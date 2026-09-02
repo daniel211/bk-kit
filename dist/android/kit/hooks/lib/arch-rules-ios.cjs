@@ -94,7 +94,9 @@ const publicApiNeedsDoc = {
 
   check(ctx) {
     const violations = [];
-    const pubPattern = /^(public|open)\s+(func|class|struct|protocol|enum)\s+(\w+)/;
+    // Swift members are indented inside a type — anchoring at column 0 would only ever
+    // match top-level declarations and silently miss every public member.
+    const pubPattern = /^\s*(public|open)\s+(func|class|struct|protocol|enum)\s+(\w+)/;
     const lines = ctx.lines;
     for (let i = 0; i < lines.length; i++) {
       const m = lines[i].match(pubPattern);

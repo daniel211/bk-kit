@@ -1,7 +1,7 @@
 {
-  "version": "0.1.0",
+  "version": "0.1.1",
   "platform": "ios",
-  "builtAt": "2026-09-02T07:54:34.491Z",
+  "builtAt": "2026-09-02T08:09:39.468Z",
   "fileCount": 312,
   "files": {
     ".bk.json": "1d6d59c151741037c6269c4d80bb2da64f4560a2f609228719d068349ea070dd",
@@ -54,7 +54,7 @@
     "hooks/lib/arch-rule-runner.cjs": "f925e349a2196d1d40d22c018f1f9ebdeac23efcb0c7f285a48cdaf10cb3ab36",
     "hooks/lib/arch-rules-android.cjs": "c3ed7aaee48f615e4a0beb3bc80c161543c4695ddf14d1c88a7773b7a1b33366",
     "hooks/lib/arch-rules-flutter.cjs": "de34b5e0f791a93275dc5df1842973b7f77231e0bb4085653c6ec02080f7b153",
-    "hooks/lib/arch-rules-ios.cjs": "d7c2f5934b2e8a20c4f7e90dd9f9e29915cd3206942df1da70625e0980a60ab6",
+    "hooks/lib/arch-rules-ios.cjs": "5ee7c0fd28a095ee9e21aeb6fca3a6d00650f77b6eee4cd828432a7a1beee033",
     "hooks/lib/bk-config-utils.cjs": "ee14906963373bc9cb11e7499dd6e8d132a7541fb327bc7ab0366eabc75e5be0",
     "hooks/lib/bk-harness-policy.json": "613e7bbc9cdb6f5773257305ba1a426068b38b1b121de4b55e0c369d2508beb9",
     "hooks/lib/bk-harness-policy.schema.json": "0d178c40b6573de2a6ac8244c4ccfc040516792aa145b9a450e5434872d41849",
