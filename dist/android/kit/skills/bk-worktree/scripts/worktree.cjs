@@ -53,10 +53,17 @@ if (nodeVersion < MIN_NODE_VERSION) {
 }
 
 // Parse arguments
+// Above this many incoming commits, `finish` treats the branch as belonging to another
+// lineage rather than to the worktree, and refuses without --force.
+const MAX_FINISH_COMMITS = 20;
+
 const args = process.argv.slice(2);
 const jsonOutput = args.includes('--json');
 const jsonIndex = args.indexOf('--json');
 if (jsonIndex > -1) args.splice(jsonIndex, 1);
+
+const baseIndex = args.indexOf('--base');
+const explicitBase = baseIndex > -1 ? (args[baseIndex + 1] || null) : null;
 
 const prefixIndex = args.indexOf('--prefix');
 let branchPrefix = 'feat';
@@ -208,7 +215,33 @@ function checkGitVersion() {
 }
 
 // Detect base branch
+/**
+ * Which branch should a new worktree be cut from?
+ *
+ * The branch the developer is standing on, unless they name another with `--base`.
+ * A worktree is for work being done now, and that work belongs on top of the current
+ * branch — not on top of whichever integration branch happens to exist.
+ *
+ * This used to return the first of dev/develop/main/master that existed, ignoring the
+ * current branch entirely. In a repository with a `develop` branch, a worktree created
+ * while standing on `release/golive-3.4.4` was cut from `develop`, so it carried 160
+ * unrelated commits across 747 files. Merging it back would have emptied develop into a
+ * release branch; the divergence was invisible until someone measured it.
+ *
+ * The conventional list survives only as a fallback for a detached HEAD, where there is
+ * no current branch to inherit.
+ *
+ * @param {string} cwd — directory inside the repository
+ * @returns {string} branch name to base the worktree on
+ */
 function detectBaseBranch(cwd) {
+  if (explicitBase) return explicitBase;
+
+  const head = git('rev-parse --abbrev-ref HEAD', { silent: true, cwd });
+  const current = head.success ? head.output.trim() : '';
+  if (current && current !== 'HEAD') return current;
+
+  // Detached HEAD — fall back to a conventional integration branch.
   const branches = ['dev', 'develop', 'main', 'master'];
   for (const branch of branches) {
     const local = git(`show-ref --verify --quiet refs/heads/${branch}`, { silent: true, cwd });
@@ -216,7 +249,7 @@ function detectBaseBranch(cwd) {
     const remote = git(`show-ref --verify --quiet refs/remotes/origin/${branch}`, { silent: true, cwd });
     if (remote.success) return branch;
   }
-  return 'main'; // fallback
+  return 'main';
 }
 
 // Find the topmost superproject by walking up the directory tree
@@ -904,6 +937,36 @@ function cmdFinish() {
     const ahead = git(`rev-list --count ${mainBranch}..${branchName}`, { silent: true });
     commitsBrought = ahead.success ? parseInt(ahead.output.trim(), 10) || 0 : 0;
 
+    // A worktree branch is meant to carry the work done in that worktree — typically a
+    // handful of commits branched from here. When it carries far more, it was cut from a
+    // different lineage, and merging it drags that whole history in.
+    //
+    // This is not hypothetical: /bk-bootstrap created a worktree from origin/develop while
+    // the developer stood on release/golive-3.4.4. The branch held one docs commit and 160
+    // commits of develop touching 747 files. `finish` would have merged all of it into a
+    // release branch, and its name gives no hint that it might.
+    const filesResult = git(`diff --name-only ${mainBranch}...${branchName}`, { silent: true });
+    const filesChanged = filesResult.success && filesResult.output.trim()
+      ? filesResult.output.trim().split('\n').length : 0;
+
+    if (commitsBrought > MAX_FINISH_COMMITS && !args.includes('--force')) {
+      const base = git(`merge-base ${mainBranch} ${branchName}`, { silent: true }).output.trim().slice(0, 8);
+      outputError('BRANCH_FROM_ANOTHER_LINEAGE', `${branchName} carries ${commitsBrought} commits that ${mainBranch} lacks, across ${filesChanged} files`, {
+        suggestion: `That is far more than one worktree's work, so this branch was cut from`
+          + ` somewhere else (merge-base ${base}). Merging it would bring all of that into`
+          + ` ${mainBranch}.\n\n`
+          + `  To take only the files the worktree produced:\n`
+          + `    git checkout ${branchName} -- <path>\n\n`
+          + `  To drop the worktree and keep the branch:\n`
+          + `    node worktree.cjs finish ${arg1} --no-merge\n\n`
+          + `  To merge anyway, knowing what it brings:\n`
+          + `    node worktree.cjs finish ${arg1} --force`,
+        commits: commitsBrought,
+        filesChanged,
+        mergeBase: base
+      });
+    }
+
     if (commitsBrought === 0) {
       outputError('NOTHING_TO_MERGE', `Branch ${branchName} has no commits that ${mainBranch} lacks`, {
         suggestion: `Nothing to bring back. Remove the worktree with:\n  node worktree.cjs finish ${arg1} --no-merge`
@@ -927,7 +990,7 @@ function cmdFinish() {
     if (dryRun) {
       output({
         success: true, dryRun: true, message: 'Dry run - no changes made',
-        wouldMerge: { branch: branchName, into: mainBranch, commits: commitsBrought },
+        wouldMerge: { branch: branchName, into: mainBranch, commits: commitsBrought, filesChanged },
         wouldRemove: { worktreePath, deleteBranch: !keepBranch }
       });
       return;

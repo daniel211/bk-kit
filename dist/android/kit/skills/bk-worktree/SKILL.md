@@ -110,6 +110,39 @@ otherwise leave every project permanently "dirty".
 
 - `--no-merge` — remove the worktree and keep its branch, when the work should not land yet
 - `--keep-branch` — merge, remove the worktree, keep the branch
+- `--force` — merge even when the branch belongs to another lineage (see below)
+
+### Which branch a worktree starts from
+
+`create` branches from the branch you are on. Pass `--base <branch>` to start somewhere
+else deliberately; a detached HEAD falls back to `dev`/`develop`/`main`/`master`.
+
+This used to work the other way round — the base was the first of those conventional
+branches that existed, whatever branch you were standing on. In a repository with a
+`develop` branch, a worktree created from `release/golive-3.4.4` was cut from `develop`
+and carried 160 unrelated commits, which is what made `finish` dangerous in the first
+place.
+
+### When the branch came from somewhere else
+
+A worktree branch is meant to carry the work done in that worktree. If it carries more
+than 20 commits the current branch lacks, `finish` stops: the branch was cut from a
+different base, and merging it would bring that whole history along.
+
+This is not hypothetical. A `/bk-bootstrap` run created its worktree from `origin/develop`
+while the developer was on `release/golive-3.4.4`. The branch held one documentation commit
+**and 160 commits of develop touching 747 files** — `.gitignore`, the Xcode project,
+localisation strings. Merging it into a release branch days before go-live would have been
+an incident, and nothing in the command's name hints that it might.
+
+When that happens, take only what the worktree produced:
+
+```bash
+git checkout <branch> -- bk/docs/foundation
+node worktree.cjs finish <name> --no-merge
+```
+
+`--force` merges anyway, once you know what it brings.
 
 **Always prefer `finish` over `remove` after an agent has worked in a worktree.** `remove`
 discards uncommitted changes and leaves an unmerged branch behind without saying where the
