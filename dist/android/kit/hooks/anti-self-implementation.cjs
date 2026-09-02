@@ -34,7 +34,7 @@ try {
   const ALLOWED_WRITES = [
     (p) => p.endsWith('.workflow-state.json'),
     (p) => p.endsWith('.plan-state.json'),
-    (p) => p.endsWith('.platform-context.json'),
+    (p) => p.endsWith('platform-context.json'),
     (p) => p.includes('/research/'),
     (p) => p.includes('/inputs/'),
     (p) => p.includes('bk/docs/foundation/_raw/'),

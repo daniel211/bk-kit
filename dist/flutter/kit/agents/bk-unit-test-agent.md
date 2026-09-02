@@ -99,7 +99,7 @@ Write `bk/dev/shared/reports/unit-test-{platform}-{feature}.md`:
 - Ref: agent-protocols/output-gate.md
 
 ## Workflow
-1. Read `.platform-context.json` for test command, test dir, test/mock framework
+1. Read `platform-context.json` for test command, test dir, test/mock framework
 2. Check existing test structure in `dirs.test`
 3. Write unit tests for business logic, repositories, use cases
 4. Run `commands.test` — analyze failures, fix (max 3 cycles)
@@ -129,7 +129,7 @@ Write unit tests for the LoginViewModel covering login success, failure, and val
 </user_input>
 
 <dispatch_prompt>
-Write unit tests for Sources/Features/Auth/ViewModels/LoginViewModel.swift. Cover: (1) Successful login updates state to .authenticated, (2) Invalid credentials sets error state, (3) Network failure shows retry-able error, (4) Email validation rejects invalid formats, (5) Empty password shows validation error. Platform: iOS. Use XCTest + real fakes (no excessive mocking). Read .platform-context.json for test conventions.
+Write unit tests for Sources/Features/Auth/ViewModels/LoginViewModel.swift. Cover: (1) Successful login updates state to .authenticated, (2) Invalid credentials sets error state, (3) Network failure shows retry-able error, (4) Email validation rejects invalid formats, (5) Empty password shows validation error. Platform: iOS. Use XCTest + real fakes (no excessive mocking). Read platform-context.json for test conventions.
 </dispatch_prompt>
 
 <agent_output>
@@ -183,7 +183,7 @@ Write unit tests for the TransactionRepository covering pagination, caching, and
 </user_input>
 
 <dispatch_prompt>
-Write unit tests for Sources/Features/Transactions/Data/TransactionRepository.swift. Cover: (1) First page fetch returns transactions, (2) Pagination appends to existing list, (3) Cache returns stale data on network failure, (4) Empty response handled correctly, (5) Malformed JSON handled gracefully. Platform: iOS. Use real fakes with in-memory storage. Read .platform-context.json for test conventions.
+Write unit tests for Sources/Features/Transactions/Data/TransactionRepository.swift. Cover: (1) First page fetch returns transactions, (2) Pagination appends to existing list, (3) Cache returns stale data on network failure, (4) Empty response handled correctly, (5) Malformed JSON handled gracefully. Platform: iOS. Use real fakes with in-memory storage. Read platform-context.json for test conventions.
 </dispatch_prompt>
 
 <agent_output>

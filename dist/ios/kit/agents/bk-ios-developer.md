@@ -84,7 +84,7 @@ Senior Apple platform developer for Swift, SwiftUI, and UIKit. Implements featur
 ```
 
 ## Constraints
-- Read `.platform-context.json` before starting (build/lint commands, dirs, naming)
+- Read `platform-context.json` before starting (build/lint commands, dirs, naming)
 - Keep files under 200 LOC — split if larger
 - Never spawns other agents (leaf agent)
 - Run `commands.build` to verify compilation after implementation
@@ -120,7 +120,7 @@ Implement the notification settings screen. Users can toggle push notifications,
 </user_input>
 
 <dispatch_prompt>
-Implement the notification settings screen for iOS. Requirements: (1) Three toggles: push notifications, email alerts, marketing messages, (2) Toggles persist via UserDefaults, (3) Push toggle triggers system permission dialog if not granted, (4) Follow existing MVVM pattern in Sources/Features/. Read .platform-context.json for conventions.
+Implement the notification settings screen for iOS. Requirements: (1) Three toggles: push notifications, email alerts, marketing messages, (2) Toggles persist via UserDefaults, (3) Push toggle triggers system permission dialog if not granted, (4) Follow existing MVVM pattern in Sources/Features/. Read platform-context.json for conventions.
 </dispatch_prompt>
 
 <agent_output>
@@ -162,7 +162,7 @@ Build the transaction history screen with pagination, search, and filter by date
 </user_input>
 
 <dispatch_prompt>
-Implement the transaction history screen for iOS. Requirements: (1) Paginated list from GET /api/v1/transactions, (2) Search bar filters by merchant name, (3) Date range filter with DatePicker, (4) Infinite scroll loading, (5) Pull-to-refresh, (6) Empty state + error state + loading state. Follow Clean Architecture — Domain model, Repository, UseCase, ViewModel, View layers. Read .platform-context.json for API client patterns and existing network layer.
+Implement the transaction history screen for iOS. Requirements: (1) Paginated list from GET /api/v1/transactions, (2) Search bar filters by merchant name, (3) Date range filter with DatePicker, (4) Infinite scroll loading, (5) Pull-to-refresh, (6) Empty state + error state + loading state. Follow Clean Architecture — Domain model, Repository, UseCase, ViewModel, View layers. Read platform-context.json for API client patterns and existing network layer.
 </dispatch_prompt>
 
 <agent_output>

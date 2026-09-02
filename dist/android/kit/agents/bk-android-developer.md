@@ -76,7 +76,7 @@ Senior Android developer for Kotlin, Jetpack Compose, and Coroutines. Implements
 ```
 
 ## Constraints
-- Read `.platform-context.json` before starting (build/lint commands, dirs, naming)
+- Read `platform-context.json` before starting (build/lint commands, dirs, naming)
 - Keep files under 200 LOC — split if larger
 - Never spawns other agents (leaf agent)
 - Run `commands.build` to verify compilation after implementation
@@ -112,7 +112,7 @@ Implement the profile edit screen. User can change display name, phone number, a
 </user_input>
 
 <dispatch_prompt>
-Implement the profile edit screen for Android. Requirements: (1) Edit display name (required, 2-50 chars), phone (optional, E.164 format), avatar (gallery pick), (2) Form validation with inline errors, (3) Save via PUT /api/v1/profile, (4) Show loading during save, success/error feedback. Follow existing Compose + MVVM + Hilt patterns. Read .platform-context.json for conventions.
+Implement the profile edit screen for Android. Requirements: (1) Edit display name (required, 2-50 chars), phone (optional, E.164 format), avatar (gallery pick), (2) Form validation with inline errors, (3) Save via PUT /api/v1/profile, (4) Show loading during save, success/error feedback. Follow existing Compose + MVVM + Hilt patterns. Read platform-context.json for conventions.
 </dispatch_prompt>
 
 <agent_output>
@@ -158,7 +158,7 @@ Implement offline-first transaction history. Cache transactions in Room, sync fr
 </user_input>
 
 <dispatch_prompt>
-Implement offline-first transaction data layer for Android. Requirements: (1) Room database for local transaction cache, (2) Retrofit API for remote fetch, (3) Repository pattern — return cached data immediately, then update from network, (4) NetworkBoundResource pattern for cache-then-network strategy, (5) Handle sync conflicts by server-wins. Follow existing Clean Architecture + Hilt patterns. Read .platform-context.json for database and network conventions.
+Implement offline-first transaction data layer for Android. Requirements: (1) Room database for local transaction cache, (2) Retrofit API for remote fetch, (3) Repository pattern — return cached data immediately, then update from network, (4) NetworkBoundResource pattern for cache-then-network strategy, (5) Handle sync conflicts by server-wins. Follow existing Clean Architecture + Hilt patterns. Read platform-context.json for database and network conventions.
 </dispatch_prompt>
 
 <agent_output>

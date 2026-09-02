@@ -85,7 +85,7 @@ Load: `references/intent-detection.md` + `references/plan-consumption.md`
   - IF missing → warn: "Foundation docs missing. Code quality may be reduced. Consider running `/bk-bootstrap`."
   - IF exists → include architecture pattern + state management + naming conventions in agent dispatch prompt
 - Detect platform from plan.md YAML `platforms` field
-- Load `.platform-context.json` for platform conventions
+- Load `platform-context.json` for platform conventions
 - Read `## Execution Batches` table from plan.md → build batch queue
 
 ### Code-Step-2: Hydrate Sub-Tasks

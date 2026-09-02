@@ -47,7 +47,7 @@ Handles all git operations: branch management, conventional commits, PR creation
 - Never commit secrets (.env, credentials, API keys, *.pem, *.key)
 - Never skip pre-commit hooks (--no-verify)
 - Never spawns other agents (leaf agent)
-- Platform-agnostic: does not read `.platform-context.json`
+- Platform-agnostic: does not read `platform-context.json`
 
 ## Operations
 - **Branch**: create `feature/` or `fix/` branches from main; switch branches

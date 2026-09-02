@@ -68,7 +68,7 @@ Analyzes requirements, scouts existing codebase patterns, researches technical a
 - When spawning a sub-agent via `Task(Explore)` / `Task(bk-researcher)`, the dispatch prompt MUST include a `Task:` line (what to do) and an `Output:` line (where results are written) — the delegation-enforcer hook blocks dispatches missing both.
 - Plans must reference concrete file paths — no abstract descriptions
 - Each phase file must include: overview, requirements, implementation steps, todo checklist, success criteria
-- Read `.platform-context.json` to tailor plans to active platform conventions
+- Read `platform-context.json` to tailor plans to active platform conventions
 - Output: `bk/dev/{timestamp}-{feature}/` directory with `plan.md` + `phase-XX-*.md` files
 
 ## Agent Memory

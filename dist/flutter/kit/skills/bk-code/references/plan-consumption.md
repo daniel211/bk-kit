@@ -42,10 +42,11 @@ If no `.plan-state.json` → fresh start from phase 1.
 
 ### Platform Detection
 
-Read `platforms` from plan.md YAML. Load matching `.platform-context.{platform}.json`:
-- `platforms: [ios]` → `.platform-context.ios.json`
-- `platforms: [flutter]` → `.platform-context.flutter.json`
-- Multi-platform → process each platform per phase YAML `platforms` field
+Read `platforms` from plan.md YAML, then load `platform-context.json` — an installed kit
+ships exactly one, already specialised for the platform it was built for.
+- Single platform → its `platform-context.json` describes the build, lint and test commands
+- Multi-platform → process each platform per phase YAML `platforms` field, using the
+  context of whichever kit is installed in that platform's project
 
 ## Step 2: Hydrate Tasks
 

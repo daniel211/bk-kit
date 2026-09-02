@@ -19,7 +19,7 @@ const program = new Command();
 program
   .name(`bk-${PLATFORM}`)
   .description(`beer-kit ${PLATFORM} Development Kit for Claude Code`)
-  .version('0.1.2');
+  .version('0.1.3');
 
 registerInit(program, PLATFORM);
 registerDoctor(program, PLATFORM);

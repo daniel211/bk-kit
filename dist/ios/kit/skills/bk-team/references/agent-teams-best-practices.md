@@ -40,7 +40,7 @@ Agent Teams use significantly more tokens than subagents. Only use when parallel
 Detect platform before spawning dev agents:
 
 1. Check plan frontmatter: `platform: ios|android|flutter`
-2. Fall back to `.platform-context.{platform}.json` in project root
+2. Fall back to `platform-context.json` in project root
 3. Fall back to asking user
 
 Agent mapping:

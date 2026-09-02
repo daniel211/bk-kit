@@ -46,7 +46,7 @@ MK Context:
 - Work dir: {project root}
 - Platform: {ios|android|flutter}
 - Foundation: bk/docs/foundation/
-- Platform context: .platform-context.{platform}.json
+- Platform context: platform-context.json
 - Reports: {plan-dir}/reports/ or bk/dev/reports/
 - Plans: bk/dev/
 - Branch: {current git branch}
@@ -63,7 +63,7 @@ MK Context:
 
 IMMEDIATELY execute in order:
 
-1. **READ** plan at `<plan-path>`. Parse into N independent task groups with non-overlapping file ownership boundaries. Detect platform from plan frontmatter or `.platform-context.{platform}.json`.
+1. **READ** plan at `<plan-path>`. Parse into N independent task groups with non-overlapping file ownership boundaries. Detect platform from plan frontmatter or `platform-context.json`.
 
 2. **CALL** `TeamCreate(team_name: "<feature-slug>")`
 

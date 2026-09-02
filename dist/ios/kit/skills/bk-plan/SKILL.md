@@ -96,7 +96,7 @@ IF AutoDream artifact available (detected: `.autodream/{feature}.json` or user p
        uiComponents, theming
      }
      ```
-   - Load `.platform-context.json`
+   - Load `platform-context.json`
    Load: `references/foundation-check.md`
 
 2. **Parse & Triage** — feature name, scope assessment

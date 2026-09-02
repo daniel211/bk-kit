@@ -53,7 +53,7 @@ Task(subagent_type: "bk-{platform}-developer", model: "opus",
   Sub-task file: {plan-dir}/sub-task-{NN}-{slug}.md
   Read sections: Scope, Expected Code, Edge Cases, Input References
   Foundation context: bk/docs/foundation/architecture.md, code-guidelines.md
-  Platform context: .platform-context.{platform}.json
+  Platform context: platform-context.json
   Inputs: {plan-dir}/inputs/
 
   Rules:
@@ -83,7 +83,7 @@ Task(subagent_type: "bk-{platform}-developer", model: "opus",
   Sub-task file: {plan-dir}/sub-task-{NN}-{slug}.md
   Read sections: Scope, Expected Code, Edge Cases, Input References
   Foundation context: bk/docs/foundation/architecture.md, code-guidelines.md
-  Platform context: .platform-context.{platform}.json
+  Platform context: platform-context.json
   Inputs: {plan-dir}/inputs/
 
   Rules:
@@ -139,7 +139,7 @@ Task(subagent_type: "bk-unit-test-agent", model: "haiku",
   Implemented code files:
   {list files from impl results of all sub-tasks in batch}
 
-  Platform context: .platform-context.{platform}.json
+  Platform context: platform-context.json
   Foundation test pattern: bk/docs/foundation/code-guidelines.md → Test Pattern section
 
   Instructions:
@@ -237,7 +237,7 @@ Task(subagent_type: "bk-code-reviewer", model: "sonnet",
   {list all files created/modified across all sub-tasks in batch}
 
   Sub-task files: {list paths for reference}
-  Platform context: .platform-context.{platform}.json
+  Platform context: platform-context.json
   Foundation: bk/docs/foundation/architecture.md, code-guidelines.md
 
   Check:

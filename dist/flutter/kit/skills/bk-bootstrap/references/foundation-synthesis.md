@@ -36,18 +36,18 @@ Merge all scan data into `bk/docs/foundation/*.md` files.
 
 ## Platform Context Update
 
-After writing docs, update `.platform-context.json`:
+After writing docs, update `platform-context.json`:
 - Override template defaults with detected values
 - Only write fields that were confirmed by scan
 - Keep template defaults for fields not detected
 
 ```
-Read existing .platform-context.json template
+Read existing platform-context.json template
 → Merge with detected:
   commands: from build-target-scan (verified > default)
   conventions: from pattern-detection (detected > template)
   dirs: from structure-scan (actual > assumed)
-→ Write updated .platform-context.json
+→ Write updated platform-context.json
 ```
 
 ## Cross-Link Rule

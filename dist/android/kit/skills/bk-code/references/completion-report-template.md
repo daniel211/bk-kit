@@ -41,7 +41,7 @@ bk-project-manager uses this template during finalize to generate completion rep
 | `feature_name` | `.plan-state.json` → `feature` | Slug or human-readable name |
 | `Status` | Sub-task statuses + batch completion | All complete = Completed; any blocked = Escalated |
 | `Tier` | `.workflow-state.json` → `complexity_tier` | Trivial / Standard / Complex |
-| `Platform` | `.platform-context.json` → `platform` | ios / android / flutter |
+| `Platform` | `platform-context.json` → `platform` | ios / android / flutter |
 | `Sub-Task Status` | `.plan-state.json` → each sub-task entry | completed / blocked / skipped |
 | `Files Changed` | Sub-task `impl-result.json` → `files_written` | Count of modified files |
 | `Tests` | Test report from `reports/unit-test-*.md` | Pass/total format |

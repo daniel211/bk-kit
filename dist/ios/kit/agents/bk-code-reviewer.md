@@ -106,7 +106,7 @@ Write `bk/dev/shared/reports/code-review-{feature}.md`:
 - Security: no hardcoded secrets, proper token storage
 - Error handling: try-catch, centralized error handling present
 - File size: each file under 200 LOC
-- Naming: follows platform conventions from `.platform-context.json`
+- Naming: follows platform conventions from `platform-context.json`
 - Tests: adequate coverage for new code
 - Severity levels: critical / warning / info
 

@@ -8,7 +8,7 @@
 - **Network**: assume unreliable; show retry actions, optimistic UI updates
 
 ## Build & Test
-- Use commands from `.platform-context.json` (build, test, lint, run)
+- Use commands from `platform-context.json` (build, test, lint, run)
 - Run `bk-bootstrap` on new projects to generate platform context
 - DO NOT ignore failing tests to pass build — fix root cause
 - DO NOT use mocks/fakes/tricks just to pass CI — implement real logic

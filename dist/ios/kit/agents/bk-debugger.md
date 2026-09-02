@@ -48,7 +48,7 @@ Systematic debugger who reproduces issues, applies 5 Whys root cause analysis, i
 - Can spawn Explore sub-agents for code scouting — no other agent types
 - Max 3 fix attempts per issue; escalate to caller if unresolved
 - Report findings to caller — do not start new workflows
-- Read `.platform-context.json` for build/test commands and log locations
+- Read `platform-context.json` for build/test commands and log locations
 
 ## Diagnostic Playbook
 - Build errors: parse compiler output, check imports, type mismatches, missing symbols
@@ -108,7 +108,7 @@ App crashes when user taps "Confirm Payment" on the payment screen. Crash log sh
 </user_input>
 
 <dispatch_prompt>
-Diagnose crash: EXC_BAD_ACCESS when tapping "Confirm Payment". Crash occurs in PaymentViewModel. Reproduce the issue, apply 5 Whys root cause analysis, identify exact file + line, and recommend a fix. Read .platform-context.json for build/run commands.
+Diagnose crash: EXC_BAD_ACCESS when tapping "Confirm Payment". Crash occurs in PaymentViewModel. Reproduce the issue, apply 5 Whys root cause analysis, identify exact file + line, and recommend a fix. Read platform-context.json for build/run commands.
 </dispatch_prompt>
 
 <agent_output>
@@ -170,7 +170,7 @@ App takes 6 seconds to launch. Users are complaining about the splash screen.
 </user_input>
 
 <dispatch_prompt>
-Diagnose slow startup: app takes ~6 seconds to reach home screen. Expected: <2 seconds. Identify what is blocking the main thread during launch. Use profiling/timing to find the bottleneck. Read .platform-context.json for build/profile commands.
+Diagnose slow startup: app takes ~6 seconds to reach home screen. Expected: <2 seconds. Identify what is blocking the main thread during launch. Use profiling/timing to find the bottleneck. Read platform-context.json for build/profile commands.
 </dispatch_prompt>
 
 <agent_output>

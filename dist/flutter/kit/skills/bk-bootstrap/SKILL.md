@@ -319,7 +319,7 @@ IF SERENA_AVAILABLE:
 
 ### Step 7: Update Platform Context
 
-Write `.platform-context.json` — enrich from real scan data, not template defaults.
+Write `platform-context.json` — enrich from real scan data, not template defaults.
 ```
 TaskUpdate(taskId=T6, status="in_progress")
 // Write platform-context.json with detected platform, build commands, SDK versions
@@ -371,12 +371,12 @@ bk/docs/foundation/
 └── project-roadmap.md     # Current state, TODOs, improvements, migrations
 ```
 
-Also updates: `.platform-context.json`
+Also updates: `platform-context.json`
 
 ## Constraints
 
 - Read-only scan — never build, test, or modify project code
-- Only write to `bk/docs/foundation/`, `.platform-context.json`, and `.serena/` (via onboarding)
+- Only write to `bk/docs/foundation/`, `platform-context.json`, and `.serena/` (via onboarding)
 - Never overwrite existing foundation without user confirmation
 - Keep each output file under 300 lines
 - Evidence-based: every detected pattern must cite file + line

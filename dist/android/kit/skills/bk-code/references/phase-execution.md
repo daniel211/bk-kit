@@ -79,7 +79,7 @@ Task(subagent_type: "bk-ios-developer", model: "opus", description: "Implement s
   # Example uses bk-ios-developer; substitute bk-android-developer or bk-flutter-developer at runtime
   Implement sub-task {NN}: {title}
   Sub-task file: {absolute-path-to-sub-task-file}
-  Platform context: .platform-context.{platform}.json
+  Platform context: platform-context.json
   Inputs: {plan-dir}/inputs/generation-input.json
   File ownership: {owns patterns from YAML}
   Requirements: {reqs list from sub-task YAML}

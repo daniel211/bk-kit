@@ -92,7 +92,7 @@ Each parallel agent receives:
 Task: Implement phase {N} — {title}
 Implement phase {N}: {title}
 Plan phase file: {absolute-path-to-phase-file}
-Platform context: .platform-context.{platform}.json
+Platform context: platform-context.json
 Inputs: {plan-dir}/inputs/generation-input.json
 File ownership: {owns patterns from YAML} — ONLY modify files matching these globs
 Requirements: {reqs list from phase YAML}

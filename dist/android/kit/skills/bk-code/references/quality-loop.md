@@ -21,7 +21,7 @@ Dispatch 3 focused reviewers in a **single message** (parallel execution):
 Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true, description: "Review architecture", prompt: "
   Review changes for plan: {plan-dir}
   Phase files: {list of completed phase files}
-  Platform context: .platform-context.{platform}.json
+  Platform context: platform-context.json
 
   FOCUS: Architecture + Code Quality
   Check: architecture compliance, naming conventions, file size (<200 LOC),
@@ -37,7 +37,7 @@ Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true
 Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true, description: "Review security", prompt: "
   Review changes for plan: {plan-dir}
   Phase files: {list of completed phase files}
-  Platform context: .platform-context.{platform}.json
+  Platform context: platform-context.json
 
   FOCUS: Security
   Check: hardcoded secrets, token storage, input validation, OWASP top 10,
@@ -51,7 +51,7 @@ Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true
 Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true, description: "Review reqs coverage", prompt: "
   Review changes for plan: {plan-dir}
   Phase files: {list of completed phase files}
-  Platform context: .platform-context.{platform}.json
+  Platform context: platform-context.json
 
   FOCUS: Requirements + SRS Traceability
   If plan has 'reqs' fields: cross-check each req ID has matching implementation.
@@ -90,7 +90,7 @@ Task(subagent_type: "bk-unit-test-agent", model: "sonnet", run_in_background: tr
   Task: Write and run unit/integration tests from the test phase file
   Test phase file: {path-to-test-phase-file}
   Implemented code: {list of files changed in completed phases}
-  Platform context: .platform-context.{platform}.json
+  Platform context: platform-context.json
 
   Read ## Unit Tests, ## Integration Tests tables, ## Edge Cases, and ## Notes for Tester.
   Each row = 1 test case. Write real test code using descriptions as spec.

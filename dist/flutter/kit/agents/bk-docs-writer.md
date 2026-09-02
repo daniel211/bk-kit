@@ -44,7 +44,7 @@ Keeps project documentation accurate and current after code changes. Updates roa
 
 ## Constraints
 - Can spawn Explore sub-agents for codebase scanning — no other agent types
-- Platform-agnostic: does not read `.platform-context.json`
+- Platform-agnostic: does not read `platform-context.json`
 - Always read current doc state before editing — never blind overwrite
 - Verify cross-references and links after updates
 - Output: updated files in `bk/docs/` directory

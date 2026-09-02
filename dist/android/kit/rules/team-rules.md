@@ -53,7 +53,7 @@ Agent A WRITES file → Conductor READS file → Conductor dispatches Agent B wi
 - Never force-push from a teammate session
 - Commit frequently with conventional messages; pull before push
 - Commit to worktree branch — never directly to main or develop
-- Reference `.platform-context.json` for platform-specific build/test commands
+- Reference `platform-context.json` for platform-specific build/test commands
 
 ## Communication Protocol (bk-team)
 

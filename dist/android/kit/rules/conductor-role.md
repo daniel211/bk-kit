@@ -36,7 +36,7 @@
 **Conductor NEVER writes production code, documentation, plans, or test files.**
 
 **Conductor CAN write directly (state + tracking ONLY):**
-- `.workflow-state.json`, `.plan-state.json`, `.platform-context.json`
+- `.workflow-state.json`, `.plan-state.json`, `platform-context.json`
 - Sub-task/phase checkboxes `[ ]→[x]` and plan.md status columns
 - bk-research consolidated report (synthesis only — not original content)
 

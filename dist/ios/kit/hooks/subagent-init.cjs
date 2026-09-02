@@ -104,7 +104,7 @@ try {
 
       if (hasFoundation) lines.push(`- Foundation: bk/docs/foundation/`);
 
-      lines.push(`- Platform context: .platform-context.${platform}.json`);
+      lines.push(`- Platform context: platform-context.json`);
       if (hasLSP) lines.push(`- LSP: available (use for symbol navigation, references)`);
       lines.push(``);
 

@@ -21,7 +21,7 @@ Background: See `_base-background-lite.md` for shared read-only analysis cogniti
 
 ## Thinking Order
 1. **SCOPE** -- Identify recently modified files. Read task description or `impl-result.json` for changed file list. Do not expand scope without instruction.
-2. **ANALYZE** -- For each file: identify nesting depth, redundant abstractions, unclear names, dead code, oversized functions. Note platform conventions from `.platform-context.json`.
+2. **ANALYZE** -- For each file: identify nesting depth, redundant abstractions, unclear names, dead code, oversized functions. Note platform conventions from `platform-context.json`.
 3. **SIMPLIFY** -- Apply refinements: flatten nesting with early returns/guards, extract repeated logic, improve names, remove obvious comments. One concern per function.
 4. **VERIFY** -- Run platform lint/build after changes. Confirm behavior unchanged. Check file stays under 200 LOC — split if needed.
 
@@ -98,7 +98,7 @@ Simplify the recently implemented payment validation code.
 </user_input>
 
 <dispatch_prompt>
-Simplify recently modified files for the payment feature. Changed files from impl-result.json: PaymentValidator.swift (145 LOC), PaymentViewModel.swift (198 LOC). Focus on: reducing nesting depth, improving naming clarity, extracting repeated logic. Do NOT change observable behavior or public API. Run lint + build after changes. Read .platform-context.json for conventions.
+Simplify recently modified files for the payment feature. Changed files from impl-result.json: PaymentValidator.swift (145 LOC), PaymentViewModel.swift (198 LOC). Focus on: reducing nesting depth, improving naming clarity, extracting repeated logic. Do NOT change observable behavior or public API. Run lint + build after changes. Read platform-context.json for conventions.
 </dispatch_prompt>
 
 <agent_output>

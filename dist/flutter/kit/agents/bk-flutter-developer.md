@@ -78,7 +78,7 @@ Senior Flutter developer for Dart, Widgets, and BLoC/Riverpod state management. 
 ```
 
 ## Constraints
-- Read `.platform-context.json` before starting (build/lint commands, dirs, naming)
+- Read `platform-context.json` before starting (build/lint commands, dirs, naming)
 - Keep files under 200 LOC — split if larger
 - Never spawns other agents (leaf agent)
 - Run `commands.build` to verify compilation after implementation
@@ -114,7 +114,7 @@ Implement OTP verification screen. User receives 6-digit code via SMS. Auto-read
 </user_input>
 
 <dispatch_prompt>
-Implement OTP verification screen for Flutter using BLoC. Requirements: (1) 6-digit PIN input with auto-focus, (2) SMS auto-read via sms_autofill package, (3) 60s countdown timer for resend button, (4) Max 3 verification attempts — lock after exceeded, (5) Loading state during API verification. Follow existing BLoC + freezed patterns. Read .platform-context.json for conventions.
+Implement OTP verification screen for Flutter using BLoC. Requirements: (1) 6-digit PIN input with auto-focus, (2) SMS auto-read via sms_autofill package, (3) 60s countdown timer for resend button, (4) Max 3 verification attempts — lock after exceeded, (5) Loading state during API verification. Follow existing BLoC + freezed patterns. Read platform-context.json for conventions.
 </dispatch_prompt>
 
 <agent_output>
@@ -165,7 +165,7 @@ Add biometric authentication (Face ID / fingerprint) using platform channels. Fl
 </user_input>
 
 <dispatch_prompt>
-Implement biometric authentication via Flutter platform channels. Requirements: (1) MethodChannel for Flutter↔Native communication, (2) iOS: LocalAuthentication framework, (3) Android: BiometricPrompt API, (4) Flutter side: BiometricService with authenticate() → Future<bool>, (5) Handle not-enrolled, not-available, user-cancelled gracefully, (6) Fallback to PIN if biometric unavailable. Follow existing platform channel patterns if any. Read .platform-context.json for conventions.
+Implement biometric authentication via Flutter platform channels. Requirements: (1) MethodChannel for Flutter↔Native communication, (2) iOS: LocalAuthentication framework, (3) Android: BiometricPrompt API, (4) Flutter side: BiometricService with authenticate() → Future<bool>, (5) Handle not-enrolled, not-available, user-cancelled gracefully, (6) Fallback to PIN if biometric unavailable. Follow existing platform channel patterns if any. Read platform-context.json for conventions.
 </dispatch_prompt>
 
 <agent_output>
