@@ -208,6 +208,23 @@ try {
   /**
    * Build harness summary from live data and cache it.
    */
+  /**
+   * Installed kit version, from the manifest `bk-<platform> init` writes at the project
+   * root. Shown on line 1 so a developer can tell at a glance which kit a project is on —
+   * the commonest support question is "which version are you running".
+   *
+   * @param {string} root — project root
+   * @returns {string} e.g. "0.1.4", or '' when the kit is not installed here
+   */
+  function readKitVersion(root) {
+    try {
+      const raw = fs.readFileSync(path.join(root, '.bk-version.json'), 'utf8');
+      return JSON.parse(raw).version || '';
+    } catch {
+      return ''; // not installed, or unreadable — line 1 simply omits it
+    }
+  }
+
   function buildHarnessSummary(policy, state, root, sessionId, contextData) {
     try {
       const lookback = policy.kill_switch.lookback_minutes || 30;
@@ -473,6 +490,8 @@ try {
       let line1 = `⚡ ${modelName}`;
       if (contextBar) line1 += `  ${contextBar}`;
       line1 += `  🕐 ${timeStr}`;
+      const kitVersion = readKitVersion(rawDir);
+      if (kitVersion) line1 += `  🍺 bk ${kitVersion}`;
 
       // Line 2: platform + project + workflow + agents + git + lines
       const line2Parts = [];
@@ -491,6 +510,24 @@ try {
 
       // --- Line 3: Harness monitoring line ---
       // Build context data for token monitoring display
+      // The statusline is the only hook Claude Code hands its full status payload to.
+      // Record which top-level keys arrive so quota/usage-credit display can be built on
+      // observed fields rather than guessed ones — the payload shape is not documented
+      // here, and inventing a field name would silently render nothing. Keys only, never
+      // values.
+      try {
+        const keysPath = path.join(rawDir, '.bk-metrics', 'statusline-payload-keys.json');
+        fs.writeFileSync(keysPath, JSON.stringify({
+          observedAt: new Date().toISOString(),
+          topLevel: Object.keys(data || {}).sort(),
+          nested: Object.fromEntries(
+            Object.entries(data || {})
+              .filter(([, v]) => v && typeof v === 'object' && !Array.isArray(v))
+              .map(([k, v]) => [k, Object.keys(v).sort()]),
+          ),
+        }, null, 2) + '\n');
+      } catch { /* diagnostics are best-effort — never break the statusline */ }
+
       const _contextData = {
         total: (usage.input_tokens || 0) +
                (usage.cache_creation_input_tokens || 0) +

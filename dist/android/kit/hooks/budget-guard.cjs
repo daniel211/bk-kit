@@ -21,6 +21,7 @@ const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');
 const { readWorkflowState } = require('./lib/bk-config-utils.cjs');
 const { trackViolation } = require('./lib/harness-policy-loader.cjs');
 const { resolveMetricsDir } = require('./lib/cost-ledger-writer.cjs');
+const { isAgentDispatch } = require('./lib/hook-event-accessor.cjs');
 
 /**
  * Sum subagent-type costUsd entries from cost-ledger.jsonl.
@@ -114,7 +115,7 @@ function main() {
   const hookInput = readStdinJson();
 
   // Only act on Task tool
-  if (hookInput.tool_name !== 'Task') {
+  if (!isAgentDispatch(hookInput)) {
     process.exit(0);
   }
 

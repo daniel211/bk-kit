@@ -202,7 +202,7 @@ function renderDashboard(data) {
   const lines = [];
 
   // Header
-  lines.push(boxTop(`VNP-MK HARNESS DASHBOARD · Window: last ${windowLabel}`));
+  lines.push(boxTop(`BEER KIT HARNESS DASHBOARD · Window: last ${windowLabel}`));
 
   // Status section
   lines.push(divider());

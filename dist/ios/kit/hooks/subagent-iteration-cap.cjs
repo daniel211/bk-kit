@@ -11,6 +11,7 @@ try {
 
   const { loadHarnessPolicy, trackRedSignal, trackViolation } = require('./lib/harness-policy-loader.cjs');
   const { isHookEnabled, readWorkflowState, writeWorkflowState } = require('./lib/bk-config-utils.cjs');
+  const { AGENT_DISPATCH_TOOLS } = require('./lib/hook-event-accessor.cjs');
 
   /**
    * Parse override env: BK_HARNESS_DISPATCH_OVERRIDE=agentType=N
@@ -65,7 +66,7 @@ try {
     const toolName = input.tool_name || '';
 
     // Only handle Task tool
-    if (toolName !== 'Task') process.exit(0);
+    if (!AGENT_DISPATCH_TOOLS.includes(toolName)) process.exit(0);
 
     const toolInput = input.tool_input || {};
     const agentType = extractAgentType(toolInput);

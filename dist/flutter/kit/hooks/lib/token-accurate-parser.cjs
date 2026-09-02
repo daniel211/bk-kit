@@ -119,6 +119,24 @@ function modelFamily(model) {
 }
 
 /**
+ * Is `transcriptPath` the session's own transcript rather than a subagent's?
+ *
+ * Claude Code writes one transcript per session, named <session_id>.jsonl, and
+ * subagent turns do not appear in it. When SubagentStop hands a hook that path,
+ * parsing it yields session-wide totals — not the subagent's usage. Attributing
+ * those totals to the subagent makes every subagent look identical and multiplies
+ * the session's cost by the number of subagents in the ledger.
+ *
+ * @param {string|null} transcriptPath
+ * @param {string|null} sessionId
+ * @returns {boolean} true when the numbers must NOT be attributed to one subagent
+ */
+function isOwnSessionTranscript(transcriptPath, sessionId) {
+  if (!transcriptPath || !sessionId) return false;
+  return path.basename(String(transcriptPath), '.jsonl') === String(sessionId);
+}
+
+/**
  * Parse a subagent JSONL transcript file with high accuracy.
  *
  * @param {string} filePath — absolute path to the .jsonl transcript
@@ -307,4 +325,4 @@ async function parseTranscriptAccurate(filePath, opts = {}) {
   }
 }
 
-module.exports = { parseTranscriptAccurate, resolvePricing, computeCost };
+module.exports = { isOwnSessionTranscript, parseTranscriptAccurate, resolvePricing, computeCost };

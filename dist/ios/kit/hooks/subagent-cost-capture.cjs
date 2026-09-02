@@ -13,7 +13,7 @@ try {
   const { createHookTimer } = require('./lib/hook-logger.cjs');
   // P1-7: migrated from deprecated jsonl-token-parser → token-accurate-parser.
   // Note: parseTranscriptAccurate returns tokensIn as TOTAL (cache + raw); see RC-1 plan.
-  const { parseTranscriptAccurate } = require('./lib/token-accurate-parser.cjs');
+  const { parseTranscriptAccurate, isOwnSessionTranscript } = require('./lib/token-accurate-parser.cjs');
   const { computeCost, appendEntry } = require('./lib/cost-ledger-writer.cjs');
 
   async function main() {
@@ -42,6 +42,19 @@ try {
       if (!transcriptPath) {
         process.stderr.write('[subagent-cost-capture] warn: no transcript_path in hook data — skipping\n');
         timer.end({ status: 'no-transcript', exit: 0 });
+        process.exit(0);
+      }
+
+      // SubagentStop hands over the session's own transcript, which holds session-wide
+      // totals and no subagent turns. Charging those totals to each subagent multiplied
+      // the ledger by the number of subagents — one live run recorded 57.8M input tokens
+      // against a session that actually used 1.45M. No entry is better than a wrong one.
+      if (isOwnSessionTranscript(transcriptPath, sessionId)) {
+        process.stderr.write(
+          '[subagent-cost-capture] session transcript supplied — per-subagent usage is not '
+          + 'attributable, skipping ledger entry\n',
+        );
+        timer.end({ status: 'unattributed', exit: 0 });
         process.exit(0);
       }
 

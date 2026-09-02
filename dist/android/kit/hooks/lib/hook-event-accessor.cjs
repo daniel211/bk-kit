@@ -47,6 +47,22 @@ function getToolInput(data) {
 }
 
 /**
+ * Names Claude Code has used for the subagent-dispatch tool. The kit long assumed
+ * "Task"; the tool is "Agent" in current versions. Hooks that gate on the dispatch
+ * silently stopped firing under the newer name — budget-guard, subagent-iteration-cap
+ * and subagent-live-tracker's spawn branch all went dead without a single error.
+ * Accept both rather than pinning to whichever is current.
+ */
+const AGENT_DISPATCH_TOOLS = ['Task', 'Agent'];
+
+/**
+ * Is this event a subagent dispatch, under any known tool name?
+ */
+function isAgentDispatch(data) {
+  return AGENT_DISPATCH_TOOLS.includes(getToolName(data));
+}
+
+/**
  * Get the subagent type for a Task event (e.g. "bk-git-manager", "bk-planner").
  * For non-Task events, returns empty string.
  */
@@ -119,6 +135,8 @@ function getParallelBatch(data) {
 }
 
 module.exports = {
+  AGENT_DISPATCH_TOOLS,
+  isAgentDispatch,
   getToolName,
   getToolInput,
   getSubagentType,
