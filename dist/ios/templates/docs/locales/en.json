@@ -105,7 +105,7 @@
     "conductor-role": "Single source of truth for conductor responsibilities, orchestration rules, and delegation patterns.",
     "core-rules": "Essential orchestration rules. Agent-specific rules live in agent definitions.",
     "development-rules": "Offline-first, battery-aware, platform-native development standards for mobile apps.",
-    "documentation-management": "Save plans in mk/dev directory with timestamp naming, structured phase files.",
+    "documentation-management": "Save plans in bk/dev directory with timestamp naming, structured phase files.",
     "metrics-collection": "Track agent performance across workflows for data-driven optimization.",
     "mobile-shared-rules": "Clean Architecture, MVVM pattern, dependency injection, error handling standards.",
     "reactive-orchestration": "Conductor reads this rule after every agent return for intelligent next-step decisions.",

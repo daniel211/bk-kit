@@ -18,7 +18,7 @@ reqs: [{all REQ-IDs covered by this plan}]
 Test cases for {feature}. Tester agent reads this + implemented code to write tests.
 
 ## Foundation References
-<!-- Auto-filled from mk/docs/foundation/ during plan synthesis -->
+<!-- Auto-filled from bk/docs/foundation/ during plan synthesis -->
 - Architecture: {{foundation.architecture}}
 - State Management: {{foundation.stateManagement}}
 - Naming Convention: {{foundation.naming}}

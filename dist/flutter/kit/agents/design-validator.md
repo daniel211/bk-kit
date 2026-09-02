@@ -96,4 +96,4 @@ Tiers: 1=primitives (Button, Divider, Icon) → 2=interactive (Input, Checkbox, 
 - Output: `{flow}/raw/discovery.json` + `{flow}/raw/component-contracts.json` only
 - **Return format (STRICT):** Final message MUST be exactly 1 line:
   `DONE: {N} screens discovered → {flow}/raw/discovery.json`
-  Example: `DONE: 11 screens discovered → mk/dev/phat-hanh-the-phi-vat-ly/design/raw/discovery.json`
+  Example: `DONE: 11 screens discovered → bk/dev/phat-hanh-the-phi-vat-ly/design/raw/discovery.json`

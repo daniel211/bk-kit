@@ -1,6 +1,6 @@
 ---
 name: bk-docs
-description: "Documentation workflow — init, update, or summarize project mk/docs/ via bk-docs-writer."
+description: "Documentation workflow — init, update, or summarize project bk/docs/ via bk-docs-writer."
 user-invocable: true
 argument-hint: "[--init | --summarize | feature or scope to document]"
 ---
@@ -9,7 +9,7 @@ argument-hint: "[--init | --summarize | feature or scope to document]"
 
 Dispatches bk-docs-writer (background, sonnet) to manage project documentation.
 Three modes: `--init` (scaffold full docs set), `--summarize` (audit docs status), or default update mode.
-Output goes to `mk/docs/` directory. No code changes — docs only.
+Output goes to `bk/docs/` directory. No code changes — docs only.
 
 <Use_When>
 - User wants to update documentation after implementing a feature
@@ -33,16 +33,16 @@ Auto-approve — no user gate required.
 
 ### `--init` — Scaffold Initial Docs
 
-Scan the codebase and generate a complete initial documentation set in `mk/docs/`:
+Scan the codebase and generate a complete initial documentation set in `bk/docs/`:
 
 1. **Scan**: Use Glob/Grep/Read to analyze project structure, dependencies, entry points, patterns
 2. **Generate** these files (skip any that already exist unless empty):
-   - `mk/docs/project-overview-pdr.md` — project purpose, goals, tech stack
-   - `mk/docs/code-standards.md` — detected patterns, naming conventions, architecture rules
-   - `mk/docs/codebase-summary.md` — directory structure, key modules, entry points
-   - `mk/docs/system-architecture.md` — component diagram, data flow, integrations
-   - `mk/docs/design-guidelines.md` — UI/UX patterns, theme, component library
-   - `mk/docs/deployment-guide.md` — build, test, deploy instructions
+   - `bk/docs/project-overview-pdr.md` — project purpose, goals, tech stack
+   - `bk/docs/code-standards.md` — detected patterns, naming conventions, architecture rules
+   - `bk/docs/codebase-summary.md` — directory structure, key modules, entry points
+   - `bk/docs/system-architecture.md` — component diagram, data flow, integrations
+   - `bk/docs/design-guidelines.md` — UI/UX patterns, theme, component library
+   - `bk/docs/deployment-guide.md` — build, test, deploy instructions
 3. **Report**: List files created/skipped, coverage gaps
 
 Dispatch:
@@ -50,8 +50,8 @@ Dispatch:
 Task(subagent_type: "bk-docs-writer", model: "sonnet", run_in_background: true, prompt: "
   Mode: init
   Platform: {platform}
-  Scan entire codebase. Generate initial docs set in mk/docs/.
-  Skip files that already exist with content. Output: new files in mk/docs/
+  Scan entire codebase. Generate initial docs set in bk/docs/.
+  Skip files that already exist with content. Output: new files in bk/docs/
 ")
 ```
 
@@ -59,7 +59,7 @@ Task(subagent_type: "bk-docs-writer", model: "sonnet", run_in_background: true, 
 
 Quick read-only audit of current documentation:
 
-1. **Check existence**: List which of the 6 standard docs files exist in `mk/docs/`
+1. **Check existence**: List which of the 6 standard docs files exist in `bk/docs/`
 2. **Check freshness**: Compare each doc's last-modified date against recent git commits touching related code
 3. **Identify gaps**: Flag missing files, empty sections, stale content (>30 commits behind)
 4. **Output table**:
@@ -82,9 +82,9 @@ Parse `$ARGUMENTS` for feature name or documentation scope.
 Detect platform from project files. Load platform context from `config/platform-context.{platform}.json`.
 
 Gather context for bk-docs-writer:
-- `mk/dev/shared/{platform}/{feature}-impl-result.json` — what was implemented
-- `mk/dev/shared/reports/code-review-{feature}.json` — review findings (if exists)
-- Current `mk/docs/` structure: `codebase-summary.md`, `system-architecture.md`, `code-standards.md`
+- `bk/dev/shared/{platform}/{feature}-impl-result.json` — what was implemented
+- `bk/dev/shared/reports/code-review-{feature}.json` — review findings (if exists)
+- Current `bk/docs/` structure: `codebase-summary.md`, `system-architecture.md`, `code-standards.md`
 
 ### Step 2: Dispatch bk-docs-writer
 
@@ -93,12 +93,12 @@ Dispatch bk-docs-writer background (sonnet):
 Task(subagent_type: "bk-docs-writer", model: "sonnet", run_in_background: true, prompt: "
   Feature: {feature_name}
   Platform: {platform}
-  impl-result: mk/dev/shared/{platform}/{feature}-impl-result.json
+  impl-result: bk/dev/shared/{platform}/{feature}-impl-result.json
   Existing docs to update:
-    - mk/docs/codebase-summary.md
-    - mk/docs/system-architecture.md  (if architecture changed)
-    - mk/docs/code-standards.md       (if new patterns introduced)
-  Output: updated files in mk/docs/ directory
+    - bk/docs/codebase-summary.md
+    - bk/docs/system-architecture.md  (if architecture changed)
+    - bk/docs/code-standards.md       (if new patterns introduced)
+  Output: updated files in bk/docs/ directory
 ")
 ```
 
@@ -108,17 +108,17 @@ overwriting unrelated content.
 ### Step 3: Report Changes
 
 Show user:
-- Files updated in `mk/docs/`
+- Files updated in `bk/docs/`
 - Sections added or modified
 - Docs impact: none | minor | major
 - Any documentation gaps identified
 
 ## Output
 
-Updated files in `mk/docs/`:
-- `mk/docs/codebase-summary.md` — always reviewed
-- `mk/docs/system-architecture.md` — updated if architecture/data flow changed
-- `mk/docs/code-standards.md` — updated if new patterns introduced
+Updated files in `bk/docs/`:
+- `bk/docs/codebase-summary.md` — always reviewed
+- `bk/docs/system-architecture.md` — updated if architecture/data flow changed
+- `bk/docs/code-standards.md` — updated if new patterns introduced
 
 ## Documentation Trigger Rules
 

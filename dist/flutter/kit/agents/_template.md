@@ -55,7 +55,7 @@ Before returning "complete":
 
 ## Output
 <!-- For report agents: use Markdown with metadata footer -->
-Write to `mk/dev/shared/reports/{agent-type}-{feature}.md`:
+Write to `bk/dev/shared/reports/{agent-type}-{feature}.md`:
 ```markdown
 ## {Report Type}: {feature}
 **Platform**: {platform} | **Files**: {count} | **Agent**: bk-{agent-name}

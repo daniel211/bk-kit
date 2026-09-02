@@ -36,7 +36,7 @@ Fix-loop max 1: 1 automatic retry, then escalate to user.
 
 ## Pre-loaded Context
 
-- **Workflow state**: `mk/dev/shared/.workflow-state.json`
+- **Workflow state**: `bk/dev/shared/.workflow-state.json`
 - **Platform**: detected from project files — see `.claude/rules/core-rules.md`
 
 ---
@@ -47,7 +47,7 @@ Transition state: `(none) → analyze`.
 
 ### Foundation Context Loading
 Before dispatching the dev agent:
-1. Read `mk/docs/foundation/architecture.md` + `mk/docs/foundation/code-guidelines.md`
+1. Read `bk/docs/foundation/architecture.md` + `bk/docs/foundation/code-guidelines.md`
 2. Include in dev agent prompt to ensure refactor follows project conventions
 
 Main session identifies refactor scope:
@@ -92,7 +92,7 @@ Task(subagent_type: "bk-{platform}-developer", model: "opus", prompt: "
   Affected files: {file_list_with_line_ranges}
   Constraint: preserve ALL existing behavior — all tests must pass after refactor
   Constraint: minimal blast radius — change only what is needed
-  Output: mk/dev/shared/{platform}/{feature}-impl-result.json
+  Output: bk/dev/shared/{platform}/{feature}-impl-result.json
 ")
 ```
 
@@ -109,8 +109,8 @@ Dispatch bk-unit-test-agent background (sonnet) to verify no regressions:
 ```
 Task(subagent_type: "bk-unit-test-agent", model: "sonnet", run_in_background: true, prompt: "
   Run existing tests — verify no regressions introduced by refactor
-  impl-result: mk/dev/shared/{platform}/{feature}-impl-result.json
-  Output: mk/dev/shared/reports/unit-test-{platform}-{feature}.json
+  impl-result: bk/dev/shared/{platform}/{feature}-impl-result.json
+  Output: bk/dev/shared/reports/unit-test-{platform}-{feature}.json
   IMPORTANT: Do NOT write new tests — only run existing suite
 ")
 ```
@@ -193,7 +193,7 @@ All 3 mandatory when refactor is part of a planned workflow.
 
 ## State Persistence
 
-File: `mk/dev/shared/.workflow-state.json`
+File: `bk/dev/shared/.workflow-state.json`
 
 ```json
 {

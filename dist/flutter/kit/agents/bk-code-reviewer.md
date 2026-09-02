@@ -70,7 +70,7 @@ Background: See `_base-background-lite.md` for shared read-only agent cognitive 
 ```
 
 ## Output
-Write `mk/dev/shared/reports/code-review-{feature}.md`:
+Write `bk/dev/shared/reports/code-review-{feature}.md`:
 
 ```markdown
 ## Code Review: {feature}
@@ -95,7 +95,7 @@ Write `mk/dev/shared/reports/code-review-{feature}.md`:
 - FORBIDDEN TOOLS: Edit, Bash, Task — read-only agent, never modifies code
 - Max 2 review cycles per PR
 - Never spawns other agents (leaf agent)
-- Output: write review report to `mk/dev/shared/reports/code-review-{feature}.md`
+- Output: write review report to `bk/dev/shared/reports/code-review-{feature}.md`
 - Ref: agent-protocols/output-gate.md, agent-protocols/tool-restriction.md
 
 ## Tool Integration

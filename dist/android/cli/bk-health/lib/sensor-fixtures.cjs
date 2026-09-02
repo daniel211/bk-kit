@@ -362,13 +362,13 @@ const FIXTURES = [
       input: {
         tool_name: 'Write',
         tool_input: {
-          file_path: 'mk/docs/foundation/overview.md',
+          file_path: 'bk/docs/foundation/overview.md',
           content: '# Overview\nThis project targets iOS.\n'
         }
       },
       env: {},
       files: {
-        'mk/docs/foundation/overview.md': '# Overview\nThis project targets iOS.\n',
+        'bk/docs/foundation/overview.md': '# Overview\nThis project targets iOS.\n',
         '.claude/.bk.json': JSON.stringify({ hooks: {} })
       }
     },
@@ -389,7 +389,7 @@ const FIXTURES = [
       env: {},
       files: {
         '.claude/.bk.json': JSON.stringify({ hooks: {} }),
-        'mk/dev/shared/.workflow-state.json': JSON.stringify({
+        'bk/dev/shared/.workflow-state.json': JSON.stringify({
           feature: 'test-feature',
           current_phase: 'coding',
           complexity_tier: 'standard'
@@ -413,7 +413,7 @@ const FIXTURES = [
       env: {},
       files: {
         '.claude/.bk.json': JSON.stringify({ hooks: {} }),
-        'mk/dev/shared/.workflow-state.json': JSON.stringify({
+        'bk/dev/shared/.workflow-state.json': JSON.stringify({
           feature: 'test-feature',
           current_phase: 'coding',
           complexity_tier: 'complex'
@@ -437,7 +437,7 @@ const FIXTURES = [
       env: { CLAUDE_CONTEXT_USAGE: '90' },  // triggers CRITICAL advisory
       files: {
         '.claude/.bk.json': JSON.stringify({ hooks: {} }),
-        'mk/dev/shared/.workflow-state.json': JSON.stringify({
+        'bk/dev/shared/.workflow-state.json': JSON.stringify({
           complexity_tier: 'complex',
           turnCount: 180
         })
@@ -460,7 +460,7 @@ const FIXTURES = [
       env: {},
       files: {
         '.claude/.bk.json': JSON.stringify({ hooks: {} }),
-        'mk/dev/shared/.statusline-cache.json': JSON.stringify({
+        'bk/dev/shared/.statusline-cache.json': JSON.stringify({
           context_pct: 30,  // safe level — not blocking
           updated: Date.now()
         })
@@ -483,7 +483,7 @@ const FIXTURES = [
       env: {},
       files: {
         '.claude/.bk.json': JSON.stringify({ hooks: {} }),
-        'mk/dev/shared/.workflow-state.json': JSON.stringify({
+        'bk/dev/shared/.workflow-state.json': JSON.stringify({
           feature: 'test-feature',
           current_phase: 'plan'
         })
@@ -506,7 +506,7 @@ const FIXTURES = [
       env: {},
       files: {
         '.claude/.bk.json': JSON.stringify({ hooks: {} }),
-        'mk/dev/shared/.workflow-state.json': JSON.stringify({
+        'bk/dev/shared/.workflow-state.json': JSON.stringify({
           workflowId: 'bk-code',
           complexity_tier: 'complex',
           phase: 'coding',
@@ -577,7 +577,7 @@ const FIXTURES = [
       env: {},
       files: {
         '.claude/.bk.json': JSON.stringify({ hooks: {} }),
-        'mk/dev/shared/.workflow-state.json': JSON.stringify({
+        'bk/dev/shared/.workflow-state.json': JSON.stringify({
           feature: 'test-feature',
           current_phase: 'coding'
         })
@@ -645,7 +645,7 @@ const FIXTURES = [
       env: {},
       files: {
         '.claude/.bk.json': JSON.stringify({ hooks: {} }),
-        'mk/docs/foundation/overview.md': '# iOS App\nPlatform: iOS\nArchitecture: MVVM\n'
+        'bk/docs/foundation/overview.md': '# iOS App\nPlatform: iOS\nArchitecture: MVVM\n'
       }
     },
     expected: {
@@ -665,7 +665,7 @@ const FIXTURES = [
       env: {},
       files: {
         '.claude/.bk.json': JSON.stringify({ hooks: {} }),
-        'mk/dev/shared/.workflow-state.json': JSON.stringify({
+        'bk/dev/shared/.workflow-state.json': JSON.stringify({
           feature: 'test-feature',
           cumulativeCostUsd: 0.05
         })
@@ -716,7 +716,7 @@ const FIXTURES = [
       env: {},
       files: {
         '.claude/.bk.json': JSON.stringify({ hooks: {} }),
-        'mk/dev/shared/.workflow-state.json': JSON.stringify({
+        'bk/dev/shared/.workflow-state.json': JSON.stringify({
           feature: 'test-feature',
           cumulativeCostUsd: 0.01
         })
@@ -804,7 +804,7 @@ const FIXTURES = [
       env: {},
       files: {
         '.claude/.bk.json': JSON.stringify({ hooks: {} }),
-        'mk/dev/shared/.workflow-state.json': JSON.stringify({
+        'bk/dev/shared/.workflow-state.json': JSON.stringify({
           feature: 'test-feature',
           current_phase: 'review'
         })
@@ -833,7 +833,7 @@ const FIXTURES = [
       env: {},
       files: {
         '.claude/.bk.json': JSON.stringify({ hooks: {} }),
-        'mk/dev/shared/.workflow-state.json': JSON.stringify({
+        'bk/dev/shared/.workflow-state.json': JSON.stringify({
           feature: 'test-feature',
           current_phase: 'coding'
         })
@@ -857,7 +857,7 @@ const FIXTURES = [
       env: {},
       files: {
         '.claude/.bk.json': JSON.stringify({ hooks: {} }),
-        'mk/dev/shared/.workflow-state.json': JSON.stringify({
+        'bk/dev/shared/.workflow-state.json': JSON.stringify({
           feature: 'test-feature',
           command: 'bk-code',
           current_phase: 'coding',
@@ -882,7 +882,7 @@ const FIXTURES = [
       env: {},
       files: {
         '.claude/.bk.json': JSON.stringify({ hooks: {} }),
-        'mk/dev/test-feature/plan.md': [
+        'bk/dev/test-feature/plan.md': [
           '# Plan: test-feature',
           '## Sub-tasks',
           ...Array(12).fill(null).map((_, i) => `### Sub-task ${i + 1}\n- [ ] Implement part ${i + 1}`)
@@ -907,13 +907,13 @@ const FIXTURES = [
       },
       env: { BK_BUDGET_OVERRIDE: '' },
       files: {
-        'mk/dev/shared/budget-config.json': JSON.stringify({
+        'bk/dev/shared/budget-config.json': JSON.stringify({
           enabled: true,
           daily_budget_usd: 0.001,  // very low → triggers advisory
           daily_warn_pct: 0.5,
           daily_block_pct: 0.95
         }),
-        'mk/dev/shared/.workflow-state.json': JSON.stringify({
+        'bk/dev/shared/.workflow-state.json': JSON.stringify({
           feature: 'test-feature',
           total_cost_usd: 0.005,  // exceeds daily budget
           cost_by_date: { [new Date().toISOString().slice(0,10)]: 0.005 }
@@ -947,7 +947,7 @@ const FIXTURES = [
             JSON.stringify({ ts: now - 1000, type: t })
           ).join('\n') + '\n';
         })(),
-        'mk/dev/shared/.workflow-state.json': JSON.stringify({ global_halt: false })
+        'bk/dev/shared/.workflow-state.json': JSON.stringify({ global_halt: false })
       }
     },
     expected: {
@@ -987,7 +987,7 @@ const FIXTURES = [
       input: {
         tool_name: 'Write',
         tool_input: {
-          file_path: 'mk/docs/foundation/architecture.md',
+          file_path: 'bk/docs/foundation/architecture.md',
           content: '# Architecture\nMVVM pattern used throughout.'
         }
       },
@@ -1016,7 +1016,7 @@ const FIXTURES = [
       env: {},
       files: {
         '.claude/.bk.json': JSON.stringify({ hooks: {} }),
-        'mk/dev/shared/.workflow-state.json': JSON.stringify({
+        'bk/dev/shared/.workflow-state.json': JSON.stringify({
           feature: 'test-feature',
           current_phase: 'coding'
         })
@@ -1035,7 +1035,7 @@ const FIXTURES = [
       input: {
         tool_name: 'Write',
         tool_input: {
-          file_path: 'mk/dev/shared/.workflow-state.json',
+          file_path: 'bk/dev/shared/.workflow-state.json',
           content: JSON.stringify({
             command: 'bk-code',
             current_phase: 'review',  // invalid: plan→coding is valid, not plan→review
@@ -1047,7 +1047,7 @@ const FIXTURES = [
       env: {},
       files: {
         '.claude/.bk.json': JSON.stringify({ hooks: {} }),
-        'mk/dev/shared/.workflow-state.json': JSON.stringify({
+        'bk/dev/shared/.workflow-state.json': JSON.stringify({
           command: 'bk-code',
           current_phase: 'plan',
           workflow_type: 'bk-code',  // required for FSM validation
@@ -1167,7 +1167,7 @@ const FIXTURES = [
       env: {},
       files: {
         '.claude/.bk.json': JSON.stringify({ hooks: {} }),
-        'mk/dev/shared/.workflow-state.json': JSON.stringify({
+        'bk/dev/shared/.workflow-state.json': JSON.stringify({
           feature: 'test-feature',
           agent_dispatch_counts: { 'bk-ios-developer': 1 }  // within limits → passes
         })

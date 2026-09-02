@@ -19,7 +19,7 @@ function writeJson(filePath, obj) {
 }
 
 function getStateFile(projectRoot) {
-  return path.join(projectRoot, 'mk', 'dev', 'shared', '.workflow-state.json');
+  return path.join(projectRoot, 'bk', 'dev', 'shared', '.workflow-state.json');
 }
 
 /**

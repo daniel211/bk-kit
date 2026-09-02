@@ -4,7 +4,7 @@ Auto-generate feature-level SRS within bk-plan workflow.
 
 ## Input
 
-- `mk/docs/srs/*.md` (project-level SRS, if exists)
+- `bk/docs/srs/*.md` (project-level SRS, if exists)
 - Feature name + description from args
 - Foundation context (from Step 1)
 
@@ -12,18 +12,18 @@ Auto-generate feature-level SRS within bk-plan workflow.
 
 ### 1. Extract from Project SRS
 
-IF `mk/docs/srs/` exists:
+IF `bk/docs/srs/` exists:
 ```
 Grep project SRS for feature keywords:
-  mk/docs/srs/functional-requirements.md → matching use cases (UC-*)
-  mk/docs/srs/nonfunctional-requirements.md → relevant NFRs
-  mk/docs/srs/ui-ux-requirements.md → matching screens
-  mk/docs/srs/api-contract.md → matching endpoints
+  bk/docs/srs/functional-requirements.md → matching use cases (UC-*)
+  bk/docs/srs/nonfunctional-requirements.md → relevant NFRs
+  bk/docs/srs/ui-ux-requirements.md → matching screens
+  bk/docs/srs/api-contract.md → matching endpoints
 ```
 
 ### 2. Fallback (no project SRS)
 
-IF `mk/docs/srs/` missing:
+IF `bk/docs/srs/` missing:
 - Generate from feature description + foundation data only
 - Note in output: "No project SRS — requirements derived from description"
 
@@ -59,7 +59,7 @@ IF `mk/docs/srs/` missing:
 
 ### 4. Write Feature SRS
 
-Write to `mk/dev/{feature}/srs.md`:
+Write to `bk/dev/{feature}/srs.md`:
 
 ```markdown
 # Feature SRS: {feature name}

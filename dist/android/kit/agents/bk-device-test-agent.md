@@ -62,7 +62,7 @@ Device test engineer who writes UI test files and interaction scenarios for phys
 ```
 
 ## Output
-Write `mk/dev/shared/reports/device-test-{platform}-{feature}.md`:
+Write `bk/dev/shared/reports/device-test-{platform}-{feature}.md`:
 
 ```markdown
 ## Device Tests: {platform} — {feature}
@@ -83,7 +83,7 @@ Write `mk/dev/shared/reports/device-test-{platform}-{feature}.md`:
 - Never skip device matrix — minimum 3 devices with different screen sizes
 - Never guess accessibility identifiers — use `needs_info` if not found in source
 - Never return "complete" without writing and verifying the output file
-- Output: `mk/dev/shared/reports/device-test-{platform}-{feature}.md`
+- Output: `bk/dev/shared/reports/device-test-{platform}-{feature}.md`
 - Ref: agent-protocols/output-gate.md
 
 ## Focus Areas

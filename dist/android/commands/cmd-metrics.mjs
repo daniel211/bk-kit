@@ -1,5 +1,5 @@
 /**
- * cmd-metrics.mjs — `mk metrics` command: display aggregated workflow metrics.
+ * cmd-metrics.mjs — `bk metrics` command: display aggregated workflow metrics.
  *
  * Reads .bk-metrics/workflow-summary.jsonl and formats a summary table.
  * Options: --last N (default 7), --skill <name>

@@ -1,7 +1,7 @@
 ---
 paths:
-  - mk/dev/shared/.workflow-state.json
-  - mk/dev/**
+  - bk/dev/shared/.workflow-state.json
+  - bk/dev/**
 ---
 
 # Workflow State Machine
@@ -93,7 +93,7 @@ Fix-loop max 1: 1 automatic retry, then escalate to user.
 
 ## State Persistence
 
-File: `mk/dev/shared/.workflow-state.json`
+File: `bk/dev/shared/.workflow-state.json`
 
 ```json
 {

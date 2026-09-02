@@ -3,7 +3,7 @@
  *
  * Triggers: PreCompact event.
  * Scope: complexity_tier in [complex, architectural] only.
- * Output: mk/dev/shared/handoff/handoff-YYYYMMDD-HHMMSS.md (keeps latest 3).
+ * Output: bk/dev/shared/handoff/handoff-YYYYMMDD-HHMMSS.md (keeps latest 3).
  * Fail-open: any error → exit 0 silently.
  */
 
@@ -76,7 +76,7 @@ ${fileLines}
 
 ## Next agent instructions
 1. Read this handoff doc first.
-2. Read \`mk/dev/shared/.workflow-state.json\` for full state.
+2. Read \`bk/dev/shared/.workflow-state.json\` for full state.
 3. Continue from the **Remaining** tasks above.
 4. Maintain the same complexity tier: **${tier}**.
 5. Do NOT restart completed tasks.
@@ -106,7 +106,7 @@ async function main() {
     if (!tier || !COMPLEX_TIERS.has(tier)) process.exit(0);
 
     const root = resolveProjectRoot();
-    const handoffDir = path.join(root, 'mk', 'dev', 'shared', 'handoff');
+    const handoffDir = path.join(root, 'bk', 'dev', 'shared', 'handoff');
     fs.mkdirSync(handoffDir, { recursive: true });
 
     const ts = formatTimestamp(new Date());

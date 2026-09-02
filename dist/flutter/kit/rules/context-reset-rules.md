@@ -15,7 +15,7 @@ Trivial/standard tiers use `/compact` (compaction) — no reset needed.
 ## Reset Protocol
 
 1. **Handoff doc auto-written** by `handoff-writer` at PreCompact or when >= 75%.
-2. Find latest handoff: `mk/dev/shared/handoff/handoff-*.md` (newest file).
+2. Find latest handoff: `bk/dev/shared/handoff/handoff-*.md` (newest file).
 3. Run `/clear` in Claude Code.
 4. In new session: read handoff doc → read `.workflow-state.json` → continue.
 

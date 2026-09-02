@@ -10,7 +10,7 @@ Merge all gathered data into `{srs_dir}/*.md` files.
 | URD content | 01-overview, 02-functional, 03-nonfunctional |
 | Figma (design specs) | 05-ui-ux-requirements |
 | API spec | 04-api-contract |
-| mk/docs/foundation/* | 01-overview (platform context) |
+| bk/docs/foundation/* | 01-overview (platform context) |
 
 ## Write Order (phase-separated)
 

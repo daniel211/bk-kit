@@ -80,8 +80,8 @@ function runSteerer(opts = {}) {
       steerer: {
         min_violation_count: 3,
         lookback_days: 30,
-        draft_path: 'mk/dev/shared/.learned-preferences-draft.md',
-        target_path: 'mk/dev/shared/learned-preferences.md',
+        draft_path: 'bk/dev/shared/.learned-preferences-draft.md',
+        target_path: 'bk/dev/shared/learned-preferences.md',
         backup_dir: '.bk-metrics/learned-preferences-backups'
       }
     };
@@ -151,7 +151,7 @@ function runSteerer(opts = {}) {
   // Write draft
   const draftPath = path.isAbsolute(steererConfig.draft_path || '')
     ? steererConfig.draft_path
-    : path.join(root, steererConfig.draft_path || 'mk/dev/shared/.learned-preferences-draft.md');
+    : path.join(root, steererConfig.draft_path || 'bk/dev/shared/.learned-preferences-draft.md');
 
   const draftResult = writeDraft(candidates, draftPath);
   process.stdout.write(summary + '\n');
@@ -161,7 +161,7 @@ function runSteerer(opts = {}) {
   if (apply) {
     const targetPath = path.isAbsolute(steererConfig.target_path || '')
       ? steererConfig.target_path
-      : path.join(root, steererConfig.target_path || 'mk/dev/shared/learned-preferences.md');
+      : path.join(root, steererConfig.target_path || 'bk/dev/shared/learned-preferences.md');
     const backupDir = path.isAbsolute(steererConfig.backup_dir || '')
       ? steererConfig.backup_dir
       : path.join(root, steererConfig.backup_dir || '.bk-metrics/learned-preferences-backups');

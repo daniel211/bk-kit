@@ -1,6 +1,6 @@
 ---
 paths:
-  - mk/dev/**
+  - bk/dev/**
 ---
 
 # Skill Chain Registry

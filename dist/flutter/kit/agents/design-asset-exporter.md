@@ -173,4 +173,4 @@ The `rendering` field drives `Contents.json` template-rendering-intent for iOS:
 - Output: `{flow}/assets/` + `{flow}/raw/asset-export-report.json`
 - **Return format (STRICT):** Final message MUST be exactly 1 line:
   `DONE: {N} assets exported, {M} skipped, {K} failed → {flow}/raw/asset-export-report.json`
-  Example: `DONE: 18 assets exported, 7 skipped, 0 failed → mk/dev/.../raw/asset-export-report.json`
+  Example: `DONE: 18 assets exported, 7 skipped, 0 failed → bk/dev/.../raw/asset-export-report.json`

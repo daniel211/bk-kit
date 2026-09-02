@@ -9,7 +9,7 @@ For layout issues, visual regressions, styling bugs.
 
 ### Step 1: Capture Current State
 - Get screenshot/recording from user
-- Read project design guidelines from `mk/docs/foundation/`
+- Read project design guidelines from `bk/docs/foundation/`
 - Identify exact visual discrepancy
 
 ### Step 2: Analyze

@@ -27,7 +27,7 @@ user-invocable: false
 ## 2. FILE STRUCTURE
 
 ```
-mk/dev/
+bk/dev/
 ├── shared/
 │   ├── design/{feature}-specs.md, -tokens.json
 │   ├── api/{feature}-endpoints.json, -models.json
@@ -56,7 +56,7 @@ mk/dev/
   "files_changed": [
     {"path": "...", "change": "created", "description": "..."}
   ],
-  "test_plan": "mk/dev/test-cases/{platform}-login.md"
+  "test_plan": "bk/dev/test-cases/{platform}-login.md"
 }
 ```
 
@@ -181,7 +181,7 @@ AFTER agent completes:
 
 ## 8. WORKFLOW COMPLETION REPORT
 
-Path: `mk/dev/shared/reports/workflow-report-{feature}.json`
+Path: `bk/dev/shared/reports/workflow-report-{feature}.json`
 
 ```json
 {

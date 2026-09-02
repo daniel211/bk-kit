@@ -1,5 +1,5 @@
 /**
- * cmd-docs.mjs — `mk docs` command: scan, build, and serve the beer-kit docs site.
+ * cmd-docs.mjs — `bk docs` command: scan, build, and serve the beer-kit docs site.
  *
  * Flow: scan src/ markdown → build static HTML via template engine → serve or write-only.
  * Options: --port (default 3000), --build-only (skip serving).

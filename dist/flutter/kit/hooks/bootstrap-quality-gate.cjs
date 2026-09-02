@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // bootstrap-quality-gate.cjs - Validate foundation docs quality after bootstrap
-// Trigger: PostToolUse (Write) — only when writing to mk/docs/foundation/
+// Trigger: PostToolUse (Write) — only when writing to bk/docs/foundation/
 
 'use strict';
 
@@ -28,7 +28,7 @@ try {
       const filePath = toolInput.file_path || toolInput.path || '';
 
       // Only trigger for foundation docs
-      if (!filePath.includes('mk/docs/foundation/')) {
+      if (!filePath.includes('bk/docs/foundation/')) {
         timer.end({ status: 'skipped', exit: 0 });
         process.exit(0);
       }

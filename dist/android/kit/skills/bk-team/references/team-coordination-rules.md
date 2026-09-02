@@ -40,7 +40,7 @@ Rules for agents operating as teammates within an MK Agent Team.
 ## MK Stack Conventions
 
 ### Report Output
-- Save reports to `{plan-dir}/reports/` (injected via hook, fallback: `mk/dev/reports/`)
+- Save reports to `{plan-dir}/reports/` (injected via hook, fallback: `bk/dev/reports/`)
 - Naming: `{role}-{date}-{slug}.md` where role = bk-debugger, bk-code-reviewer, etc.
 - Sacrifice grammar for concision. List unresolved questions at end.
 
@@ -52,7 +52,7 @@ Rules for agents operating as teammates within an MK Agent Team.
 ### Docs Sync (Dev Teams Only)
 - After completing implementation tasks, lead MUST evaluate docs impact
 - State explicitly: `Docs impact: [none|minor|major]`
-- If impact: update `mk/docs/foundation/` or note in completion message
+- If impact: update `bk/docs/foundation/` or note in completion message
 
 ## Task Claiming
 

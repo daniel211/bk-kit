@@ -48,11 +48,11 @@ Example: `/bk-autopilot "login screen" --deep --parallel`
 
 ### Step 0: Pre-Flight Check
 
-- IF `mk/docs/foundation/overview.md` missing AND feature is not trivial:
+- IF `bk/docs/foundation/overview.md` missing AND feature is not trivial:
   - AskUserQuestion: "Foundation docs missing. Run /bk-bootstrap first?"
   - If yes → invoke `/bk-bootstrap`, then continue
   - If no → warn "Code quality may be reduced", continue
-- IF BRD/design specs detected in project (files matching `*brd*`, `*brief*`, `*requirements*` in root or `docs/`) AND no `mk/dev/{feature}/srs-overview.md`:
+- IF BRD/design specs detected in project (files matching `*brd*`, `*brief*`, `*requirements*` in root or `docs/`) AND no `bk/dev/{feature}/srs-overview.md`:
   - Suggest: "BRD detected. Consider /bk-spec first for structured requirements."
 
 ### Step 1: Parse Arguments
@@ -81,7 +81,7 @@ Example: `/bk-autopilot "login screen" --deep --parallel`
 
 Before transitioning from bk-plan to bk-code, validate:
 
-1. **Plan file exists** — `mk/dev/{feature}/plan.md` must exist and have content > 0 lines
+1. **Plan file exists** — `bk/dev/{feature}/plan.md` must exist and have content > 0 lines
 2. **Task files exist** — at least 1 task file: `sub-task-*.md` (new format) OR `phase-*.md` (legacy)
 3. **Task file completeness** — each task file must contain:
    - `## Overview` or `## Scope` section
@@ -107,7 +107,7 @@ Before transitioning from bk-plan to bk-code, validate:
 ### Step 5: Summary
 
 Report to user:
-- Plan location: `mk/dev/{feature}/plan.md`
+- Plan location: `bk/dev/{feature}/plan.md`
 - Phases completed
 - Files modified
 - Commit reference (if bk-code finalized)

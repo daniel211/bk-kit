@@ -33,8 +33,8 @@ Read each file. Skip files > 500 lines (summarize instead).
 
 ### 2. Gather Optional Context
 Check for existing pipeline outputs (skip if missing):
-- `mk/dev/{feature}/design/*/design.md` → screen names, component list (from /bk-spec)
-- `mk/dev/shared/api-output.json` → endpoint paths, models (from bk-openapi-parse)
+- `bk/dev/{feature}/design/*/design.md` → screen names, component list (from /bk-spec)
+- `bk/dev/shared/api-output.json` → endpoint paths, models (from bk-openapi-parse)
 
 ### 3. Extract Requirements (Inline)
 Using all collected docs + optional context, extract structured requirements:
@@ -45,7 +45,7 @@ Using all collected docs + optional context, extract structured requirements:
 - Data models and relationships
 
 ### 4. Output
-Write `mk/dev/shared/requirements-output.json`:
+Write `bk/dev/shared/requirements-output.json`:
 ```json
 {
   "schema": "ProjectRequirements",

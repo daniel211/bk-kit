@@ -9,7 +9,7 @@ Replaces 15+ agent Write calls with a single Bash call, saving ~4-5K tokens/run.
 
 Usage:
   # Auto-detect platform from report's techStack field:
-  python generate-assets.py --report mk/dev/flow/raw/asset-export-report.json
+  python generate-assets.py --report bk/dev/flow/raw/asset-export-report.json
 
   # Override platform:
   python generate-assets.py --platform ios     --report ...

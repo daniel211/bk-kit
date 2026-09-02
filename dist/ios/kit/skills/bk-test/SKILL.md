@@ -32,12 +32,12 @@ Auto-approve — no user gate required.
 
 Parse `$ARGUMENTS` for feature name, platform, and test type (unit / UI / device / all).
 Detect platform from project files. Load platform context from `config/platform-context.{platform}.json`.
-Check for `impl-result.json` at `mk/dev/shared/{platform}/{feature}-impl-result.json`.
+Check for `impl-result.json` at `bk/dev/shared/{platform}/{feature}-impl-result.json`.
 
 ### Foundation Context Loading
 Before dispatching the test-architect agent:
-1. Read `mk/docs/foundation/architecture.md` — extract architecture patterns, layer structure
-2. Read `mk/docs/foundation/code-guidelines.md` — extract test patterns, naming conventions
+1. Read `bk/docs/foundation/architecture.md` — extract architecture patterns, layer structure
+2. Read `bk/docs/foundation/code-guidelines.md` — extract test patterns, naming conventions
 3. Include foundation summary in test-architect dispatch prompt to ensure test strategy aligns with project conventions
 
 ### Step 2: Test Strategy
@@ -47,8 +47,8 @@ Dispatch bk-test-architect foreground (sonnet):
 Task(subagent_type: "bk-test-architect", model: "sonnet", prompt: "
   Feature: {feature_name}
   Platform: {platform}
-  impl-result: mk/dev/shared/{platform}/{feature}-impl-result.json
-  Output: mk/dev/shared/reports/test-strategy-{feature}.json
+  impl-result: bk/dev/shared/{platform}/{feature}-impl-result.json
+  Output: bk/dev/shared/reports/test-strategy-{feature}.json
 ")
 ```
 
@@ -63,15 +63,15 @@ Dispatch test agents background (sonnet), all in ONE message:
 Task(subagent_type: "bk-unit-test-agent", model: "sonnet", run_in_background: true, prompt: "
   Feature: {feature_name}
   Platform: {platform}
-  Test strategy: mk/dev/shared/reports/test-strategy-{feature}.json
-  Output: mk/dev/shared/reports/unit-test-{platform}-{feature}.json
+  Test strategy: bk/dev/shared/reports/test-strategy-{feature}.json
+  Output: bk/dev/shared/reports/unit-test-{platform}-{feature}.json
 ")
 
 # Optional — when feature has UI components or user requests device tests:
 Task(subagent_type: "bk-device-test-agent", model: "sonnet", run_in_background: true, prompt: "
   Feature: {feature_name}
   Platform: {platform}
-  Output: mk/dev/shared/reports/device-test-{platform}-{feature}.json
+  Output: bk/dev/shared/reports/device-test-{platform}-{feature}.json
 ")
 ```
 
@@ -87,9 +87,9 @@ If failures exist: suggest `/bk-debug` for bugs or `/bk-code` for missing implem
 
 ## Output
 
-- `mk/dev/shared/reports/test-strategy-{feature}.json`
-- `mk/dev/shared/reports/unit-test-{platform}-{feature}.json`
-- `mk/dev/shared/reports/device-test-{platform}-{feature}.json` (optional)
+- `bk/dev/shared/reports/test-strategy-{feature}.json`
+- `bk/dev/shared/reports/unit-test-{platform}-{feature}.json`
+- `bk/dev/shared/reports/device-test-{platform}-{feature}.json` (optional)
 
 ## Constraints
 

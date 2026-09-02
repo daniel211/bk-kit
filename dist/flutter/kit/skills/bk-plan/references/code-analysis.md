@@ -1,14 +1,14 @@
 # Code Analysis (Feature-Focused)
 
 Scan codebase for feature-relevant files, affected code, and blast radius.
-Broad project context comes from `mk/docs/foundation/` (bootstrap output).
+Broad project context comes from `bk/docs/foundation/` (bootstrap output).
 
 ## Prerequisites
 
 Read from foundation (loaded in Step 1):
-- `mk/docs/foundation/architecture.md` → known patterns, layers, key files
-- `mk/docs/foundation/code-guidelines.md` → conventions to follow
-- `mk/docs/foundation/dependencies.md` → available packages
+- `bk/docs/foundation/architecture.md` → known patterns, layers, key files
+- `bk/docs/foundation/code-guidelines.md` → conventions to follow
+- `bk/docs/foundation/dependencies.md` → available packages
 
 If foundation missing → fallback to full scan (see Legacy Scan below).
 
@@ -74,7 +74,7 @@ Write to `{plan-dir}/research/code-analysis-summary.md`:
 # Code Analysis: {feature}
 
 ## Foundation Context
-- Architecture: {from mk/docs/foundation/architecture.md}
+- Architecture: {from bk/docs/foundation/architecture.md}
 - Patterns: {relevant patterns for this feature}
 
 ## Affected Files
@@ -95,7 +95,7 @@ Write to `{plan-dir}/research/code-analysis-summary.md`:
 
 ## Legacy Scan (no foundation)
 
-If `mk/docs/foundation/` missing and user skipped bootstrap:
+If `bk/docs/foundation/` missing and user skipped bootstrap:
 - Detect platform from file signals (pubspec.yaml/xcworkspace/build.gradle)
 - Grep for architecture patterns (ViewModel, Repository, UseCase)
 - Grep for DI, navigation, networking patterns

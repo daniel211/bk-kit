@@ -68,7 +68,7 @@ try {
       } catch { /* ignore config errors */ }
 
       // T0: Always inject — workflow state + plan dir (~30 tokens)
-      const statePath = path.join(root, 'mk', 'dev', 'shared', '.workflow-state.json');
+      const statePath = path.join(root, 'bk', 'dev', 'shared', '.workflow-state.json');
       let state = {};
       if (fs.existsSync(statePath)) {
         try {
@@ -79,14 +79,14 @@ try {
         } catch (e) { /* ignore corrupt state */ }
       }
 
-      const plansDir = path.join(root, 'mk', 'dev');
+      const plansDir = path.join(root, 'bk', 'dev');
       if (fs.existsSync(plansDir)) {
         try {
           const dirs = fs.readdirSync(plansDir)
             .filter(d => !d.startsWith('.') && d !== 'shared')
             .sort().reverse();
           if (dirs.length > 0) {
-            lines.push(`Plan: mk/dev/${dirs[0]}/`);
+            lines.push(`Plan: bk/dev/${dirs[0]}/`);
           }
         } catch (e) { /* ignore */ }
       }
@@ -146,7 +146,7 @@ try {
         lines.push('- Finalize: Trivial=git | Standard=pm+git | Complex=pm+docs+git.');
 
         // Workflow-specific compact rules (replaces always-loaded static rules)
-        const statePath2 = path.join(root, 'mk', 'dev', 'shared', '.workflow-state.json');
+        const statePath2 = path.join(root, 'bk', 'dev', 'shared', '.workflow-state.json');
         try {
           if (fs.existsSync(statePath2)) {
             const ws = JSON.parse(fs.readFileSync(statePath2, 'utf8'));

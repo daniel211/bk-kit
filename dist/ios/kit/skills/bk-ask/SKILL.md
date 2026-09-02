@@ -34,9 +34,9 @@ Read-only consultation — no code changes.
 ## Foundation Context
 
 Load project context before answering:
-1. Check `mk/docs/foundation/overview.md` — project platform, architecture, patterns
-2. Check `mk/docs/foundation/dependencies.md` — current tech stack
-3. Check `mk/docs/foundation/conventions.md` — code conventions in use
+1. Check `bk/docs/foundation/overview.md` — project platform, architecture, patterns
+2. Check `bk/docs/foundation/dependencies.md` — current tech stack
+3. Check `bk/docs/foundation/conventions.md` — code conventions in use
 4. If foundation missing → answer generically, note assumptions
 
 ## Process
@@ -55,7 +55,7 @@ Load project context before answering:
 
 For Architecture/Platform/Security questions:
 - Scout codebase with Explore agents to understand current patterns
-- Check `mk/docs/foundation/` for existing decisions
+- Check `bk/docs/foundation/` for existing decisions
 - If question involves unfamiliar tech → dispatch researcher agent (background)
 
 ### Background Research (if question needs codebase context)
@@ -65,7 +65,7 @@ Task(subagent_type: "bk-researcher", model: "haiku", run_in_background: true,
   description: "Research context for question", prompt: "
   Gather context for question: {user_question}
   Search codebase for relevant patterns, files, recent changes.
-  Output: mk/dev/shared/research/ask-context.md (max 100 lines)
+  Output: bk/dev/shared/research/ask-context.md (max 100 lines)
 ")
 ```
 

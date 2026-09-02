@@ -33,7 +33,7 @@ Runs inline — reads spec and extracts structured data directly.
 ### 2. Parse Spec (Inline)
 If `src/scripts/openapi-transformer.ts` exists, use it:
 ```bash
-npx tsx src/scripts/openapi-transformer.ts --input {specPath} --output mk/dev/shared/api-output.json
+npx tsx src/scripts/openapi-transformer.ts --input {specPath} --output bk/dev/shared/api-output.json
 ```
 
 Otherwise, parse inline — extract:
@@ -43,7 +43,7 @@ Otherwise, parse inline — extract:
 - **Base URL**: servers/host info
 
 ### 3. Output
-Write `mk/dev/shared/api-output.json`:
+Write `bk/dev/shared/api-output.json`:
 ```json
 {
   "schema": "ApiOutput",

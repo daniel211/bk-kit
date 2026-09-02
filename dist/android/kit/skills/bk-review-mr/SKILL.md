@@ -46,7 +46,7 @@ Parse `$ARGUMENTS`:
 
 Resolve `SRS_PATH`:
 - If `--srs <path>` given, use it as-is (file or directory).
-- Else if `mk/docs/srs/` exists, default `SRS_PATH=mk/docs/srs/`.
+- Else if `bk/docs/srs/` exists, default `SRS_PATH=bk/docs/srs/`.
 - Else `SRS_PATH=none` — review proceeds without SRS-based logic checks (skip Step 3b, omit SRS review focus in dispatch prompts).
 
 Validate branches exist:
@@ -77,14 +77,14 @@ git diff --stat origin/$TARGET_BRANCH...origin/$SOURCE_BRANCH
 
 Generate full diff for reviewers:
 ```bash
-git diff origin/$TARGET_BRANCH...origin/$SOURCE_BRANCH > mk/dev/shared/reports/mr-diff-{source-slug}.patch
+git diff origin/$TARGET_BRANCH...origin/$SOURCE_BRANCH > bk/dev/shared/reports/mr-diff-{source-slug}.patch
 ```
 
 Where `{source-slug}` = SOURCE_BRANCH with `/` replaced by `-`.
 
 ### Step 3: Load Foundation Context
 
-1. Read `mk/docs/foundation/architecture.md` (if exists) — pass patterns to reviewers
+1. Read `bk/docs/foundation/architecture.md` (if exists) — pass patterns to reviewers
 2. Detect platform per `.claude/rules/core-rules.md` section 1
 
 ### Step 3b: Load SRS Context (if `SRS_PATH != none`)
@@ -111,7 +111,7 @@ Count changed files `N` from Step 2's file list:
 Splitting rule: simple even split by position in the file list (chunk size 15) — not grouped by module/folder. Deterministic and avoids uneven chunks.
 
 For **Split tier** only:
-- For each chunk, generate a chunk-scoped diff: `git diff origin/$TARGET_BRANCH...origin/$SOURCE_BRANCH -- {chunk_files}` → `mk/dev/shared/reports/mr-diff-{source-slug}-chunk{i}.patch`
+- For each chunk, generate a chunk-scoped diff: `git diff origin/$TARGET_BRANCH...origin/$SOURCE_BRANCH -- {chunk_files}` → `bk/dev/shared/reports/mr-diff-{source-slug}-chunk{i}.patch`
 - `TaskCreate` one sub-task per chunk (subject `"Review chunk {i}/{K}: {file_count} files"`, unblocked, all parallel), linked under the parent tracking task from Step 1b.
 - The optional `bk-security-auditor` from Step 4 is dispatched ONCE against the full security-sensitive file list regardless of tier — it is a narrower set already, splitting it adds no value.
 
@@ -140,10 +140,10 @@ Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true
   Changed files:
   {file_list — one per line}
 
-  Diff patch: mk/dev/shared/reports/mr-diff-{source-slug}.patch
+  Diff patch: bk/dev/shared/reports/mr-diff-{source-slug}.patch
 
   Architecture rules: .claude/rules/{platform}-rules.md
-  Architecture doc: mk/docs/foundation/architecture.md
+  Architecture doc: bk/docs/foundation/architecture.md
   SRS docs: {SRS_PATH, or 'none — skip SRS compliance check'}
 
   Review focus:
@@ -161,7 +161,7 @@ Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true
     - Edge case / validation rule specified in SRS but absent in code
     Cite the SRS requirement ID/section in each such finding.
 
-  Output: mk/dev/shared/reports/code-review-mr-{source-slug}.json (Split tier: code-review-mr-{source-slug}-chunk{i}.json)
+  Output: bk/dev/shared/reports/code-review-mr-{source-slug}.json (Split tier: code-review-mr-{source-slug}-chunk{i}.json)
 
   Report back (final message, in addition to writing the JSON): '{critical}C/{major}M/{minor}m/{info}I — <=2 sentence summary of top issue(s), or \"no significant findings\"'
 ")
@@ -180,9 +180,9 @@ Task(subagent_type: "bk-security-auditor", model: "sonnet", run_in_background: t
   Changed files (security-sensitive):
   {security_file_list}
 
-  Diff patch: mk/dev/shared/reports/mr-diff-{source-slug}.patch
+  Diff patch: bk/dev/shared/reports/mr-diff-{source-slug}.patch
 
-  Output: mk/dev/shared/reports/security-mr-{source-slug}.json
+  Output: bk/dev/shared/reports/security-mr-{source-slug}.json
 ")
 ```
 
@@ -224,11 +224,11 @@ If critical/major findings: suggest `/bk-debug` or `/bk-code` fix loop on source
 
 | File | Description |
 |------|-------------|
-| `mk/dev/shared/reports/mr-diff-{source-slug}.patch` | Raw git diff patch (Standard tier, whole diff) |
-| `mk/dev/shared/reports/code-review-mr-{source-slug}.json` | Code review findings (Standard tier) |
-| `mk/dev/shared/reports/security-mr-{source-slug}.json` | Security findings (optional) |
-| `mk/dev/shared/reports/mr-diff-{source-slug}-chunk{i}.patch` | Per-chunk diff patch (Split tier only, `i` = 1..K) |
-| `mk/dev/shared/reports/code-review-mr-{source-slug}-chunk{i}.json` | Per-chunk code review findings (Split tier only) |
+| `bk/dev/shared/reports/mr-diff-{source-slug}.patch` | Raw git diff patch (Standard tier, whole diff) |
+| `bk/dev/shared/reports/code-review-mr-{source-slug}.json` | Code review findings (Standard tier) |
+| `bk/dev/shared/reports/security-mr-{source-slug}.json` | Security findings (optional) |
+| `bk/dev/shared/reports/mr-diff-{source-slug}-chunk{i}.patch` | Per-chunk diff patch (Split tier only, `i` = 1..K) |
+| `bk/dev/shared/reports/code-review-mr-{source-slug}-chunk{i}.json` | Per-chunk code review findings (Split tier only) |
 
 ## Constraints
 

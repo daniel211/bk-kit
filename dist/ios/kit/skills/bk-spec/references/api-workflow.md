@@ -20,8 +20,8 @@ Task(
     Write SRS section: API Contract for {feature-name} ({feature-slug})
     API spec: {api_path} (read and parse — OpenAPI JSON/YAML or Swagger)
     Context:
-      - mk/dev/{feature-slug}/srs/01-overview.md (if exists — cross-reference UCs)
-      - mk/docs/foundation/overview.md
+      - bk/dev/{feature-slug}/srs/01-overview.md (if exists — cross-reference UCs)
+      - bk/docs/foundation/overview.md
     Load: references/api-contract.md
     Template: templates/04-api-contract.md
     Extract:
@@ -31,7 +31,7 @@ Task(
       - Error handling contract
       - Pagination contract (if detected)
     If 02-functional-requirements.md exists: link endpoints ↔ use cases
-    Output: mk/dev/{feature-slug}/srs/04-api-contract.md
+    Output: bk/dev/{feature-slug}/srs/04-api-contract.md
   "
 )
 ```
@@ -47,7 +47,7 @@ Task(
   run_in_background: true,
   description: "Review API contract quality for {feature-name}",
   prompt: "
-    Review API contract: mk/dev/{feature-slug}/srs/04-api-contract.md
+    Review API contract: bk/dev/{feature-slug}/srs/04-api-contract.md
     Context: Check metadata to determine if contract was parsed from OpenAPI spec or inferred from URD.
       - If inferred: apply looser quality bar, add note 'API contract inferred — cần xác nhận với backend team'
     Check:
@@ -57,10 +57,10 @@ Task(
     4. Error handling contract with status codes or error conditions
     5. Mermaid diagrams (if any) have valid syntax — semicolons escaped as #59;
     6. No placeholder content or TODO markers
-    7. If mk/dev/{feature-slug}/srs/02-functional-requirements.md exists: verify endpoint ↔ use case mapping
+    7. If bk/dev/{feature-slug}/srs/02-functional-requirements.md exists: verify endpoint ↔ use case mapping
     8. File under 120 lines
     TOOL RESTRICTION: You are a READ-ONLY agent. Do NOT use Edit, Bash, or Task tools.
-    Output: mk/dev/shared/reports/api-review-{feature-slug}.md
+    Output: bk/dev/shared/reports/api-review-{feature-slug}.md
     Verdict: OKAY or REVISE with specific issues
   "
 )

@@ -161,5 +161,43 @@ export function registerInit(program, platform) {
       } else {
         console.log(`\n⚠ Kit initialized with ${doctorResult.errors} issue(s). Run "bk-${platform} doctor" for details.`);
       }
+
+      printVersionControlNotice(targetDir);
     });
+}
+
+/**
+ * Tell the user exactly what init put in their repository and let them decide
+ * whether to track it. init creates three entries a clean working tree will show
+ * as untracked, and silently leaving the repo in that state is unhelpful:
+ *
+ *   .claude/           the kit itself — commit it to share one version across a team
+ *   .bk-version.json   install manifest used by `update` to detect local edits
+ *   .bk-metrics/       per-developer runtime telemetry, never worth committing
+ *
+ * Only prints inside a git repository, and stays quiet about entries the project
+ * already ignores.
+ */
+function printVersionControlNotice(targetDir) {
+  if (!existsSync(join(targetDir, '.git'))) return;
+
+  const entries = ['.claude/', '.bk-version.json', '.bk-metrics/'];
+  let ignored = '';
+  try {
+    ignored = readFileSync(join(targetDir, '.gitignore'), 'utf8');
+  } catch {
+    // No .gitignore — nothing is ignored yet.
+  }
+  const ignoredSet = new Set(
+    ignored.split('\n').map((l) => l.trim().replace(/\/$/, '')).filter(Boolean),
+  );
+  const untracked = entries.filter((e) => !ignoredSet.has(e.replace(/\/$/, '')));
+  if (untracked.length === 0) return;
+
+  console.log('\nVersion control — this created files git will show as untracked:');
+  console.log('  .claude/          the kit; commit it to pin one version for the team');
+  console.log('  .bk-version.json  install manifest, read by `update` to spot local edits');
+  console.log('  .bk-metrics/      per-developer runtime telemetry — do not commit');
+  console.log('\nCommit them, or ignore them by adding to .gitignore:');
+  for (const e of untracked) console.log(`  ${e}`);
 }

@@ -47,17 +47,17 @@ Keeps project documentation accurate and current after code changes. Updates roa
 - Platform-agnostic: does not read `.platform-context.json`
 - Always read current doc state before editing — never blind overwrite
 - Verify cross-references and links after updates
-- Output: updated files in `mk/docs/` directory
+- Output: updated files in `bk/docs/` directory
 
 ## Managed Documents
-- `mk/docs/project-overview-pdr.md` — project overview
-- `mk/docs/system-architecture.md` — architecture decisions
-- `mk/docs/code-standards.md` — coding conventions
-- `mk/docs/development-roadmap.md` — roadmap and progress
-- `mk/docs/project-changelog.md` — changelog with severity/impact
+- `bk/docs/project-overview-pdr.md` — project overview
+- `bk/docs/system-architecture.md` — architecture decisions
+- `bk/docs/code-standards.md` — coding conventions
+- `bk/docs/development-roadmap.md` — roadmap and progress
+- `bk/docs/project-changelog.md` — changelog with severity/impact
 
 ## Tool Integration
-- **Codebase summary:** When initializing docs or `mk/docs/codebase-summary.md` is missing, use `/bk-repomix` to generate codebase compaction, then create summary from it.
+- **Codebase summary:** When initializing docs or `bk/docs/codebase-summary.md` is missing, use `/bk-repomix` to generate codebase compaction, then create summary from it.
 
 ## Update Triggers
 - Feature complete → update roadmap status + changelog
@@ -120,9 +120,9 @@ Update project documentation after QR payment feature completion. Files implemen
 ### Files Updated
 | # | File | Changes |
 |---|------|---------|
-| 1 | mk/docs/development-roadmap.md | QR Payment status: planned → completed (Phase 2.3) |
-| 2 | mk/docs/project-changelog.md | Added v1.4.0 entry for QR payment feature |
-| 3 | mk/docs/system-architecture.md | Added QR Payment Coordinator flow diagram |
+| 1 | bk/docs/development-roadmap.md | QR Payment status: planned → completed (Phase 2.3) |
+| 2 | bk/docs/project-changelog.md | Added v1.4.0 entry for QR payment feature |
+| 3 | bk/docs/system-architecture.md | Added QR Payment Coordinator flow diagram |
 
 ### Changelog Entry Added
 ```markdown

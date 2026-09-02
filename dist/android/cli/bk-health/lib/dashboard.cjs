@@ -69,7 +69,7 @@ function getDashboardData(opts = {}) {
   const windowMs = opts.windowMs || (24 * 60 * 60 * 1000); // default 24h
 
   const metricsDir = path.join(root, '.bk-metrics');
-  const stateFile = path.join(root, 'mk', 'dev', 'shared', '.workflow-state.json');
+  const stateFile = path.join(root, 'bk', 'dev', 'shared', '.workflow-state.json');
 
   const violations = readJsonlFiltered(path.join(metricsDir, 'violations.jsonl'), windowMs);
   const decisions  = readJsonlFiltered(path.join(metricsDir, 'decisions.jsonl'), windowMs);

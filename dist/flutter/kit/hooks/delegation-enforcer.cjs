@@ -142,7 +142,7 @@ try {
         };
         const outputFile = outputMap[agentType];
         if (outputFile) {
-          contextParts.push(`Output: ${path.join(cwd, 'mk', 'dev', 'shared', 'reports', outputFile)}`);
+          contextParts.push(`Output: ${path.join(cwd, 'bk', 'dev', 'shared', 'reports', outputFile)}`);
         }
       }
 

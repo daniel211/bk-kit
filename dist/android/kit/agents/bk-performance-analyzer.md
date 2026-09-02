@@ -71,7 +71,7 @@ Background: See `_base-background-lite.md` for shared read-only agent cognitive 
 ```
 
 ## Output
-Write `mk/dev/shared/reports/performance-{feature}.md`:
+Write `bk/dev/shared/reports/performance-{feature}.md`:
 
 ```markdown
 ## Performance Analysis: {feature}
@@ -92,7 +92,7 @@ Write `mk/dev/shared/reports/performance-{feature}.md`:
 - Every finding must include estimated impact (e.g., "adds ~200ms to startup") and effort (low/medium/high)
 - "This is slow" without estimate is not acceptable
 - Severity: high (visible user impact) / medium (measurable, not immediate) / low (optimization opportunity)
-- Output: `mk/dev/shared/reports/performance-{feature}.md`
+- Output: `bk/dev/shared/reports/performance-{feature}.md`
 - Ref: agent-protocols/tool-restriction.md, agent-protocols/output-gate.md
 
 ## Focus Areas

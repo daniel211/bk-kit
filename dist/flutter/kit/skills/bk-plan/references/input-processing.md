@@ -6,16 +6,16 @@ Extract structured data from user-provided sources into `inputs/`.
 
 | Source | Detect By | Script / Handler |
 |--------|-----------|--------|
-| Design (via /bk-spec) | Figma signal OR UI signal | Consume `mk/dev/{feature}/design/*/design.md` produced by `/bk-spec`. NO re-extract in /bk-plan. |
+| Design (via /bk-spec) | Figma signal OR UI signal | Consume `bk/dev/{feature}/design/*/design.md` produced by `/bk-spec`. NO re-extract in /bk-plan. |
 | Figma (CLI, deprecated) | `--figma URL` + FIGMA_TOKEN env | figma-mcp-adapter.ts → figma-parser.ts (legacy — prefer /bk-spec) |
-| Figma (local fallback) | `design-app/` folder or `mk/docs/design/*.md` files | Read design spec .md files directly (last resort) |
+| Figma (local fallback) | `design-app/` folder or `bk/docs/design/*.md` files | Read design spec .md files directly (last resort) |
 | OpenAPI | `--openapi PATH` or *.yaml/*.json with openapi/swagger field | openapi-transformer.ts |
 | Docs | `--docs PATH` or *.md files in specified directory | docs-intake.ts |
-| PRD/BRD | `mk/docs/product/prds/`, `mk/docs/requirements/`, `mk/docs/brd/` directories | Dispatch Explore agent → requirements.json |
-| Test Specs | `mk/docs/deliverables/testing/`, `mk/docs/test-cases/`, `mk/docs/qa/` | Dispatch Explore agent → requirements.json |
-| Architecture | `mk/docs/product/architecture/`, `mk/docs/architecture/` | Dispatch Explore agent → requirements.json |
-| API Docs | `mk/docs/api/`, `mk/docs/openapi/` | Dispatch Explore agent → requirements.json |
-| User Stories | `mk/docs/stories/`, `mk/docs/user-stories/` | Dispatch Explore agent → requirements.json |
+| PRD/BRD | `bk/docs/product/prds/`, `bk/docs/requirements/`, `bk/docs/brd/` directories | Dispatch Explore agent → requirements.json |
+| Test Specs | `bk/docs/deliverables/testing/`, `bk/docs/test-cases/`, `bk/docs/qa/` | Dispatch Explore agent → requirements.json |
+| Architecture | `bk/docs/product/architecture/`, `bk/docs/architecture/` | Dispatch Explore agent → requirements.json |
+| API Docs | `bk/docs/api/`, `bk/docs/openapi/` | Dispatch Explore agent → requirements.json |
+| User Stories | `bk/docs/stories/`, `bk/docs/user-stories/` | Dispatch Explore agent → requirements.json |
 
 ## Design Resolution (Consumer Mode)
 
@@ -23,8 +23,8 @@ Extract structured data from user-provided sources into `inputs/`.
 
 ```
 Design Resolution Priority (in /bk-plan Step 4a):
-  1. /bk-spec output present (mk/dev/{feature}/.spec-state.json with design_review_verdict)
-     → consume mk/dev/{feature}/design/*/design.md, write inputs/design-refs.json
+  1. /bk-spec output present (bk/dev/{feature}/.spec-state.json with design_review_verdict)
+     → consume bk/dev/{feature}/design/*/design.md, write inputs/design-refs.json
   2. Figma signal OR UI signal detected but no spec-state.json
      → STOP, AskUserQuestion route user back to /bk-spec --design
   3. Legacy figma-mcp-adapter.ts CLI (FIGMA_TOKEN env)
@@ -41,10 +41,10 @@ Producer files (written by `/bk-spec` Phase 2):
 
 | Path | Producer | Consumer use |
 |------|----------|--------------|
-| `mk/dev/{feature}/.spec-state.json` | Phase 2 state | Read `design_review_verdict`, `design_partial`, `design_cancelled` |
-| `mk/dev/{feature}/design/{slug}/design.md` | design-spec-writer | Per-screen specs (read by dev agents) |
-| `mk/dev/{feature}/design/raw/component-contracts.json` | design-validator | Component contract reference |
-| `mk/dev/{feature}/srs/05-ui-ux-requirements.md` | bk-docs-writer (Phase 2 Step 4) | UI requirements summary |
+| `bk/dev/{feature}/.spec-state.json` | Phase 2 state | Read `design_review_verdict`, `design_partial`, `design_cancelled` |
+| `bk/dev/{feature}/design/{slug}/design.md` | design-spec-writer | Per-screen specs (read by dev agents) |
+| `bk/dev/{feature}/design/raw/component-contracts.json` | design-validator | Component contract reference |
+| `bk/dev/{feature}/srs/05-ui-ux-requirements.md` | bk-docs-writer (Phase 2 Step 4) | UI requirements summary |
 
 Consumer file (written by `/bk-plan` Step 4a):
 
@@ -53,12 +53,12 @@ Consumer file (written by `/bk-plan` Step 4a):
 {
   "source": "bk-spec",
   "feature_slug": "{feature}",
-  "design_dir": "mk/dev/{feature}/design",
+  "design_dir": "bk/dev/{feature}/design",
   "screens": [
-    {"slug": "qr-scanner", "design_md": "mk/dev/{feature}/design/qr-scanner/design.md"}
+    {"slug": "qr-scanner", "design_md": "bk/dev/{feature}/design/qr-scanner/design.md"}
   ],
-  "ui_requirements": "mk/dev/{feature}/srs/05-ui-ux-requirements.md",
-  "component_contracts": "mk/dev/{feature}/design/raw/component-contracts.json",
+  "ui_requirements": "bk/dev/{feature}/srs/05-ui-ux-requirements.md",
+  "component_contracts": "bk/dev/{feature}/design/raw/component-contracts.json",
   "verdict": "OKAY|REVISE|partial|cancelled"
 }
 ```
@@ -79,7 +79,7 @@ Task(
     Scan enterprise documentation directories for feature: {feature}
 
     Directories found:
-    {list detected paths: mk/docs/product/prds/, mk/docs/requirements/, etc.}
+    {list detected paths: bk/docs/product/prds/, bk/docs/requirements/, etc.}
 
     For each document:
     1. Read full content

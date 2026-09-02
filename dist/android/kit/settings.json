@@ -297,27 +297,11 @@
           },
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/arch-fitness-ios.cjs"
-          },
-          {
-            "type": "command",
             "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/arch-fitness-android.cjs"
           },
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/arch-fitness-flutter.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/arch-fitness-ios-native.cjs"
-          },
-          {
-            "type": "command",
             "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/arch-fitness-android-native.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/arch-fitness-flutter-native.cjs"
           },
           {
             "type": "command",

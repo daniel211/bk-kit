@@ -17,7 +17,7 @@ LOOP:
      Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true, prompt: "
        Feature: {feature}
        Files changed: {files_from_impl_result}
-       Output: mk/dev/shared/reports/code-review-{feature}.md
+       Output: bk/dev/shared/reports/code-review-{feature}.md
        Score format: X/10. List critical, warnings, suggestions.
      ")
 

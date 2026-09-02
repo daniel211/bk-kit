@@ -14,7 +14,7 @@
 
 ## 2. Actions Conductor ALWAYS Delegates (HARD ENFORCEMENT)
 
-> **CRITICAL:** If about to Write/Edit files in mk/docs/ or mk/dev/ (except workflow state files), STOP. Dispatch via Task(). ZERO EXCEPTIONS.
+> **CRITICAL:** If about to Write/Edit files in bk/docs/ or bk/dev/ (except workflow state files), STOP. Dispatch via Task(). ZERO EXCEPTIONS.
 
 | Action | Agent | Model | Execution |
 |--------|-------|-------|-----------|

@@ -7,7 +7,7 @@ Each sub-task is a focused unit of work owning a small set of files (3-5 max).
 
 Before starting any sub-task execution, check if this is a resumed session:
 
-1. **Read sub-task files** — scan `mk/dev/{feature}/` for `plan.md` and `sub-task-*.md`
+1. **Read sub-task files** — scan `bk/dev/{feature}/` for `plan.md` and `sub-task-*.md`
 2. **Check TaskList()** — if empty but sub-task files exist, this is a session resume
 3. **Hydrate Tasks:**
    - For each unchecked `- [ ]` item in sub-task files → `TaskCreate` with description
@@ -57,7 +57,7 @@ Extract these sections for agent prompt:
 When dispatching dev agents, ALWAYS include foundation context in the prompt:
 
 ```
-Foundation Context (from mk/docs/foundation/):
+Foundation Context (from bk/docs/foundation/):
 - Architecture: {from architecture.md — e.g. MVVM + Clean Architecture}
 - State Management: {from architecture.md — e.g. @Observable, Combine, StateFlow}
 - Naming: {from code-guidelines.md — e.g. PascalCase classes, camelCase functions}
@@ -67,7 +67,7 @@ Foundation Context (from mk/docs/foundation/):
 Follow these conventions strictly. Do not introduce new patterns.
 ```
 
-If `mk/docs/foundation/architecture.md` was not found during Code-Step-1, omit this block but add a warning:
+If `bk/docs/foundation/architecture.md` was not found during Code-Step-1, omit this block but add a warning:
 `⚠️ No foundation context available. Follow existing code patterns in the sub-task file.`
 
 ## Dispatch bk-{platform}-developer (per sub-task)

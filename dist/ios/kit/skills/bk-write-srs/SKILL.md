@@ -1,6 +1,6 @@
 ---
 name: bk-write-srs
-argument-hint: "[đường dẫn tài liệu nguồn hoặc thư mục mk/dev/<id>/requirements] [id tính năng nếu muốn chỉ định]"
+argument-hint: "[đường dẫn tài liệu nguồn hoặc thư mục bk/dev/<id>/requirements] [id tính năng nếu muốn chỉ định]"
 description: |
   Viết, cập nhật hoặc review SRS (đặc tả tính năng) cho mobile app, đầu vào
   thường là URD — dùng cả khi user chỉ đưa URD và nói "viết SRS cho cái này".
@@ -24,16 +24,16 @@ Viết một tài liệu SRS hoàn chỉnh cho **một tính năng ở phía ứ
 
 ## Vị trí output
 
-Ghi SRS vào `mk/dev/<id>/srs/srs-mobile.md`, trong đó `<id>` là một trong:
+Ghi SRS vào `bk/dev/<id>/srs/srs-mobile.md`, trong đó `<id>` là một trong:
 
-- Mã ticket Jira (VD `mk/dev/APP-1234/srs/srs-mobile.md`)
-- Mã GitHub issue, tiền tố `gh-` (VD `mk/dev/gh-4567/srs/srs-mobile.md`)
-- Tên tính năng ngắn dạng kebab-case (VD `mk/dev/phat-hanh-the-tin-dung-cam-co/srs/srs-mobile.md`)
+- Mã ticket Jira (VD `bk/dev/APP-1234/srs/srs-mobile.md`)
+- Mã GitHub issue, tiền tố `gh-` (VD `bk/dev/gh-4567/srs/srs-mobile.md`)
+- Tên tính năng ngắn dạng kebab-case (VD `bk/dev/phat-hanh-the-tin-dung-cam-co/srs/srs-mobile.md`)
 
-`mk/dev/` chỉ chứa các thư mục đặt tên theo `<id>` làm con trực tiếp — không tạo thư mục con theo tên người viết. Nếu user có ticket/issue thì dùng mã đó; nếu không, hỏi user tên tính năng để đặt thư mục. Chỉ tạo ticket/issue mới khi user yêu cầu tường minh.
+`bk/dev/` chỉ chứa các thư mục đặt tên theo `<id>` làm con trực tiếp — không tạo thư mục con theo tên người viết. Nếu user có ticket/issue thì dùng mã đó; nếu không, hỏi user tên tính năng để đặt thư mục. Chỉ tạo ticket/issue mới khi user yêu cầu tường minh.
 
 ```
-mk/dev/<id>/
+bk/dev/<id>/
 ├── requirements/   # tài liệu nguồn: URD, PRD, SRS server, techspec, catalog mã lỗi...
 └── srs/            # đầu ra: srs-mobile.md
 ```
@@ -43,7 +43,7 @@ mk/dev/<id>/
 ### Bước 1: Xác định mode
 
 - **Mode A — Viết mới**: có URD hoặc mô tả tính năng, chưa có SRS.
-- **Mode B — Cập nhật**: đã có `mk/dev/<id>/srs/srs-mobile.md`. Đọc bản hiện tại, sửa đúng chỗ, **tăng phiên bản** (sửa lớn +1 số nguyên, sửa nhỏ +0.1) và thêm dòng vào Lịch sử sửa đổi — không xóa dòng cũ.
+- **Mode B — Cập nhật**: đã có `bk/dev/<id>/srs/srs-mobile.md`. Đọc bản hiện tại, sửa đúng chỗ, **tăng phiên bản** (sửa lớn +1 số nguyên, sửa nhỏ +0.1) và thêm dòng vào Lịch sử sửa đổi — không xóa dòng cũ.
 - **Mode C — Review**: chạy `references/checklist.md` trên SRS có sẵn, báo cáo từng điểm đạt/không đạt, không tự sửa trừ khi user yêu cầu.
 
 Nếu user đưa nội dung rõ ràng thì tự suy luận mode và xác nhận lại một lần.
@@ -53,7 +53,7 @@ Nếu user đưa nội dung rõ ràng thì tự suy luận mode và xác nhận 
 Bắt buộc trước khi viết — thiếu thì hỏi user, **không tự bịa**:
 
 1. **`<id>`** cho thư mục output (ticket / issue / tên kebab-case).
-2. **Tài liệu nguồn**: đường dẫn URD (hoặc mô tả tính năng), thường tại `mk/dev/<id>/requirements/`. Đọc **toàn bộ** trước khi viết; nếu thư mục có thêm PRD / SRS server / techspec thì đọc để lấy MID, mã lỗi, ràng buộc — và đối chiếu mâu thuẫn giữa các tài liệu (thành ISS).
+2. **Tài liệu nguồn**: đường dẫn URD (hoặc mô tả tính năng), thường tại `bk/dev/<id>/requirements/`. Đọc **toàn bộ** trước khi viết; nếu thư mục có thêm PRD / SRS server / techspec thì đọc để lấy MID, mã lỗi, ràng buộc — và đối chiếu mâu thuẫn giữa các tài liệu (thành ISS).
 3. **Mã tính năng** `F-xxx` và **tên app / mã dự án** (cho mã tài liệu `[PRJ]-SRS-[YYYY]-[Fxxx]`).
 
 Nên hỏi thêm — nếu chưa có thì ghi "Chưa chốt" và mở ISS, không vì thế mà dừng viết:
@@ -85,7 +85,7 @@ Chạy `references/checklist.md`. Sau khi ghi file, báo cho user: đường d�
 | Chức năng | `FN-[nhóm]-NNN` | Nhóm = nhóm chức năng nghiệp vụ viết tắt không dấu, 3–5 ký tự (VD: AUTH, CARD, TAXI — theo JP-style); tính năng nhỏ thường dùng một nhóm chung. Mã đã cấp không tái sử dụng, kể cả khi chức năng bị hủy |
 | Màn hình | `SCR-NNN` | Mọi màn hình ở §5.1 phải xuất hiện trong sơ đồ §3 |
 | Cạnh chuyển màn hình | `JR-NN` | Chỉ định nghĩa tại bảng Journey Rules §3 |
-| API | `API-[nhóm]-NN` | Cùng [nhóm] với FN — tránh trùng mã giữa các tài liệu trong `mk/dev/` |
+| API | `API-[nhóm]-NN` | Cùng [nhóm] với FN — tránh trùng mã giữa các tài liệu trong `bk/dev/` |
 | Luồng chung | `CF-xxx` | Chỉ gọi, không đặc tả lại nội dung đã ủy thác |
 | Quy tắc nghiệp vụ | `BR-[nhóm]-NNN` | Cùng [nhóm] với FN. Định nghĩa **một** lần ở chức năng đầu tiên dùng nó, nơi khác tham chiếu mã |
 | Nhánh hợp lệ | `AF-x` | Chỉ xuất hiện trong bảng ngoại lệ §4.2 |

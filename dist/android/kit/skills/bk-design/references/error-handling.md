@@ -140,7 +140,7 @@ to disk instead of `get_screenshot` inline.
 
 ### save_screenshots rejects path
 
-Use relative paths only: `mk/dev/{flow}/{screen-slug}/file.png`
+Use relative paths only: `bk/dev/{flow}/{screen-slug}/file.png`
 
 ### Text content missing diacritics
 

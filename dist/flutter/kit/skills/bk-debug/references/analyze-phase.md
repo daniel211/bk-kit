@@ -14,7 +14,7 @@ Task(subagent_type: "bk-debugger", model: "sonnet", prompt: "
   Platform: {platform}
   Recent commits: {git_log}
   Platform context: {from platform-context.json}
-  Output: mk/dev/shared/reports/debug-analysis-{feature}.json
+  Output: bk/dev/shared/reports/debug-analysis-{feature}.json
 
   Apply 5 Whys analysis. Identify exact file + line. Propose fix approach.
 ")
@@ -77,14 +77,14 @@ Task(subagent_type: "bk-brainstormer", model: "sonnet", run_in_background: true,
   2. Proper fix (address root cause)
   3. Refactor approach (if architecture issue)
   Trade-offs: risk, effort, maintainability, performance
-  Output: mk/dev/shared/reports/brainstorm-{feature}.md
+  Output: bk/dev/shared/reports/brainstorm-{feature}.md
 ")
 
 Task(subagent_type: "bk-researcher", model: "sonnet", run_in_background: true, prompt: "
   Research: {root_cause_area}
   Platform: {platform}
   Find: security advisories, known issues, best practices, platform docs
-  Output: mk/dev/shared/reports/research-{feature}.md
+  Output: bk/dev/shared/reports/research-{feature}.md
 ")
 ```
 

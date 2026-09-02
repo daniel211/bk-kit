@@ -15,15 +15,15 @@ user-invocable: false
 If task involves Views, Screens, Widgets, or UI components:
 
 1. **Primary path** (canonical — `/bk-spec` output):
-   - Glob `mk/dev/{feature}/design/*/design.md` (per-screen specs from `design-spec-writer`)
-   - Read `mk/dev/{feature}/.spec-state.json` → check `design_review_verdict`
+   - Glob `bk/dev/{feature}/design/*/design.md` (per-screen specs from `design-spec-writer`)
+   - Read `bk/dev/{feature}/.spec-state.json` → check `design_review_verdict`
    - If at least one design.md exists for current task screen:
-     - `verdict == "OKAY"` → read screen design.md + `mk/docs/foundation/design-system.md` for tokens, proceed
+     - `verdict == "OKAY"` → read screen design.md + `bk/docs/foundation/design-system.md` for tokens, proceed
      - `verdict == "REVISE"` or `design_partial` set → proceed with warning, add `"design_verdict": "REVISE"` to impl-result.json
      - `design_cancelled` → fall through to step 2
 
 2. **Legacy fallback** (backward compat for features built before `/bk-spec` migration — TODO: remove after v2.x sunset, see plan `260511-1447-remove-bk-design-agent-consolidate-to-spec`):
-   - Check `mk/dev/shared/design/{feature}-specs.md` and `{feature}-tokens.json`
+   - Check `bk/dev/shared/design/{feature}-specs.md` and `{feature}-tokens.json`
    - Both exist → read + log warning "DEPRECATED design path — migrate to /bk-spec", proceed
 
 3. **Inline guidance fallback**:
@@ -38,7 +38,7 @@ Never hardcode colors, fonts, or spacing without design tokens.
 
 After loading design context, validate completeness:
 
-1. **Foundation check:** `mk/docs/foundation/design-system.md` exists (global tokens source of truth)
+1. **Foundation check:** `bk/docs/foundation/design-system.md` exists (global tokens source of truth)
 2. **Per-screen check:** Current task screen's `design.md` has `## Design Tokens` section (or references foundation)
 3. **Consistency check:** Color values are valid hex; spacing values are numeric
 
@@ -52,7 +52,7 @@ If validation fails:
 
 ## GATE CHECK: PLAN REQUIRED
 
-Check `mk/dev/feature-*-plan.md` and `mk/dev/research/{feature}-requirements.md` exist before implementation.
+Check `bk/dev/feature-*-plan.md` and `bk/dev/research/{feature}-requirements.md` exist before implementation.
 
 ---
 

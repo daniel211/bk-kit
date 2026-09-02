@@ -39,12 +39,12 @@ function checkPreCommitHook(projectRoot) {
   const nativePath = path.join(projectRoot, '.git', 'hooks', 'pre-commit');
   if (fs.existsSync(nativePath)) {
     const content = fs.readFileSync(nativePath, 'utf8');
-    const isMkHook = content.includes('bk-harness-ci') || content.includes('bk-harness');
+    const isBkHook = content.includes('bk-harness-ci') || content.includes('bk-harness');
     return {
       installed: true,
       framework: 'native',
       path: nativePath,
-      isMkHook
+      isBkHook
     };
   }
 
@@ -56,7 +56,7 @@ function checkPreCommitHook(projectRoot) {
       installed: true,
       framework: 'husky',
       path: huskyPath,
-      isMkHook: content.includes('bk-harness-ci')
+      isBkHook: content.includes('bk-harness-ci')
     };
   }
 
@@ -69,12 +69,12 @@ function checkPreCommitHook(projectRoot) {
         installed: true,
         framework: 'pre-commit',
         path: preCommitConfig,
-        isMkHook: true
+        isBkHook: true
       };
     }
   }
 
-  return { installed: false, framework: null, path: null, isMkHook: false };
+  return { installed: false, framework: null, path: null, isBkHook: false };
 }
 
 /**
@@ -186,8 +186,8 @@ function renderCiReadinessPanel(panel) {
   // Pre-commit status
   if (preCommit.installed) {
     const fw = preCommit.framework || 'native';
-    const mk = preCommit.isMkHook ? ' (bk-harness)' : ' (external)';
-    lines.push(`  ✓ Pre-commit installed: ${fw}${mk}`);
+    const mkFlag = preCommit.isBkHook ? ' (bk-harness)' : ' (external)';
+    lines.push(`  ✓ Pre-commit installed: ${fw}${mkFlag}`);
   } else {
     lines.push(`  ✗ Pre-commit not installed — run: node src/cli/bk-precommit-install.cjs`);
   }

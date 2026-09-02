@@ -63,7 +63,7 @@ Task(subagent_type: "bk-researcher", model: "sonnet", run_in_background: true, p
   Task: Research {specific_technical_question}
   Research topic: {specific_technical_question}
   Project context: {platform and architecture summary}
-  Output: mk/dev/research/{topic}-analysis.md
+  Output: bk/dev/research/{topic}-analysis.md
   Structure:
   ## Key Findings
   - {finding with source}
@@ -87,7 +87,7 @@ Present findings directly in conversation:
 
 If bk-researcher was dispatched, incorporate research findings into summary.
 
-Save analysis to `mk/dev/research/{topic}-analysis.md` if user wants to reference it later.
+Save analysis to `bk/dev/research/{topic}-analysis.md` if user wants to reference it later.
 
 ## Constraints
 

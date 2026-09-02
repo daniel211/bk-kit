@@ -21,7 +21,7 @@ owns: ["{test file glob patterns}"]
 Test cases for {scope}. Tester agent reads this + implemented code to write tests.
 
 ## Foundation References
-<!-- Auto-filled from mk/docs/foundation/ during plan synthesis -->
+<!-- Auto-filled from bk/docs/foundation/ during plan synthesis -->
 - Architecture: {{foundation.architecture}}
 - Test Pattern: {{foundation.testPattern}}
 - Related Components: {{foundation.relatedComponents}}

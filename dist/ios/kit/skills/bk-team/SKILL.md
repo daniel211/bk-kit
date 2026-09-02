@@ -45,10 +45,10 @@ Every teammate spawn prompt MUST include this at the end:
 MK Context:
 - Work dir: {project root}
 - Platform: {ios|android|flutter}
-- Foundation: mk/docs/foundation/
+- Foundation: bk/docs/foundation/
 - Platform context: .platform-context.{platform}.json
-- Reports: {plan-dir}/reports/ or mk/dev/reports/
-- Plans: mk/dev/
+- Reports: {plan-dir}/reports/ or bk/dev/reports/
+- Plans: bk/dev/
 - Branch: {current git branch}
 - Active plan: {plan-dir or "none"}
 - Commits: conventional (feat:, fix:, docs:, refactor:, test:, chore:)

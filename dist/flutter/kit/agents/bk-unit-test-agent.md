@@ -69,7 +69,7 @@ Writes and executes platform unit tests for business logic, repositories, and us
 ```
 
 ## Output
-Write `mk/dev/shared/reports/unit-test-{platform}-{feature}.md`:
+Write `bk/dev/shared/reports/unit-test-{platform}-{feature}.md`:
 
 ```markdown
 ## Unit Tests: {platform} — {feature}
@@ -95,7 +95,7 @@ Write `mk/dev/shared/reports/unit-test-{platform}-{feature}.md`:
 - Tests must be deterministic — no flaky tests allowed
 - Max 3 retry cycles; each retry must differ from previous approach
 - May delegate to bk-debugger on persistent test failures
-- Output: `mk/dev/shared/reports/unit-test-{platform}-{feature}.md`
+- Output: `bk/dev/shared/reports/unit-test-{platform}-{feature}.md`
 - Ref: agent-protocols/output-gate.md
 
 ## Workflow

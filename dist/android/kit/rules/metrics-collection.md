@@ -7,7 +7,7 @@ Track agent performance across workflows to enable data-driven optimization of d
 
 After each skill completes, the conductor SHOULD write a metrics file:
 
-**Path:** `mk/dev/shared/metrics/{skill}-{feature}-{YYMMDD}.json`
+**Path:** `bk/dev/shared/metrics/{skill}-{feature}-{YYMMDD}.json`
 
 **Schema:**
 ```json

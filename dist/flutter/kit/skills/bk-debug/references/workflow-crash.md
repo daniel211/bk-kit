@@ -43,7 +43,7 @@ Task(subagent_type: "bk-debugger", model: "sonnet", prompt: "
   Stack trace: {trace}
   Platform: {platform}
   Focus: identify root cause from crash point backward
-  Output: mk/dev/shared/reports/debug-analysis-{feature}.json
+  Output: bk/dev/shared/reports/debug-analysis-{feature}.json
 ")
 ```
 

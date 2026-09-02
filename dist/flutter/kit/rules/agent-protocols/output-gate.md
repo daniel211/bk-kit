@@ -1,6 +1,6 @@
 ---
 paths:
-  - mk/dev/shared/reports/**
+  - bk/dev/shared/reports/**
 ---
 
 # Output Gate Protocol
@@ -46,12 +46,12 @@ On MISMATCH: fix before returning. Never return "complete" with mismatched outpu
 
 | Agent | Output Path |
 |-------|-------------|
-| bk-unit-test-agent | `mk/dev/shared/reports/unit-test-{platform}-{feature}.md` |
-| bk-device-test-agent | `mk/dev/shared/reports/device-test-{platform}-{feature}.md` |
-| bk-code-reviewer | `mk/dev/shared/reports/code-review-{feature}.md` |
-| bk-security-auditor | `mk/dev/shared/reports/security-{feature}.md` |
-| bk-performance-analyzer | `mk/dev/shared/reports/performance-{feature}.md` |
-| bk-test-architect | `mk/dev/shared/reports/test-strategy-{feature}.md` |
+| bk-unit-test-agent | `bk/dev/shared/reports/unit-test-{platform}-{feature}.md` |
+| bk-device-test-agent | `bk/dev/shared/reports/device-test-{platform}-{feature}.md` |
+| bk-code-reviewer | `bk/dev/shared/reports/code-review-{feature}.md` |
+| bk-security-auditor | `bk/dev/shared/reports/security-{feature}.md` |
+| bk-performance-analyzer | `bk/dev/shared/reports/performance-{feature}.md` |
+| bk-test-architect | `bk/dev/shared/reports/test-strategy-{feature}.md` |
 
 ## Agent-Specific Checks
 

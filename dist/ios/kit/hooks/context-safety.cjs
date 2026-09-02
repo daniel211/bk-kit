@@ -35,8 +35,8 @@ try {
       let source = 'none';  // 'cache' | 'heuristic' | 'none'
 
       const candidates = [
-        path.join(cwd, 'mk', 'dev', 'shared', '.statusline-cache.json'),
-        path.join(cwd, 'mk', 'dev', 'shared', '.workflow-state.json')
+        path.join(cwd, 'bk', 'dev', 'shared', '.statusline-cache.json'),
+        path.join(cwd, 'bk', 'dev', 'shared', '.workflow-state.json')
       ];
 
       for (const filePath of candidates) {

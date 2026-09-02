@@ -65,8 +65,8 @@ const DEFAULT_POLICY = {
   },
   steerer: {
     enabled: true, min_violation_count: 3, lookback_days: 30,
-    draft_path: 'mk/dev/shared/.learned-preferences-draft.md',
-    target_path: 'mk/dev/shared/learned-preferences.md',
+    draft_path: 'bk/dev/shared/.learned-preferences-draft.md',
+    target_path: 'bk/dev/shared/learned-preferences.md',
     backup_dir: '.bk-metrics/learned-preferences-backups'
   },
   monitor: {

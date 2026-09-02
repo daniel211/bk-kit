@@ -17,8 +17,8 @@ When `--archive PLAN_DIR` is passed, skip normal workflow and:
 1. Verify `PLAN_DIR` exists and contains `plan.md`
 2. Read `plan.md` frontmatter — confirm all phase statuses are complete (or force with `--force`)
 3. Update frontmatter `status: archived` in `plan.md`
-4. Move entire plan directory to `mk/dev/archive/{dir-name}/`
-5. Report: "Archived {feature} → mk/dev/archive/{dir-name}/"
+4. Move entire plan directory to `bk/dev/archive/{dir-name}/`
+5. Report: "Archived {feature} → bk/dev/archive/{dir-name}/"
 
 No research, no synthesis, no agents dispatched.
 
@@ -75,16 +75,16 @@ IF AutoDream artifact available (detected: `.autodream/{feature}.json` or user p
   5. Note in plan.md: "Plan seeded from AutoDream artifact. Validated by bk-planner."
 
 1. **Check Foundation** — verify bootstrap, load project context
-   - IF `mk/dev/{feature}/spec-summary.md` exists → read as pre-collected input (skip redundant interview questions for inputs already gathered by bk-spec)
-   - Check `mk/docs/foundation/overview.md` exists
+   - IF `bk/dev/{feature}/spec-summary.md` exists → read as pre-collected input (skip redundant interview questions for inputs already gathered by bk-spec)
+   - Check `bk/docs/foundation/overview.md` exists
    - IF missing → **STOP**. Show: "Foundation docs not found. Run `/bk-bootstrap` first to scan project."
    - IF exists → read ALL 6 foundation files and extract specific data:
-     1. `mk/docs/foundation/overview.md` → extract: platform, entry points, module map
-     2. `mk/docs/foundation/architecture.md` → extract: architecture pattern, state management, DI, layer map
-     3. `mk/docs/foundation/code-guidelines.md` → extract: naming conventions, lint rules, test patterns
-     4. `mk/docs/foundation/dependencies.md` → extract: core deps, version constraints
-     5. `mk/docs/foundation/build-targets.md` → extract: build commands, CI config
-     6. `mk/docs/foundation/design-system.md` (if exists) → extract: UI components, theming
+     1. `bk/docs/foundation/overview.md` → extract: platform, entry points, module map
+     2. `bk/docs/foundation/architecture.md` → extract: architecture pattern, state management, DI, layer map
+     3. `bk/docs/foundation/code-guidelines.md` → extract: naming conventions, lint rules, test patterns
+     4. `bk/docs/foundation/dependencies.md` → extract: core deps, version constraints
+     5. `bk/docs/foundation/build-targets.md` → extract: build commands, CI config
+     6. `bk/docs/foundation/design-system.md` (if exists) → extract: UI components, theming
    - Store extracted data as `foundation_context` for use in all subsequent steps:
      ```
      foundation_context = {
@@ -129,10 +129,10 @@ T8 = TaskCreate(subject="Hydrate tasks for bk-code",    activeForm="Hydrating ta
 Update: `TaskUpdate(taskId, status: "in_progress")` before dispatch, `TaskUpdate(taskId, status: "completed")` after agent returns.
 
 3. **Feature SRS** — extract/generate feature requirements
-   - Read `mk/docs/srs/` (project-level, if exists)
+   - Read `bk/docs/srs/` (project-level, if exists)
    - Extract feature-relevant requirements
    - Brief user interview (2-3 questions)
-   - Write `mk/dev/{feature}/srs.md`
+   - Write `bk/dev/{feature}/srs.md`
    Load: `references/feature-srs.md`
    Skip if: fast mode or trivial scope
 
@@ -146,12 +146,12 @@ Update: `TaskUpdate(taskId, status: "in_progress")` before dispatch, `TaskUpdate
 
    ```
    has_figma_signal = (--figma flag OR Figma URL in description OR frame names in PRD/BRD)
-   has_ui_signal    = (mk/dev/{feature}/srs/05-ui-ux-requirements.md exists
+   has_ui_signal    = (bk/dev/{feature}/srs/05-ui-ux-requirements.md exists
                        OR UI keywords in description: screen, view, màn hình, giao diện, UI)
 
    IF has_figma_signal OR has_ui_signal:
-     spec_state = mk/dev/{feature}/.spec-state.json
-     design_dir = mk/dev/{feature}/design/
+     spec_state = bk/dev/{feature}/.spec-state.json
+     design_dir = bk/dev/{feature}/design/
 
      CASE: spec_state missing
        STOP. AskUserQuestion (Vietnamese):
@@ -189,12 +189,12 @@ Update: `TaskUpdate(taskId, status: "in_progress")` before dispatch, `TaskUpdate
    {
      "source": "bk-spec",
      "feature_slug": "{feature}",
-     "design_dir": "mk/dev/{feature}/design",
+     "design_dir": "bk/dev/{feature}/design",
      "screens": [
-       {"slug": "qr-scanner", "design_md": "mk/dev/{feature}/design/qr-scanner/design.md"}
+       {"slug": "qr-scanner", "design_md": "bk/dev/{feature}/design/qr-scanner/design.md"}
      ],
-     "ui_requirements": "mk/dev/{feature}/srs/05-ui-ux-requirements.md",
-     "component_contracts": "mk/dev/{feature}/design/raw/component-contracts.json",
+     "ui_requirements": "bk/dev/{feature}/srs/05-ui-ux-requirements.md",
+     "component_contracts": "bk/dev/{feature}/design/raw/component-contracts.json",
      "verdict": "OKAY|REVISE|partial|cancelled"
    }
    ```
@@ -208,11 +208,11 @@ Update: `TaskUpdate(taskId, status: "in_progress")` before dispatch, `TaskUpdate
    Detect enterprise docs in well-known directories:
    ```
    Enterprise doc paths to scan:
-     - PRD/BRD:        mk/docs/product/prds/, mk/docs/requirements/, mk/docs/brd/
-     - Test specs:     mk/docs/deliverables/testing/, mk/docs/test-cases/, mk/docs/qa/
-     - Architecture:   mk/docs/product/architecture/, mk/docs/architecture/
-     - API specs:      mk/docs/api/, mk/docs/openapi/
-     - User stories:   mk/docs/stories/, mk/docs/user-stories/
+     - PRD/BRD:        bk/docs/product/prds/, bk/docs/requirements/, bk/docs/brd/
+     - Test specs:     bk/docs/deliverables/testing/, bk/docs/test-cases/, bk/docs/qa/
+     - Architecture:   bk/docs/product/architecture/, bk/docs/architecture/
+     - API specs:      bk/docs/api/, bk/docs/openapi/
+     - User stories:   bk/docs/stories/, bk/docs/user-stories/
 
    IF any enterprise doc directories found:
      Task(
@@ -310,7 +310,7 @@ Update: `TaskUpdate(taskId, status: "in_progress")` before dispatch, `TaskUpdate
      Feature: {feature_description}
      Platform: {platform}
      Context:
-       - mk/docs/foundation/ (project context — architecture, guidelines, deps)
+       - bk/docs/foundation/ (project context — architecture, guidelines, deps)
        - {plan-dir}/research/code-analysis-summary.md (Step 5 code impact analysis)
        - {plan-dir}/research/researcher-*.md (Step 6 research outputs)
        - {plan-dir}/inputs/ (design.json, requirements.json if exist)
@@ -374,7 +374,7 @@ Update: `TaskUpdate(taskId, status: "in_progress")` before dispatch, `TaskUpdate
 ## Output Contract
 
 ```
-mk/dev/{feature}/
+bk/dev/{feature}/
 ├── .plan-state.json           # Workflow state (step progress, gap decisions)
 ├── srs.md                     # Feature SRS (Step 3 output)
 ├── plan.md                    # Summary: inputs, code impact, phases, gaps

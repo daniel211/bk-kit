@@ -31,7 +31,7 @@ function setupFixtureProject(files) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'bk-sensor-verify-'));
   fs.mkdirSync(path.join(root, '.bk-metrics'), { recursive: true });
   fs.mkdirSync(path.join(root, '.claude'), { recursive: true });
-  fs.mkdirSync(path.join(root, 'mk', 'dev', 'shared'), { recursive: true });
+  fs.mkdirSync(path.join(root, 'bk', 'dev', 'shared'), { recursive: true });
 
   // Write default .bk.json to enable hooks
   const mkJson = path.join(root, '.claude', '.bk.json');

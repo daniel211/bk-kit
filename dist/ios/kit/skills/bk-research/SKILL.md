@@ -32,7 +32,7 @@ Dispatch researcher subagents to investigate a topic and produce a structured re
 - Check if called within a plan context (plan-dir exists)
 - Set output path:
   - If plan context: `{plan-dir}/research/`
-  - Otherwise: `mk/dev/reports/`
+  - Otherwise: `bk/dev/reports/`
 
 ### 2. Quick Mode (1 researcher)
 

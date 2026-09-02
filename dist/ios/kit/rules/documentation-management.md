@@ -1,18 +1,18 @@
 ---
 paths:
-  - mk/docs/**
+  - bk/docs/**
 ---
 
 # MK Documentation Management
 
 ## Plan Structure
 
-Save plans in `./mk/dev` directory with timestamp and descriptive name.
+Save plans in `./bk/dev` directory with timestamp and descriptive name.
 
-**Format:** `mk/dev/{YYMMDD}-{HHMM}-{descriptive-slug}/`
+**Format:** `bk/dev/{YYMMDD}-{HHMM}-{descriptive-slug}/`
 
 ```
-mk/dev/{YYMMDD}-{HHMM}-{slug}/
+bk/dev/{YYMMDD}-{HHMM}-{slug}/
 ├── research/              # Research reports from scouts/researchers
 ├── reports/               # Agent output reports
 ├── plan.md                # Overview — under 80 lines, links to phases
@@ -39,7 +39,7 @@ Each phase file contains:
 
 ## Report Conventions
 
-- Path: `mk/dev/shared/reports/`
+- Path: `bk/dev/shared/reports/`
 - Naming: `{agent-type}-{feature}.md` (e.g., `code-review-payment.md`, `security-auth.md`)
 - Reports must include `## ` header and `<!-- metadata: {...} -->` footer (per `output-gate.md`)
 - Concise — sacrifice grammar for brevity; unresolved questions at end
@@ -63,7 +63,7 @@ Maintain living docs when significant changes occur:
 
 ## Foundation Docs Maintenance
 
-Foundation docs (`mk/docs/foundation/`) are the single source of truth for project context.
+Foundation docs (`bk/docs/foundation/`) are the single source of truth for project context.
 
 ### When to Update
 - After significant architecture changes → update `architecture.md`
@@ -81,6 +81,6 @@ Foundation docs (`mk/docs/foundation/`) are the single source of truth for proje
 
 ## State Tracking
 
-- Workflow state persisted in `mk/dev/shared/.workflow-state.json`
+- Workflow state persisted in `bk/dev/shared/.workflow-state.json`
 - See `state-machine.md` for FSM transitions and persistence schema
 - On context compaction: resume from last persisted state, not from scratch

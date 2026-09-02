@@ -59,7 +59,7 @@ Infer commit type from file paths and changes:
 | `fix` | Bug-fix keywords in diff, small targeted changes |
 | `refactor` | Rename operations, code restructure, no net new behavior |
 | `test` | `*Test*`, `*Spec*`, `*_test.*`, `__tests__/` |
-| `docs` | `*.md`, `mk/docs/`, comments-only changes |
+| `docs` | `*.md`, `bk/docs/`, comments-only changes |
 | `chore` | `package.json`, lockfiles, `.gitignore`, build config |
 
 ## Scope Detection
@@ -69,7 +69,7 @@ Group files by their top-level module/directory:
 src/auth/LoginView.swift      → scope: auth
 src/auth/AuthService.swift    → scope: auth
 src/payments/Cart.swift       → scope: payments
-mk/docs/README.md             → scope: docs
+bk/docs/README.md             → scope: docs
 ```
 
 ## Presentation Format
@@ -88,7 +88,7 @@ Auto-Split Analysis: 3 logical commits detected
      Changes: +15 lines
 
   3) docs: update API integration guide
-     Files: mk/docs/api-guide.md
+     Files: bk/docs/api-guide.md
      Changes: +8 lines
 
 Options:

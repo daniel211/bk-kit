@@ -36,7 +36,7 @@ try {
       }
 
       // Find latest plan directory
-      const plansDir = path.join(resolveProjectRoot(), 'mk', 'dev');
+      const plansDir = path.join(resolveProjectRoot(), 'bk', 'dev');
       let planPath = null;
 
       if (fs.existsSync(plansDir)) {

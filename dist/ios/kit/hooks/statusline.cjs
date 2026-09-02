@@ -400,7 +400,7 @@ try {
       // --- Write context_pct cache for context-safety.cjs ---
       if (contextPct > 0) {
         try {
-          const cacheDir = path.join(resolveProjectRoot(), 'mk', 'dev', 'shared');
+          const cacheDir = path.join(resolveProjectRoot(), 'bk', 'dev', 'shared');
           fs.mkdirSync(cacheDir, { recursive: true });
           const cachePath = path.join(cacheDir, '.statusline-cache.json');
           const tmpPath = cachePath + '.tmp';

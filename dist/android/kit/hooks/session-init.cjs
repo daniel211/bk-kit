@@ -77,11 +77,11 @@ try {
       const hasFoundation = fs.existsSync(path.join(cwd, 'docs', 'foundation', 'overview.md'));
       const hasLSP = process.env.ENABLE_LSP_TOOL === '1';
 
-      // Scan mk/dev/ for active plan (.plan-state.json with status != complete)
+      // Scan bk/dev/ for active plan (.plan-state.json with status != complete)
       let activePlan = '';
       let activePlanFeature = '';
       try {
-        const plansDir = path.join(cwd, 'mk', 'dev');
+        const plansDir = path.join(cwd, 'bk', 'dev');
         if (fs.existsSync(plansDir)) {
           const entries = fs.readdirSync(plansDir, { withFileTypes: true });
           for (const entry of entries) {
@@ -91,7 +91,7 @@ try {
             try {
               const planState = JSON.parse(fs.readFileSync(stateFile, 'utf8'));
               if (planState.status !== 'complete') {
-                activePlan = path.join('mk', 'dev', entry.name);
+                activePlan = path.join('bk', 'dev', entry.name);
                 activePlanFeature = planState.feature || entry.name;
                 break;
               }
@@ -107,7 +107,7 @@ try {
         writeEnv(envFile, 'BK_PROJECT_TYPE', projectType || '');
         writeEnv(envFile, 'BK_GIT_BRANCH', branch || '');
         writeEnv(envFile, 'BK_PROJECT_ROOT', cwd);
-        writeEnv(envFile, 'BK_REPORTS_PATH', path.join(cwd, 'mk', 'dev', 'reports'));
+        writeEnv(envFile, 'BK_REPORTS_PATH', path.join(cwd, 'bk', 'dev', 'reports'));
         writeEnv(envFile, 'BK_HAS_FOUNDATION', hasFoundation ? 'true' : 'false');
         writeEnv(envFile, 'BK_ACTIVE_PLAN', activePlan);
         writeEnv(envFile, 'BK_ACTIVE_PLAN_FEATURE', activePlanFeature);
@@ -155,7 +155,7 @@ try {
         : '⚠️  Foundation docs: not found (run /bk-bootstrap)');
 
       // 3. Active plan
-      const plansHealthPath = path.join(cwd, 'mk', 'dev');
+      const plansHealthPath = path.join(cwd, 'bk', 'dev');
       const hasActivePlanHealth = fs.existsSync(plansHealthPath) && 
         fs.readdirSync(plansHealthPath).some(f => !f.startsWith('.') && !f.startsWith('shared'));
       healthChecks.push(hasActivePlanHealth 
@@ -171,7 +171,7 @@ try {
       }
 
       // 5. Workflow state
-      const statePath = path.join(cwd, 'mk', 'dev', 'shared', '.workflow-state.json');
+      const statePath = path.join(cwd, 'bk', 'dev', 'shared', '.workflow-state.json');
       if (fs.existsSync(statePath)) {
         try {
           const stateData = JSON.parse(fs.readFileSync(statePath, 'utf8'));
@@ -202,7 +202,7 @@ try {
         } catch { /* checkpoint restore is best-effort */ }
 
         console.log('\n[!] CONTEXT COMPACTED: Verify approval state before continuing.');
-        console.log('    Read mk/dev/shared/.workflow-state.json to restore context.');
+        console.log('    Read bk/dev/shared/.workflow-state.json to restore context.');
       }
 
       timer.end({ status: 'ok', exit: 0 });

@@ -61,12 +61,12 @@ Task(subagent_type: "{agent}", model: "{model}", prompt: "
 ### Key Output Paths
 | Agent | Output |
 |-------|--------|
-| Explore | mk/docs/foundation/_raw/scan-report.md |
+| Explore | bk/docs/foundation/_raw/scan-report.md |
 | bk-researcher | {plan-dir}/research/researcher-{N}-{topic}.md |
 | bk-planner | {plan-dir}/plan.md + sub-task-*.md |
 | bk-{platform}-developer | Source files + {plan-dir}/reports/impl-result.json |
-| bk-code-reviewer | mk/dev/shared/reports/code-review-{feature}.md |
-| bk-debugger | mk/dev/shared/reports/debug-analysis-{feature}.json |
+| bk-code-reviewer | bk/dev/shared/reports/code-review-{feature}.md |
+| bk-debugger | bk/dev/shared/reports/debug-analysis-{feature}.json |
 
 ---
 
@@ -81,7 +81,7 @@ Task(subagent_type: "{agent}", model: "{model}", prompt: "
 | bk-refactor | (none)→analyze→refactor→test→commit; test→refactor on failures | 1 |
 
 ### Phase Persistence
-File: `mk/dev/shared/.workflow-state.json`
+File: `bk/dev/shared/.workflow-state.json`
 Key fields: `command`, `current_phase`, `phase_history[]`, `quality_fix_count`, `build_retry_count`, `refactor_fix_count`, `complexity_tier`, `review_mode`, `platform`.
 
 **On resume:** read `current_phase` → resume from there → never re-execute completed phases → check fix-loop counters.
@@ -138,7 +138,7 @@ Agent output MUST include: `Critical: N | Warning: N | Info: N | Test pass rate:
 | `mcp_timeout` | MCP>10s / refused | Auto-fallback (hook-managed) | — | — |
 
 **Limits:** max 2 reactive dispatches per signal. If both fail → MUST AskUserQuestion.
-Reactive output path: `mk/dev/shared/reactive/{signal}-{feature}.md`
+Reactive output path: `bk/dev/shared/reactive/{signal}-{feature}.md`
 
 ### MCP Auto-Fallbacks
 Serena → Grep/Glob | xcode-mcp/xcode-build → `xcodebuild` CLI | Figma → retry once, then AskUserQuestion

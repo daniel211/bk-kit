@@ -70,7 +70,7 @@ Background: See `_base-background-lite.md` for shared read-only agent cognitive 
 ```
 
 ## Output
-Write `mk/dev/shared/reports/test-strategy-{feature}.md`:
+Write `bk/dev/shared/reports/test-strategy-{feature}.md`:
 
 ```markdown
 ## Test Strategy: {feature}
@@ -98,7 +98,7 @@ Write `mk/dev/shared/reports/test-strategy-{feature}.md`:
 - Every test case maps to a REQ-xxx — no orphan tests
 - Dispatch recommendations must specify: agent, platform, and test count
 - Never return "complete" without writing both output files
-- Output: `mk/dev/shared/reports/test-strategy-{feature}.md` + `traceability-{feature}.md`
+- Output: `bk/dev/shared/reports/test-strategy-{feature}.md` + `traceability-{feature}.md`
 - Ref: agent-protocols/output-gate.md
 
 ## Team Mode
@@ -125,7 +125,7 @@ Create a test strategy for the QR payment feature covering all critical paths.
 </user_input>
 
 <dispatch_prompt>
-Design test strategy for the QR payment feature. Requirements: REQ-PAY-001 (QR scan), REQ-PAY-002 (amount confirmation), REQ-PAY-003 (PIN verification), REQ-PAY-004 (payment processing), REQ-PAY-005 (result display). Map each requirement to test cases. Assign priorities. Recommend dispatch to specific test agents. Read plan files in mk/dev/20250110-payment-feature/ for full requirements.
+Design test strategy for the QR payment feature. Requirements: REQ-PAY-001 (QR scan), REQ-PAY-002 (amount confirmation), REQ-PAY-003 (PIN verification), REQ-PAY-004 (payment processing), REQ-PAY-005 (result display). Map each requirement to test cases. Assign priorities. Recommend dispatch to specific test agents. Read plan files in bk/dev/20250110-payment-feature/ for full requirements.
 </dispatch_prompt>
 
 <agent_output>

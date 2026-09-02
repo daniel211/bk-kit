@@ -52,7 +52,7 @@ Task(subagent_type: "bk-{platform}-developer", model: "opus",
   prompt: "
   Sub-task file: {plan-dir}/sub-task-{NN}-{slug}.md
   Read sections: Scope, Expected Code, Edge Cases, Input References
-  Foundation context: mk/docs/foundation/architecture.md, code-guidelines.md
+  Foundation context: bk/docs/foundation/architecture.md, code-guidelines.md
   Platform context: .platform-context.{platform}.json
   Inputs: {plan-dir}/inputs/
 
@@ -82,7 +82,7 @@ Task(subagent_type: "bk-{platform}-developer", model: "opus",
   prompt: "
   Sub-task file: {plan-dir}/sub-task-{NN}-{slug}.md
   Read sections: Scope, Expected Code, Edge Cases, Input References
-  Foundation context: mk/docs/foundation/architecture.md, code-guidelines.md
+  Foundation context: bk/docs/foundation/architecture.md, code-guidelines.md
   Platform context: .platform-context.{platform}.json
   Inputs: {plan-dir}/inputs/
 
@@ -140,7 +140,7 @@ Task(subagent_type: "bk-unit-test-agent", model: "haiku",
   {list files from impl results of all sub-tasks in batch}
 
   Platform context: .platform-context.{platform}.json
-  Foundation test pattern: mk/docs/foundation/code-guidelines.md → Test Pattern section
+  Foundation test pattern: bk/docs/foundation/code-guidelines.md → Test Pattern section
 
   Instructions:
   - Write real test code for each test case row
@@ -238,7 +238,7 @@ Task(subagent_type: "bk-code-reviewer", model: "sonnet",
 
   Sub-task files: {list paths for reference}
   Platform context: .platform-context.{platform}.json
-  Foundation: mk/docs/foundation/architecture.md, code-guidelines.md
+  Foundation: bk/docs/foundation/architecture.md, code-guidelines.md
 
   Check:
   - Architecture compliance with foundation patterns

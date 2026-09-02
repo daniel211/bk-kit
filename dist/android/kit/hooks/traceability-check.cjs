@@ -36,8 +36,8 @@ try {
         process.exit(0);
       }
 
-      // Find latest feature directory in mk/dev/
-      const devDir = path.join(resolveProjectRoot(), 'mk', 'dev');
+      // Find latest feature directory in bk/dev/
+      const devDir = path.join(resolveProjectRoot(), 'bk', 'dev');
       if (!fs.existsSync(devDir)) {
         timer.end({ status: 'no_specs_dir', exit: 0 });
         process.exit(0);

@@ -55,7 +55,7 @@ During finalize, bk-project-manager:
 
 1. Reads all source fields listed above
 2. Fills template fields with actual data
-3. Writes: `mk/dev/{feature}/completion-report.md`
+3. Writes: `bk/dev/{feature}/completion-report.md`
 4. Outputs 5-line summary to conductor
 
 ## 5-Line Summary Format (for conductor)

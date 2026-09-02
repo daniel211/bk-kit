@@ -13,19 +13,19 @@ try {
   // Paths that conductor should delegate to agents
   const DELEGATION_PATHS = [
     {
-      test: (p) => p.includes('mk/docs/foundation/') && !p.includes('mk/docs/foundation/_raw/'),
+      test: (p) => p.includes('bk/docs/foundation/') && !p.includes('bk/docs/foundation/_raw/'),
       agent: 'bk-docs-writer (via bk-bootstrap Step 5)'
     },
     {
-      test: (p) => p.includes('/plan.md') && p.includes('mk/dev/'),
+      test: (p) => p.includes('/plan.md') && p.includes('bk/dev/'),
       agent: 'bk-planner (via bk-plan Step 8)'
     },
     {
-      test: (p) => p.includes('/sub-task-') && p.includes('mk/dev/'),
+      test: (p) => p.includes('/sub-task-') && p.includes('bk/dev/'),
       agent: 'bk-planner (via bk-plan Step 8)'
     },
     {
-      test: (p) => p.includes('/phase-') && p.includes('mk/dev/'),
+      test: (p) => p.includes('/phase-') && p.includes('bk/dev/'),
       agent: 'bk-planner (via bk-plan Step 8)'
     }
   ];
@@ -37,7 +37,7 @@ try {
     (p) => p.endsWith('.platform-context.json'),
     (p) => p.includes('/research/'),
     (p) => p.includes('/inputs/'),
-    (p) => p.includes('mk/docs/foundation/_raw/'),
+    (p) => p.includes('bk/docs/foundation/_raw/'),
     (p) => p.includes('research-report-'),
     (p) => p.endsWith('-analysis.md')
   ];

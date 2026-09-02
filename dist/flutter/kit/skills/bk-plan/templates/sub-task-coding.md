@@ -31,7 +31,7 @@ reqs: [{REQ-IDs this sub-task fulfills}]
 - Depends on: sub-task-{XX} output ({what it provides})
 
 ## Foundation References
-<!-- Auto-filled from mk/docs/foundation/ during plan synthesis -->
+<!-- Auto-filled from bk/docs/foundation/ during plan synthesis -->
 - Architecture: {{foundation.architecture}}
 - State Management: {{foundation.stateManagement}}
 - Naming Convention: {{foundation.naming}}

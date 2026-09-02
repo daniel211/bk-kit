@@ -9,7 +9,7 @@
 - Lightest path: Trivial skips review; Complex adds security + perf.
 - React to agent signals — dispatch helpers when stuck (not a static pipeline).
 - Agents self-delegate: planner, debugger, docs-writer, test-agent spawn Explore autonomously.
-- Finalize scales by tier (see below). State in `mk/dev/shared/.workflow-state.json`.
+- Finalize scales by tier (see below). State in `bk/dev/shared/.workflow-state.json`.
 
 ## Conductor Role
 

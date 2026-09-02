@@ -71,7 +71,7 @@ Background: See `_base-background-lite.md` for shared read-only agent cognitive 
 ```
 
 ## Output
-Write `mk/dev/shared/reports/security-{feature}.md`:
+Write `bk/dev/shared/reports/security-{feature}.md`:
 
 ```markdown
 ## Security Audit: {feature}
@@ -93,7 +93,7 @@ Write `mk/dev/shared/reports/security-{feature}.md`:
 - Always grep for secrets regardless of feature scope — non-negotiable
 - Severity reflects exploitability, not theoretical risk
 - Never return "complete" without writing output file
-- Output: `mk/dev/shared/reports/security-{feature}.md`
+- Output: `bk/dev/shared/reports/security-{feature}.md`
 - Ref: agent-protocols/tool-restriction.md, agent-protocols/output-gate.md
 
 ## Focus Areas

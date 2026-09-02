@@ -1,6 +1,6 @@
 ---
 name: bk-bootstrap
-description: "Scan project codebase, detect platform/architecture/patterns, output foundation docs to mk/docs/foundation/."
+description: "Scan project codebase, detect platform/architecture/patterns, output foundation docs to bk/docs/foundation/."
 user-invocable: true
 argument-hint: "[project path] [--fast|--deep|--refresh]"
 ---
@@ -8,12 +8,12 @@ argument-hint: "[project path] [--fast|--deep|--refresh]"
 # Bootstrap: $ARGUMENTS
 
 Scan project codebase to produce foundation documentation.
-Output: `mk/docs/foundation/` (7 focused .md files).
+Output: `bk/docs/foundation/` (7 focused .md files).
 
 <Use_When>
-- First time setting up mk toolkit in a project
+- First time setting up the bk toolkit in a project
 - User says "bootstrap", "setup", "init", "scan project"
-- `mk/docs/foundation/overview.md` missing
+- `bk/docs/foundation/overview.md` missing
 - User passes `--refresh` to re-scan
 </Use_When>
 
@@ -24,7 +24,7 @@ Output: `mk/docs/foundation/` (7 focused .md files).
 ## CRITICAL ENFORCEMENT
 
 - Step 4 **MUST** dispatch parallel Explore agents (1 per domain) — DO NOT scan inline
-- Step 5 **MUST** dispatch bk-docs-writer — DO NOT write mk/docs/foundation/*.md yourself
+- Step 5 **MUST** dispatch bk-docs-writer — DO NOT write bk/docs/foundation/*.md yourself
 - If workflow ends with 0 Task() calls → INCOMPLETE
 
 | Step | Agent | Model | Condition |
@@ -41,7 +41,7 @@ Output: `mk/docs/foundation/` (7 focused .md files).
    - Parse `$ARGUMENTS` for project path (default: CWD)
    - Detect platform from project signals
    - IF ambiguous → **use `AskUserQuestion` tool** to ask platform selection
-   - IF `mk/docs/foundation/overview.md` exists AND no `--refresh` → **use `AskUserQuestion` tool**: overwrite or skip?
+   - IF `bk/docs/foundation/overview.md` exists AND no `--refresh` → **use `AskUserQuestion` tool**: overwrite or skip?
    - **Serena Onboarding** (before any scan):
      1. Check if Serena MCP tools are available in session (look for `serena` tools like `check_onboarding_performed`)
      2. IF available → call `check_onboarding_performed()`
@@ -228,11 +228,11 @@ Task(subagent_type: "Explore", run_in_background: true,
 ```
 
 Wait for ALL agents to complete. Mark tasks completed.
-Conductor collects agent returns → writes to mk/docs/foundation/_raw/:
-- `mk/docs/foundation/_raw/code-scan.md` (from Agent 1)
-- `mk/docs/foundation/_raw/docs-scan.md` (from Agent 2, if dispatched)
-- `mk/docs/foundation/_raw/design-scan.md` (from Agent 3, if dispatched)
-- `mk/docs/foundation/_raw/api-scan.md` (from Agent 4, if dispatched)
+Conductor collects agent returns → writes to bk/docs/foundation/_raw/:
+- `bk/docs/foundation/_raw/code-scan.md` (from Agent 1)
+- `bk/docs/foundation/_raw/docs-scan.md` (from Agent 2, if dispatched)
+- `bk/docs/foundation/_raw/design-scan.md` (from Agent 3, if dispatched)
+- `bk/docs/foundation/_raw/api-scan.md` (from Agent 4, if dispatched)
 
 Note: Explore agents are read-only — they return data via prompt.
 Conductor writes _raw/ files (ALLOWED in anti-self-implementation hook whitelist).
@@ -247,19 +247,19 @@ Timeout: 3 minutes per scout.
 TaskUpdate(taskId=T4, status="in_progress")
 ```
 
-ALWAYS dispatch bk-docs-writer — DO NOT write mk/docs/foundation/*.md yourself.
+ALWAYS dispatch bk-docs-writer — DO NOT write bk/docs/foundation/*.md yourself.
 ```
 Task(subagent_type: "bk-docs-writer", model: "haiku",
   description: "Synthesize foundation docs", prompt: "
   Task: Synthesize scan reports into 7 foundation documentation files
-  Files: Read scan reports from mk/docs/foundation/_raw/:
+  Files: Read scan reports from bk/docs/foundation/_raw/:
     - code-scan.md (source code analysis)
     - docs-scan.md (project documents — if exists)
     - design-scan.md (design specs — if exists)
     - api-scan.md (API specifications — if exists)
     - modules-report.md (deep module scan — if exists)
   User context: {user_description_if_provided}
-  Output: Write 7 docs in mk/docs/foundation/:
+  Output: Write 7 docs in bk/docs/foundation/:
     1. overview.md — Project identity, purpose (from BRD), structure, tech stack, module map
     2. architecture.md — Patterns, layers, dependency graph, conventions
     3. code-guidelines.md — Naming, patterns, lint rules, error handling
@@ -288,9 +288,9 @@ IF SERENA_AVAILABLE:
   TaskUpdate(taskId=T5, status="in_progress")
 
   Read key data from foundation docs:
-  1. mk/docs/foundation/architecture.md → extract: architecture pattern, layers, state management, DI, navigation
-  2. mk/docs/foundation/code-guidelines.md → extract: naming, file organization, error handling, test patterns
-  3. mk/docs/foundation/design-system.md → extract: colors, typography, spacing, key components
+  1. bk/docs/foundation/architecture.md → extract: architecture pattern, layers, state management, DI, navigation
+  2. bk/docs/foundation/code-guidelines.md → extract: naming, file organization, error handling, test patterns
+  3. bk/docs/foundation/design-system.md → extract: colors, typography, spacing, key components
 
   serena.write_memory("foundation_architecture", "
     Architecture: {pattern}
@@ -341,12 +341,12 @@ IF TODO/FIXME count > 20 OR lock files > 180 days old:
 ### Suggest Next Steps
 
 Based on scan results:
-- IF BRD/requirements extracted → Suggest: "/bk-spec {feature} mk/docs/foundation/_raw/requirements-extract.md — Requirements detected, SRS will use the extract as URD input"
+- IF BRD/requirements extracted → Suggest: "/bk-spec {feature} bk/docs/foundation/_raw/requirements-extract.md — Requirements detected, SRS will use the extract as URD input"
 - IF Figma/design detected → Suggest: "/bk-spec {feature} --figma — Design specs available for structured extraction"
 - IF API specs detected → Suggest: "/bk-spec {feature} --openapi — API contracts available"
 - OTHERWISE → Suggest: "/bk-plan {feature}"
 
-Write extracted requirements to: mk/docs/foundation/_raw/requirements-extract.md (structured)
+Write extracted requirements to: bk/docs/foundation/_raw/requirements-extract.md (structured)
 
 **Reference files for analysis steps:**
 
@@ -361,7 +361,7 @@ Write extracted requirements to: mk/docs/foundation/_raw/requirements-extract.md
 ## Output Contract
 
 ```
-mk/docs/foundation/
+bk/docs/foundation/
 ├── overview.md            # Project identity + structure + tech stack + module map
 ├── architecture.md        # Patterns + layer map + dependency graph + conventions
 ├── code-guidelines.md     # Naming, patterns, lint rules + error handling + imports
@@ -376,7 +376,7 @@ Also updates: `.platform-context.json`
 ## Constraints
 
 - Read-only scan — never build, test, or modify project code
-- Only write to `mk/docs/foundation/`, `.platform-context.json`, and `.serena/` (via onboarding)
+- Only write to `bk/docs/foundation/`, `.platform-context.json`, and `.serena/` (via onboarding)
 - Never overwrite existing foundation without user confirmation
 - Keep each output file under 300 lines
 - Evidence-based: every detected pattern must cite file + line

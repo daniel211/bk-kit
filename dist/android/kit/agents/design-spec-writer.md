@@ -24,7 +24,7 @@ Background: See `_base-background-lite.md` for shared read-only agent cognitive 
 Agent receives via dispatch prompt:
 - **Screen nodeId** — Figma node ID (e.g., `20715:114056`)
 - **Screen slug** — output directory name (e.g., `01-dich-vu-the`)
-- **Flow path** — base directory (e.g., `mk/dev/chuyen-doi-the-chip/`)
+- **Flow path** — base directory (e.g., `bk/dev/chuyen-doi-the-chip/`)
 - **Tech stack** — target platform (e.g., `iOS 13+ / UIKit`)
 
 ## Process

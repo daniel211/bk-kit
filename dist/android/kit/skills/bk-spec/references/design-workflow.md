@@ -48,13 +48,13 @@ Task(
   model: "sonnet",
   description: "Figma discovery",
   prompt: "Figma URL: {figma_url}
-    Flow: mk/dev/{feature-slug}/design/
+    Flow: bk/dev/{feature-slug}/design/
     Task: Parse URL, discover screens, extract component contracts.
   "
 )
 ```
 
-**Verify** `mk/dev/{feature-slug}/design/raw/discovery.json` + `raw/component-contracts.json` exist.
+**Verify** `bk/dev/{feature-slug}/design/raw/discovery.json` + `raw/component-contracts.json` exist.
 
 | Condition | Action |
 |-----------|--------|
@@ -88,7 +88,7 @@ Do NOT proceed to Step 2 until `approved[]` is non-empty AND status ≠ cancelle
 
 ### Hydrating Step 2 after Phase Checkpoint
 
-The conductor knows the actual screen count only **after** the Phase Checkpoint. Source of truth: `mk/dev/{feature-slug}/design/raw/discovery.json` filtered by the user's approval choice.
+The conductor knows the actual screen count only **after** the Phase Checkpoint. Source of truth: `bk/dev/{feature-slug}/design/raw/discovery.json` filtered by the user's approval choice.
 
 Steps to hydrate Step 2:
 1. Read `discovery.json` to get the full discovered list (`screens[]`)
@@ -111,7 +111,7 @@ Triggered when user picks "Hủy" at any Phase Checkpoint with a cancel option.
    ```
    (Step 1 stays `completed` — it actually ran.)
 
-2. Record cancellation in `mk/dev/{feature-slug}/.spec-state.json`:
+2. Record cancellation in `bk/dev/{feature-slug}/.spec-state.json`:
    ```json
    {
      "current_phase": "design_cancelled",
@@ -154,11 +154,11 @@ Task(
   description: "Design spec {slug}",
   prompt: "
     Task: Extract design spec from Figma screen
-    Flow: mk/dev/{feature-slug}/design/
-    Component contracts: mk/dev/{feature-slug}/design/raw/component-contracts.json (read first to identify shared components)
+    Flow: bk/dev/{feature-slug}/design/
+    Component contracts: bk/dev/{feature-slug}/design/raw/component-contracts.json (read first to identify shared components)
     Screen: {nodeId} | Slug: {slug}
     Name: {name} | Size: {width}x{height}
-    Output: mk/dev/{feature-slug}/design/{slug}/
+    Output: bk/dev/{feature-slug}/design/{slug}/
   "
 )
 // ... repeat for each screen in the SAME message (or per wave if M > 15)
@@ -176,7 +176,7 @@ TaskUpdate(taskId: <Step2>,
 
 **Post-verify (filesystem-based, source of truth):**
 
-1. After all dispatched agents return, glob `mk/dev/{feature-slug}/design/*/design.md`
+1. After all dispatched agents return, glob `bk/dev/{feature-slug}/design/*/design.md`
 2. Cross-check against `metadata.approvedSlugs`
 3. Compute `extracted = present screens`, `missing = approved - extracted`
 
@@ -204,14 +204,14 @@ Task(
   subagent_type: "design-asset-exporter",
   model: "sonnet",
   description: "Export Figma assets",
-  prompt: "Flow: mk/dev/{feature-slug}/design/
-    Tech stack: read from mk/docs/foundation/build-targets.md (platform = ios | android | flutter)
+  prompt: "Flow: bk/dev/{feature-slug}/design/
+    Tech stack: read from bk/docs/foundation/build-targets.md (platform = ios | android | flutter)
     Task: Read ALL assets.json files in the flow directory, deduplicate, resolve invalid node IDs, batch export, write platform-specific metadata (Contents.json for iOS, drawable/mipmap dirs for Android, assets/ for Flutter), write asset-export-report.json.
   "
 )
 ```
 
-**Verify** `mk/dev/{feature-slug}/design/raw/asset-export-report.json`.
+**Verify** `bk/dev/{feature-slug}/design/raw/asset-export-report.json`.
 
 | Condition | Action |
 |-----------|--------|
@@ -232,10 +232,10 @@ Task(
   prompt: "
     Write SRS section: UI/UX Requirements for {feature-name} ({feature-slug})
     Context:
-      - Read ALL */design.md files in mk/dev/{feature-slug}/design/ (screen designs)
-      - mk/docs/foundation/design-system.md (design tokens)
-      - mk/dev/{feature-slug}/srs/01-overview.md (if exists — screen flow diagram)
-      - mk/dev/{feature-slug}/.spec-state.json (check `design_partial` — if set, mark missing screens as 'TBD' in inventory)
+      - Read ALL */design.md files in bk/dev/{feature-slug}/design/ (screen designs)
+      - bk/docs/foundation/design-system.md (design tokens)
+      - bk/dev/{feature-slug}/srs/01-overview.md (if exists — screen flow diagram)
+      - bk/dev/{feature-slug}/.spec-state.json (check `design_partial` — if set, mark missing screens as 'TBD' in inventory)
     Load: references/ui-ux-requirements.md
     Template: templates/05-ui-ux-requirements.md
     Synthesize:
@@ -246,7 +246,7 @@ Task(
       - Design tokens used
       - Accessibility requirements
       - Loading/error/empty states
-    Output: mk/dev/{feature-slug}/srs/05-ui-ux-requirements.md
+    Output: bk/dev/{feature-slug}/srs/05-ui-ux-requirements.md
   "
 )
 ```
@@ -261,9 +261,9 @@ Task(
   prompt: "
     Review design documentation for feature: {feature-name} ({feature-slug}).
     Files to review:
-      - ALL */design.md files in mk/dev/{feature-slug}/design/
-      - mk/dev/{feature-slug}/srs/05-ui-ux-requirements.md
-      - mk/dev/{feature-slug}/design/raw/asset-export-report.json (if exists)
+      - ALL */design.md files in bk/dev/{feature-slug}/design/
+      - bk/dev/{feature-slug}/srs/05-ui-ux-requirements.md
+      - bk/dev/{feature-slug}/design/raw/asset-export-report.json (if exists)
     Note: 04-api-contract is in Phase 3 — do NOT check for it.
     Check:
     1. Every design.md has complete section structure (9 sections)
@@ -276,7 +276,7 @@ Task(
     8. Screens with 0 assets are valid (popups, modals) — do NOT flag
     9. Design.md files up to 900 lines are acceptable — do NOT flag
     TOOL RESTRICTION: READ-ONLY agent. Do NOT use Edit, Bash, or Task tools.
-    Output: mk/dev/shared/reports/design-review-{feature-slug}.md
+    Output: bk/dev/shared/reports/design-review-{feature-slug}.md
     Verdict: OKAY or REVISE with specific issues
   "
 )
@@ -288,13 +288,13 @@ Task(
 
 **On REVISE verdict (initial):** Show issues to user → AskUserQuestion:
 - **Sửa lỗi** → enter Iteration 1
-- **Tiếp tục không sửa** → continue to Phase 4 Validate, record `design_review_verdict: "REVISE"` in `mk/dev/{feature-slug}/.spec-state.json`
+- **Tiếp tục không sửa** → continue to Phase 4 Validate, record `design_review_verdict: "REVISE"` in `bk/dev/{feature-slug}/.spec-state.json`
 - **Huỷ** → trigger Cancel Handling
 
 **Fix loop (max 2 iterations, user-gated each iter):**
 
 **Iteration 1:**
-1. For each REVISE finding in `mk/dev/shared/reports/design-review-{feature-slug}.md`, identify target file:
+1. For each REVISE finding in `bk/dev/shared/reports/design-review-{feature-slug}.md`, identify target file:
    - Finding cites `*/design.md` → re-dispatch design-spec-writer for that screen (read existing + apply specific fix, not full rewrite)
    - Finding cites `srs/05-ui-ux-requirements.md` → re-dispatch bk-docs-writer for that file (read existing + apply specific fix)
 2. Re-dispatch bk-code-reviewer for re-review (same prompt as Step 5)

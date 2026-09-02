@@ -1,6 +1,6 @@
 # Spec Summary Template
 
-Write to `mk/dev/{feature-slug}/spec-summary.md` using this template. Replace all `{placeholders}` with actual values.
+Write to `bk/dev/{feature-slug}/spec-summary.md` using this template. Replace all `{placeholders}` with actual values.
 
 ---
 
@@ -8,7 +8,7 @@ Write to `mk/dev/{feature-slug}/spec-summary.md` using this template. Replace al
 # Spec Summary: {Feature Name}
 
 > Generated: {date}
-> Foundation: mk/docs/foundation/overview.md
+> Foundation: bk/docs/foundation/overview.md
 
 ## Input Sources
 
@@ -22,7 +22,7 @@ Write to `mk/dev/{feature-slug}/spec-summary.md` using this template. Replace al
 
 ## SRS Documents
 
-Generated at: `mk/dev/{feature-slug}/srs/`
+Generated at: `bk/dev/{feature-slug}/srs/`
 
 | File | Content | Status |
 |------|---------|--------|
@@ -32,9 +32,9 @@ Generated at: `mk/dev/{feature-slug}/srs/`
 | 04-api-contract.md | {N} endpoints, {M} models, ER diagram | ✓ / ⊘ No API input |
 | 05-ui-ux-requirements.md | {N} screens, {M} flows, navigation diagram | ✓ / ⊘ No Figma input |
 
-SRS quality review: `mk/dev/shared/reports/srs-review-{feature-slug}.md` — {OKAY / REVISE / N/A}
-Design quality review: `mk/dev/shared/reports/design-review-{feature-slug}.md` — {OKAY / REVISE / N/A}
-API quality review: `mk/dev/shared/reports/api-review-{feature-slug}.md` — {OKAY / REVISE / N/A}
+SRS quality review: `bk/dev/shared/reports/srs-review-{feature-slug}.md` — {OKAY / REVISE / N/A}
+Design quality review: `bk/dev/shared/reports/design-review-{feature-slug}.md` — {OKAY / REVISE / N/A}
+API quality review: `bk/dev/shared/reports/api-review-{feature-slug}.md` — {OKAY / REVISE / N/A}
 
 ## Design Summary
 

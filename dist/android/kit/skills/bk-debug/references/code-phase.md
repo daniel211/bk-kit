@@ -16,7 +16,7 @@ Task(subagent_type: "bk-{platform}-developer", model: "opus", prompt: "
   Files to modify: {affected_files}
   Fix approach: {fix_approach}
   Platform context: {from platform-context.json}
-  Output: mk/dev/shared/{platform}/{feature}-impl-result.json
+  Output: bk/dev/shared/{platform}/{feature}-impl-result.json
 
   Requirements:
   - Follow platform conventions from {platform}-rules.md

@@ -8,9 +8,9 @@ Parse bk-plan output, resume from crash, hydrate Claude Tasks.
 
 ```
 $ARGUMENTS patterns:
-- "mk/dev/feature/plan.md"     → full plan execution
-- "mk/dev/feature/phase-02-*.md" → single phase execution
-- "mk/dev/feature/"            → detect plan.md in directory
+- "bk/dev/feature/plan.md"     → full plan execution
+- "bk/dev/feature/phase-02-*.md" → single phase execution
+- "bk/dev/feature/"            → detect plan.md in directory
 ```
 
 1. Resolve plan directory from argument

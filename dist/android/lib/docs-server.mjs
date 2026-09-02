@@ -1,5 +1,5 @@
 /**
- * docs-server.mjs — Minimal static file server for the mk docs site.
+ * docs-server.mjs — Minimal static file server for the bk docs site.
  *
  * Uses node:http to serve pre-built HTML/CSS/JS from a directory.
  * Auto-opens the browser on macOS using the 'open' command.

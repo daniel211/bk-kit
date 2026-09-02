@@ -48,7 +48,7 @@ If Trivial:
 
 ## State Output
 
-Write to `mk/dev/shared/.workflow-state.json`:
+Write to `bk/dev/shared/.workflow-state.json`:
 ```json
 {
   "command": "bk-debug",

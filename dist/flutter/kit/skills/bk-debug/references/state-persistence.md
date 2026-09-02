@@ -2,7 +2,7 @@
 
 ## State File
 
-Path: `mk/dev/shared/.workflow-state.json`
+Path: `bk/dev/shared/.workflow-state.json`
 
 ```json
 {

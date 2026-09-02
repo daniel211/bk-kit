@@ -41,7 +41,7 @@ try {
       }
 
       // Find latest completion report
-      const devDir = path.join(resolveProjectRoot(), 'mk', 'dev');
+      const devDir = path.join(resolveProjectRoot(), 'bk', 'dev');
       let reportPath = null;
       let featureName = state.feature || 'unknown';
 

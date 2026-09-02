@@ -126,12 +126,12 @@ Before commit:
   "agent_trace": {"total_agents": 0, "completed": 0, "failed": 0},
   "interrupted": false,
   "recovery_hints": {
-    "state_file": "mk/dev/shared/.workflow-state.json"
+    "state_file": "bk/dev/shared/.workflow-state.json"
   }
 }
 ```
 
-Location: `mk/dev/checkpoints/checkpoint_{feature}_{timestamp}.json`
+Location: `bk/dev/checkpoints/checkpoint_{feature}_{timestamp}.json`
 
 ---
 

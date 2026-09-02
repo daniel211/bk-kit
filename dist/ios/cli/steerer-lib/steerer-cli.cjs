@@ -41,7 +41,7 @@ Description:
     - Oscillating file edits (>= 10 edits with toggle pattern)
     - Budget overruns (> 2× estimated)
 
-  Writes a draft to mk/dev/shared/.learned-preferences-draft.md.
+  Writes a draft to bk/dev/shared/.learned-preferences-draft.md.
   User reviews the draft, marks items [x] Accept, then runs --apply.
 
 Env vars:

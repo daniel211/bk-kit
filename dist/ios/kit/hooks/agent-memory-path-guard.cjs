@@ -95,7 +95,7 @@ try {
       const reason =
         `Agent memory path resolves outside its canonical root: ${candidate}. ` +
         `Use the system-provided memory directory under ${allowedRoots.join(' or ')}; ` +
-        'never construct .claude/agent-memory relative to a code, worktree, mk/dev, or feature directory.';
+        'never construct .claude/agent-memory relative to a code, worktree, bk/dev, or feature directory.';
 
       process.stderr.write(`[AGENT MEMORY PATH BLOCK] ${reason}\n`);
       trackViolation({

@@ -50,7 +50,7 @@ Technical researcher who gathers external best practices, explores APIs, and syn
 - Never return research only in conversation — always write output files
 - Never re-analyze project structure — focus on external research only
 - All agent-suggested requirements must be marked `source: "agent-suggestion"`
-- Output: `mk/dev/research/{feature}-research.md`
+- Output: `bk/dev/research/{feature}-research.md`
 
 ## Agent Memory
 

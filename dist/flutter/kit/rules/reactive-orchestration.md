@@ -93,7 +93,7 @@ When dispatching a reactive helper skill:
    - What has been tried and failed (retry history)
 
 2. **Helper output path:**
-   - Write to `mk/dev/shared/reactive/{signal}-{feature}.md`
+   - Write to `bk/dev/shared/reactive/{signal}-{feature}.md`
 
 3. **Resume main workflow:**
    - Read helper output
@@ -149,10 +149,10 @@ Conductor does NOT need to manually manage MCP failures.
 
 All reactive helper skill outputs go to:
 ```
-mk/dev/shared/reactive/{signal}-{feature}-{YYMMDD-HHMM}.md
+bk/dev/shared/reactive/{signal}-{feature}-{YYMMDD-HHMM}.md
 ```
 
-Example: `mk/dev/shared/reactive/agent_stuck-payment-login-260325-1400.md`
+Example: `bk/dev/shared/reactive/agent_stuck-payment-login-260325-1400.md`
 
 ### Handoff Steps
 
@@ -174,7 +174,7 @@ Context:
   - Feature: {feature}
   - Error: {last error or issue}
   - Tried: {list of attempted approaches}
-Output: mk/dev/shared/reactive/{signal}-{feature}.md
+Output: bk/dev/shared/reactive/{signal}-{feature}.md
 Expected: {what kind of result is needed — approach, docs, analysis}
 ```
 

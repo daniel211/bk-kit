@@ -105,7 +105,7 @@
     "conductor-role": "Nguồn sự thật duy nhất cho trách nhiệm conductor, quy tắc điều phối và pattern ủy quyền.",
     "core-rules": "Quy tắc điều phối thiết yếu. Quy tắc riêng của agent nằm trong định nghĩa agent.",
     "development-rules": "Tiêu chuẩn phát triển mobile: offline-first, tiết kiệm pin, native theo từng platform.",
-    "documentation-management": "Lưu plan trong thư mục mk/dev với đặt tên có timestamp, file phase có cấu trúc.",
+    "documentation-management": "Lưu plan trong thư mục bk/dev với đặt tên có timestamp, file phase có cấu trúc.",
     "metrics-collection": "Theo dõi hiệu năng agent trên các workflow để tối ưu dựa trên dữ liệu.",
     "mobile-shared-rules": "Clean Architecture, MVVM pattern, dependency injection, chuẩn xử lý lỗi.",
     "reactive-orchestration": "Conductor đọc rule này sau mỗi lần agent trả về để ra quyết định bước tiếp theo thông minh.",

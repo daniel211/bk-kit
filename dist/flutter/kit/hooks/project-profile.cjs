@@ -29,7 +29,7 @@ try {
 
       // Check if foundation overview exists
       const root = resolveProjectRoot();
-      const overviewPath = path.join(root, 'mk', 'docs', 'foundation', 'overview.md');
+      const overviewPath = path.join(root, 'bk', 'docs', 'foundation', 'overview.md');
       if (!fs.existsSync(overviewPath)) {
         timer.end({ status: 'no_overview', exit: 0 });
         process.exit(0);
@@ -61,7 +61,7 @@ try {
 
       // Read architecture.md if exists → extract pattern keywords
       let architecture = 'unknown';
-      const archPath = path.join(root, 'mk', 'docs', 'foundation', 'architecture.md');
+      const archPath = path.join(root, 'bk', 'docs', 'foundation', 'architecture.md');
       if (fs.existsSync(archPath)) {
         const archContent = fs.readFileSync(archPath, 'utf8');
         if (/\bVIPER\b/i.test(archContent)) {
@@ -77,8 +77,8 @@ try {
         }
       }
 
-      // Detect what docs exist in mk/docs/foundation/
-      const foundationDir = path.join(root, 'mk', 'docs', 'foundation');
+      // Detect what docs exist in bk/docs/foundation/
+      const foundationDir = path.join(root, 'bk', 'docs', 'foundation');
       let foundationFiles = [];
       try {
         foundationFiles = fs.readdirSync(foundationDir).map(f => f.toLowerCase());

@@ -25,7 +25,7 @@ const DEFAULT_CONFIG = {
   },
   paths: {
     docs: 'docs',
-    plans: 'mk/dev'
+    plans: 'bk/dev'
   },
   locale: {
     thinkingLanguage: null,
@@ -150,7 +150,7 @@ function isHookEnabled(hookName, config) {
 }
 
 /**
- * Read platform-context.json from project root or mk/dev/shared/
+ * Read platform-context.json from project root or bk/dev/shared/
  * Returns context object or null.
  * @returns {Object|null}
  */
@@ -158,7 +158,7 @@ function readPlatformContext() {
   const root = resolveProjectRoot();
   const candidates = [
     path.join(root, '.claude', 'platform-context.json'),
-    path.join(root, 'mk', 'dev', 'shared', 'platform-context.json')
+    path.join(root, 'bk', 'dev', 'shared', 'platform-context.json')
   ];
   for (const p of candidates) {
     try {
@@ -171,13 +171,13 @@ function readPlatformContext() {
 }
 
 /**
- * Read .workflow-state.json from mk/dev/shared/
+ * Read .workflow-state.json from bk/dev/shared/
  * Fallback chain: primary file → .bak backup → latest checkpoint
  * @returns {Object|null}
  */
 function readWorkflowState() {
   const root = resolveProjectRoot();
-  const statePath = path.join(root, 'mk', 'dev', 'shared', '.workflow-state.json');
+  const statePath = path.join(root, 'bk', 'dev', 'shared', '.workflow-state.json');
   const bakPath = statePath + '.bak';
 
   // Try primary file
@@ -217,7 +217,7 @@ function readWorkflowState() {
  */
 function writeWorkflowState(updates) {
   const root = resolveProjectRoot();
-  const statePath = path.join(root, 'mk', 'dev', 'shared', '.workflow-state.json');
+  const statePath = path.join(root, 'bk', 'dev', 'shared', '.workflow-state.json');
   const bakPath = statePath + '.bak';
   const lockPath = statePath + '.lock';
   const tmpPath = statePath + '.' + Math.random().toString(36).slice(2);
@@ -276,7 +276,7 @@ function writeWorkflowState(updates) {
  * @returns {string} Absolute path
  */
 function getOutputPath(agentType, feature, platform) {
-  const base = path.join(resolveProjectRoot(), 'mk', 'dev', 'shared', 'reports');
+  const base = path.join(resolveProjectRoot(), 'bk', 'dev', 'shared', 'reports');
   // Normalize: strip bk- prefix for filename generation
   const bare = agentType.replace(/^bk-/, '');
   const pfx = platform || 'unknown';
@@ -310,7 +310,7 @@ function parseReportMetadata(content) {
  * @returns {boolean}
  */
 function saveCheckpoint(data, maxKeep = 5) {
-  const dir = path.join(resolveProjectRoot(), 'mk', 'dev', 'shared', 'checkpoints');
+  const dir = path.join(resolveProjectRoot(), 'bk', 'dev', 'shared', 'checkpoints');
   try {
     fs.mkdirSync(dir, { recursive: true });
     const ts = new Date().toISOString().replace(/[:.]/g, '-');
@@ -329,7 +329,7 @@ function saveCheckpoint(data, maxKeep = 5) {
  * @returns {Object|null}
  */
 function readLatestCheckpoint() {
-  const dir = path.join(resolveProjectRoot(), 'mk', 'dev', 'shared', 'checkpoints');
+  const dir = path.join(resolveProjectRoot(), 'bk', 'dev', 'shared', 'checkpoints');
   try {
     if (!fs.existsSync(dir)) return null;
     const files = fs.readdirSync(dir)
@@ -552,7 +552,7 @@ function resolveNamingPattern(planConfig, gitBranch) {
  * @returns {{ path: string|null, resolvedBy: 'session'|'branch'|null }}
  */
 function resolvePlanPath(sessionId, config) {
-  const plansDir = config?.paths?.plans || 'mk/dev';
+  const plansDir = config?.paths?.plans || 'bk/dev';
   const resolution = config?.plan?.resolution || {};
   const order = resolution.order || ['session', 'branch'];
   const branchPattern = resolution.branchPattern;

@@ -81,7 +81,7 @@ Load: `references/intent-detection.md` + `references/plan-consumption.md`
 
 - Parse $ARGUMENTS for plan.md or sub-task file path
 - Read `.plan-state.json` if exists → resume from last incomplete batch/sub-task
-- **Foundation check**: Read `mk/docs/foundation/architecture.md` → extract architecture pattern, state management
+- **Foundation check**: Read `bk/docs/foundation/architecture.md` → extract architecture pattern, state management
   - IF missing → warn: "Foundation docs missing. Code quality may be reduced. Consider running `/bk-bootstrap`."
   - IF exists → include architecture pattern + state management + naming conventions in agent dispatch prompt
 - Detect platform from plan.md YAML `platforms` field
@@ -128,7 +128,7 @@ See `references/batch-execution.md` for complete dispatch syntax (copy-paste rea
 Load: `references/finalize.md`
 
 1. Full sync-back: sweep ALL sub-task files, mark completed `[x]`, update plan.md statuses
-2. Dispatch `bk-docs-writer` (background) → update `mk/docs/` if needed
+2. Dispatch `bk-docs-writer` (background) → update `bk/docs/` if needed
 3. Dispatch `bk-git-manager` → stage + commit with conventional format
 4. Write final `.plan-state.json` with status: complete
 

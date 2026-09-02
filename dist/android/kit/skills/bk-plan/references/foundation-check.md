@@ -5,11 +5,11 @@ Check if project has been bootstrapped before planning.
 ## Check Logic
 
 ```
-1. Glob("mk/docs/foundation/overview.md")
+1. Glob("bk/docs/foundation/overview.md")
 2. IF exists:
-     Read mk/docs/foundation/overview.md → extract platform, structure
-     Read mk/docs/foundation/architecture.md → extract patterns
-     Read mk/docs/foundation/code-guidelines.md → extract conventions
+     Read bk/docs/foundation/overview.md → extract platform, structure
+     Read bk/docs/foundation/architecture.md → extract patterns
+     Read bk/docs/foundation/code-guidelines.md → extract conventions
      → Use as base context for planning
      → Skip own platform detection
      → Skip broad code analysis (do feature-specific only)
@@ -27,11 +27,11 @@ Check if project has been bootstrapped before planning.
 
 | File | Extract For |
 |------|-------------|
-| `mk/docs/foundation/overview.md` | platform, structure, entry points, totalLoc |
-| `mk/docs/foundation/architecture.md` | arch pattern, state mgmt, DI, navigation, networking |
-| `mk/docs/foundation/code-guidelines.md` | naming, folder structure, lint rules, test conventions |
-| `mk/docs/foundation/dependencies.md` | available packages (know what's usable) |
-| `mk/docs/foundation/build-targets.md` | build/test commands (for agents) |
+| `bk/docs/foundation/overview.md` | platform, structure, entry points, totalLoc |
+| `bk/docs/foundation/architecture.md` | arch pattern, state mgmt, DI, navigation, networking |
+| `bk/docs/foundation/code-guidelines.md` | naming, folder structure, lint rules, test conventions |
+| `bk/docs/foundation/dependencies.md` | available packages (know what's usable) |
+| `bk/docs/foundation/build-targets.md` | build/test commands (for agents) |
 
 ## Context Passed to Downstream Steps
 

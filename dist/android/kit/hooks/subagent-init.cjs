@@ -59,7 +59,7 @@ try {
       async function injectFoundationContext(agentName) {
         if (!FOUNDATION_AGENTS.includes(agentName)) return '';
 
-        const foundationPath = path.join(resolveProjectRoot(), 'mk', 'docs', 'foundation');
+        const foundationPath = path.join(resolveProjectRoot(), 'bk', 'docs', 'foundation');
         // Budget: ~200 tokens for arch (~800 chars) + ~120 tokens for guidelines (~480 chars)
         let context = '\n\n--- Foundation Context (auto-injected) ---\n';
 
@@ -102,7 +102,7 @@ try {
         }
       }
 
-      if (hasFoundation) lines.push(`- Foundation: mk/docs/foundation/`);
+      if (hasFoundation) lines.push(`- Foundation: bk/docs/foundation/`);
 
       lines.push(`- Platform context: .platform-context.${platform}.json`);
       if (hasLSP) lines.push(`- LSP: available (use for symbol navigation, references)`);

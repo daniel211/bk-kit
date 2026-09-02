@@ -21,19 +21,19 @@ Agent A WRITES file → Conductor READS file → Conductor dispatches Agent B wi
 
 | Agent | Output Location |
 |-------|----------------|
-| Explore (scan) | mk/docs/foundation/_raw/scan-report.md |
+| Explore (scan) | bk/docs/foundation/_raw/scan-report.md |
 | bk-researcher | {plan-dir}/research/researcher-{N}-{topic}.md |
 | bk-planner | {plan-dir}/plan.md + sub-task-*.md |
-| bk-docs-writer (foundation) | mk/docs/foundation/*.md |
+| bk-docs-writer (foundation) | bk/docs/foundation/*.md |
 | bk-docs-writer (SRS) | {srs-dir}/*.md |
-| bk-docs-writer (project docs) | mk/docs/*.md |
+| bk-docs-writer (project docs) | bk/docs/*.md |
 | bk-{platform}-developer | Source code files + {plan-dir}/reports/impl-result.json |
-| bk-code-reviewer | mk/dev/shared/reports/code-review-{feature}.md |
-| bk-unit-test-agent | mk/dev/shared/reports/unit-test-{platform}-{feature}.md |
-| bk-debugger | mk/dev/shared/reports/debug-analysis-{feature}.json |
+| bk-code-reviewer | bk/dev/shared/reports/code-review-{feature}.md |
+| bk-unit-test-agent | bk/dev/shared/reports/unit-test-{platform}-{feature}.md |
+| bk-debugger | bk/dev/shared/reports/debug-analysis-{feature}.json |
 | bk-git-manager | Git commit (no file output) |
 | bk-project-manager | plan.md + phase/sub-task files (in-place checkbox updates) |
-| bk-spec (conductor) | mk/dev/{feature-slug}/spec-summary.md |
+| bk-spec (conductor) | bk/dev/{feature-slug}/spec-summary.md |
 
 ## File Ownership (CRITICAL — bk-team only)
 
@@ -42,7 +42,7 @@ Agent A WRITES file → Conductor READS file → Conductor dispatches Agent B wi
   - iOS: `ios/Runner/**`, `*.swift`
   - Android: `android/app/**`, `*.kt`
   - Flutter: `lib/**/*.dart`
-  - Shared: `test/**`, `mk/docs/**`
+  - Shared: `test/**`, `bk/docs/**`
 - Lead resolves ownership conflicts by restructuring tasks or handling shared files directly
 - Review/test agents: read-only on impl files, write only to reports/test files
 - Ownership violation detected → STOP and report to lead immediately

@@ -1,6 +1,6 @@
 ---
 paths:
-  - mk/dev/**
+  - bk/dev/**
   - .autodream/**
 ---
 
@@ -58,7 +58,7 @@ Failure state written to `.bk-dispatch-queue.json`:
 
 Each task inherits beer-kit's permission profile:
 - **Read**: all project files
-- **Write**: `mk/` directory, source files within plan scope
+- **Write**: `bk/` directory, source files within plan scope
 - **Bash**: build commands, test commands
 - **No**: git push (requires explicit approval)
 
@@ -76,7 +76,7 @@ _Source: `config/auto-mode-profiles.json`_
 
 - Claude Code with Dispatch feature enabled
 - beer-kit installed and configured (`bk-platform init`)
-- Project bootstrapped (foundation docs present in `mk/docs/foundation/`)
+- Project bootstrapped (foundation docs present in `bk/docs/foundation/`)
 
 ### Migration from Synchronous
 

@@ -32,7 +32,7 @@ figma-frame: "{Figma frame name or URL}"
 - Depends on: sub-task-{XX} output ({what it provides — e.g., ViewModel, data models})
 
 ## Foundation References
-<!-- Auto-filled from mk/docs/foundation/ during plan synthesis -->
+<!-- Auto-filled from bk/docs/foundation/ during plan synthesis -->
 - Architecture: {{foundation.architecture}}
 - State Management: {{foundation.stateManagement}}
 - Naming Convention: {{foundation.naming}}

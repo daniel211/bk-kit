@@ -13,11 +13,11 @@ After all agents complete, verify:
 | Check | Pass condition | Action if fail |
 |-------|---------------|----------------|
 | SRS | `srs/01-overview.md` exists AND `srs/02-functional-requirements.md` exists | Warn user, ask if proceed anyway |
-| SRS quality | `mk/dev/shared/reports/srs-review-{slug}.md` verdict = OKAY | Warn + show issues to user |
-| Design quality | `mk/dev/shared/reports/design-review-{slug}.md` verdict = OKAY | Warn + show issues to user |
-| API quality | `mk/dev/shared/reports/api-review-{slug}.md` verdict = OKAY | Warn + show issues to user |
+| SRS quality | `bk/dev/shared/reports/srs-review-{slug}.md` verdict = OKAY | Warn + show issues to user |
+| Design quality | `bk/dev/shared/reports/design-review-{slug}.md` verdict = OKAY | Warn + show issues to user |
+| API quality | `bk/dev/shared/reports/api-review-{slug}.md` verdict = OKAY | Warn + show issues to user |
 | Source quality | `source_quality` in `.spec-state.json` | If `low` + `degraded_mode`: add Risk "SRS degraded — requirements inferred, not verified against URD" |
-| Design | `mk/dev/{feature-slug}/design/*/design.md` exists (≥1 screen) AND file size > 500 bytes | Warn + add to Risks |
+| Design | `bk/dev/{feature-slug}/design/*/design.md` exists (≥1 screen) AND file size > 500 bytes | Warn + add to Risks |
 | API | `srs/04-api-contract.md` exists | If missing: add Risk "API contract chưa có — chạy `/bk-spec --api` khi có spec" |
 
 **Review report handling:**
@@ -38,7 +38,7 @@ When ANY check fails, present fail list to user via AskUserQuestion:
 
 ### Step 2: Write Spec Summary
 
-Write `mk/dev/{feature-slug}/spec-summary.md` using the template from [spec-summary-template.md](../templates/spec-summary-template.md).
+Write `bk/dev/{feature-slug}/spec-summary.md` using the template from [spec-summary-template.md](../templates/spec-summary-template.md).
 
 Key sections: Input Sources, **SRS Documents** (links to srs/ folder), Design Summary, Dependencies, Risks & Unknowns, Ready-for-Plan Checklist.
 

@@ -31,7 +31,7 @@ Analyzes requirements, scouts existing codebase patterns, researches technical a
 3. **STRUCTURE** -- Phases, file ownership lists, dependencies between phases.
    Use `find_referencing_symbols` to verify file ownership has no overlap between parallel phases.
 4. **WRITE** -- Phase files with steps, todos, success criteria.
-5. **SAVE** -- To mk/dev/ directory with proper naming.
+5. **SAVE** -- To bk/dev/ directory with proper naming.
 
 ## Core Mental Models
 - **Decomposition**: Break vague goals into small concrete tasks with file paths
@@ -69,7 +69,7 @@ Analyzes requirements, scouts existing codebase patterns, researches technical a
 - Plans must reference concrete file paths — no abstract descriptions
 - Each phase file must include: overview, requirements, implementation steps, todo checklist, success criteria
 - Read `.platform-context.json` to tailor plans to active platform conventions
-- Output: `mk/dev/{timestamp}-{feature}/` directory with `plan.md` + `phase-XX-*.md` files
+- Output: `bk/dev/{timestamp}-{feature}/` directory with `plan.md` + `phase-XX-*.md` files
 
 ## Agent Memory
 
@@ -237,7 +237,7 @@ Multi-screen payment flow: QR Scanner → Payment Confirmation → PIN Entry →
 **Success criteria:** Full navigation flow works, back navigation correct at each step
 
 ### Phase 5: Design Spec Handoff (consume /bk-spec output)
-**Source:** `mk/dev/qr-payment/design/*/design.md` (extracted by `/bk-spec --design` via design-validator + design-spec-writer + design-asset-exporter trio)
+**Source:** `bk/dev/qr-payment/design/*/design.md` (extracted by `/bk-spec --design` via design-validator + design-spec-writer + design-asset-exporter trio)
 **Output:** `{plan-dir}/inputs/design-refs.json` — pointer file to per-screen design.md paths
 **Note:** If `/bk-spec` output missing, plan halts at Step 4a — user routed back to `/bk-spec --design`
 

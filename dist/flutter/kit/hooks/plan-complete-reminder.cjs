@@ -24,7 +24,7 @@ try {
       }
 
       // Find latest plan directory
-      const plansDir = path.join(resolveProjectRoot(), 'mk', 'dev');
+      const plansDir = path.join(resolveProjectRoot(), 'bk', 'dev');
       let planPath = null;
       
       if (fs.existsSync(plansDir)) {
@@ -38,7 +38,7 @@ try {
 
       // Also check workflow state
       if (!planPath) {
-        const statePath = path.join(resolveProjectRoot(), 'mk', 'dev', 'shared', '.workflow-state.json');
+        const statePath = path.join(resolveProjectRoot(), 'bk', 'dev', 'shared', '.workflow-state.json');
         if (fs.existsSync(statePath)) {
           try {
             const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));

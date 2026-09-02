@@ -2,7 +2,7 @@
 
 ## Overview
 
-Generate feature SRS at `mk/dev/{feature-slug}/srs/`.
+Generate feature SRS at `bk/dev/{feature-slug}/srs/`.
 
 ## Task Tracking
 
@@ -30,7 +30,7 @@ Task(
     Platform: {from foundation}
     Source quality: {source_quality}
     Context:
-      - Foundation: mk/docs/foundation/overview.md
+      - Foundation: bk/docs/foundation/overview.md
       - URD content: {urd_path_or_content} (read to extract business goals, stakeholders, scope, constraints)
     Load: references/srs-diagrams.md (diagram guidelines)
     Load: references/srs-synthesis.md (synthesis rules)
@@ -44,7 +44,7 @@ Task(
       - Add Source Quality Notice after Project Scope:
         > ⚠ SOURCE QUALITY: {LOW|MEDIUM} — Requirements suy luận từ {source},
         > chưa xác nhận từ tài liệu yêu cầu.
-    Output: mk/dev/{feature-slug}/srs/01-overview.md
+    Output: bk/dev/{feature-slug}/srs/01-overview.md
   "
 )
 ```
@@ -61,13 +61,13 @@ Task(subagent_type: "bk-docs-writer", model: "sonnet",
   prompt: "
     Write SRS section: Functional Requirements
     Source quality: {source_quality}
-    Context: mk/dev/{feature-slug}/srs/01-overview.md (read first), mk/docs/foundation/
+    Context: bk/dev/{feature-slug}/srs/01-overview.md (read first), bk/docs/foundation/
     URD content: {urd_path_or_content} (if provided)
     If source_quality != 'verified': tag acceptance criteria '(inferred — cần xác nhận)'
     Load: references/functional-requirements.md
     Template: templates/02-functional-requirements.md
     Diagrams: embed relevant sequence diagrams (coreFlowDiagrams) from overview
-    Output: mk/dev/{feature-slug}/srs/02-functional-requirements.md
+    Output: bk/dev/{feature-slug}/srs/02-functional-requirements.md
   "
 )
 
@@ -75,10 +75,10 @@ Task(subagent_type: "bk-docs-writer", model: "sonnet",
   description: "Write non-functional requirements for {feature-name}",
   prompt: "
     Write SRS section: Non-Functional Requirements
-    Context: mk/dev/{feature-slug}/srs/01-overview.md, mk/docs/foundation/
+    Context: bk/dev/{feature-slug}/srs/01-overview.md, bk/docs/foundation/
     Load: references/nonfunctional-requirements.md
     Template: templates/03-nonfunctional-requirements.md
-    Output: mk/dev/{feature-slug}/srs/03-nonfunctional-requirements.md
+    Output: bk/dev/{feature-slug}/srs/03-nonfunctional-requirements.md
   "
 )
 
@@ -94,7 +94,7 @@ Task(
   model: "sonnet",
   description: "Review SRS quality for {feature-name}",
   prompt: "
-    Review SRS documents (01-overview, 02-functional, 03-nonfunctional) in mk/dev/{feature-slug}/srs/.
+    Review SRS documents (01-overview, 02-functional, 03-nonfunctional) in bk/dev/{feature-slug}/srs/.
     Check:
     1. All use cases have acceptance criteria
     2. NFRs are measurable (numbers, not adjectives)
@@ -102,7 +102,7 @@ Task(
     4. No placeholder content or TODO markers
     5. Cross-references between files are valid
     6. If degraded_mode: verify Source Quality Notice exists in overview
-    Output: mk/dev/shared/reports/srs-review-{feature-slug}.md
+    Output: bk/dev/shared/reports/srs-review-{feature-slug}.md
     Verdict: OKAY or REVISE with specific issues
   "
 )

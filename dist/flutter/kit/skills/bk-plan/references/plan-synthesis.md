@@ -143,10 +143,10 @@ Every sub-task file MUST include a `## Foundation References` section:
 
 ```markdown
 ## Foundation References
-- Architecture: MVVM + Clean Architecture (from mk/docs/foundation/architecture.md)
-- Naming: PascalCase for classes, camelCase for functions (from mk/docs/foundation/code-guidelines.md)
-- State: @Observable macro (from mk/docs/foundation/architecture.md)
-- Test Pattern: MockRepository protocol (from mk/docs/foundation/code-guidelines.md)
+- Architecture: MVVM + Clean Architecture (from bk/docs/foundation/architecture.md)
+- Naming: PascalCase for classes, camelCase for functions (from bk/docs/foundation/code-guidelines.md)
+- State: @Observable macro (from bk/docs/foundation/architecture.md)
+- Test Pattern: MockRepository protocol (from bk/docs/foundation/code-guidelines.md)
 ```
 
 This ensures every developer agent has context without re-scanning the project.

@@ -64,7 +64,7 @@ function loadBudgetConfig() {
   // 2. Project path
   try {
     const root = resolveProjectRoot();
-    candidates.push(path.join(root, 'mk', 'dev', 'shared', 'budget-config.json'));
+    candidates.push(path.join(root, 'bk', 'dev', 'shared', 'budget-config.json'));
   } catch { /* skip */ }
 
   // 3. Hook's shipped default — check same dir and lib/ subdir

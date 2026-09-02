@@ -51,7 +51,7 @@ For each screen, note key interactions:
 ## Design Tokens Reference
 
 From Figma `design.tokens`:
-- Color palette → reference `mk/docs/foundation/architecture.md` design tokens
+- Color palette → reference `bk/docs/foundation/architecture.md` design tokens
 - Typography scale → font requirements
 - Spacing system → layout consistency
 

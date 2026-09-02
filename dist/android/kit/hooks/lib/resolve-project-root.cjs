@@ -78,7 +78,7 @@ function resolveProjectRoot(hookData) {
   }
 
   // Priority 4: walk up from process.cwd() looking for a .claude directory.
-  // Handles the case where the user is in a subfolder (e.g. mk/dev/xxx).
+  // Handles the case where the user is in a subfolder (e.g. bk/dev/xxx).
   const cwdRoot = resolveByWalkingUp(process.cwd());
   if (cwdRoot) {
     _cachedRoot = cwdRoot;

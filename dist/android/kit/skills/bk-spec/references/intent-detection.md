@@ -70,7 +70,7 @@ Discover ALL spec directories and classify their states.
 
 **Primary** — scan state files:
 ```
-Glob("mk/dev/*/.spec-state.json")
+Glob("bk/dev/*/.spec-state.json")
   → read each
   → classify by current_phase (collect, srs, design, validate, complete)
   → sort: incomplete first (current_phase != "complete"), then by updated_at desc
@@ -78,7 +78,7 @@ Glob("mk/dev/*/.spec-state.json")
 
 **Fallback** — for dirs without `.spec-state.json` (legacy):
 ```
-Glob("mk/dev/*/") → filter out shared/, research/
+Glob("bk/dev/*/") → filter out shared/, research/
 ```
 
 Infer state from file existence:
@@ -235,7 +235,7 @@ options:
 ### Persist
 
 1. Slugify feature name: lowercase, spaces/special chars → hyphens, remove accents
-2. Create dir: `mk/dev/{slug}/` (and `srs/` if srs operation)
+2. Create dir: `bk/dev/{slug}/` (and `srs/` if srs operation)
 3. Write `.spec-state.json`:
 
 ```json

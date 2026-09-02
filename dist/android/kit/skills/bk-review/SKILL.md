@@ -37,10 +37,10 @@ Detect platform per `.claude/rules/core-rules.md` section 1.
 
 ### Foundation Context Loading
 Before dispatching reviewers:
-1. Read `mk/docs/foundation/architecture.md`
+1. Read `bk/docs/foundation/architecture.md`
 2. Pass architecture patterns to bk-code-reviewer dispatch prompt
 
-Check for `impl-result.json` at `mk/dev/shared/{platform}/{feature}-impl-result.json`.
+Check for `impl-result.json` at `bk/dev/shared/{platform}/{feature}-impl-result.json`.
 If not found, use `git diff` to identify changed files.
 
 Detect if changes are security-sensitive:
@@ -59,7 +59,7 @@ Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true
   Platform: {platform}
   Files to review: {file_list or impl-result path}
   Architecture rules: .claude/rules/{platform}-rules.md
-  Output: mk/dev/shared/reports/code-review-{feature}.json
+  Output: bk/dev/shared/reports/code-review-{feature}.json
 ")
 ```
 
@@ -70,7 +70,7 @@ Task(subagent_type: "bk-security-auditor", model: "sonnet", run_in_background: t
   Feature: {feature_name}
   Platform: {platform}
   Files to review: {file_list or impl-result path}
-  Output: mk/dev/shared/reports/security-{feature}.json
+  Output: bk/dev/shared/reports/security-{feature}.json
 ")
 ```
 
@@ -89,8 +89,8 @@ If critical/major findings: suggest `/bk-debug` or resuming `/bk-code` fix loop.
 
 ## Output
 
-- `mk/dev/shared/reports/code-review-{feature}.json`
-- `mk/dev/shared/reports/security-{feature}.json` (optional)
+- `bk/dev/shared/reports/code-review-{feature}.json`
+- `bk/dev/shared/reports/security-{feature}.json` (optional)
 
 ## Constraints
 

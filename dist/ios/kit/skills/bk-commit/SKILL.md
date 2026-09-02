@@ -91,8 +91,8 @@ Show user a clear summary of what will be committed:
 
 Read from:
 - `git diff --stat HEAD` for file summary
-- `mk/dev/shared/reports/code-review-{feature}.json` (if exists)
-- `mk/dev/shared/reports/unit-test-{platform}-{feature}.json` (if exists)
+- `bk/dev/shared/reports/code-review-{feature}.json` (if exists)
+- `bk/dev/shared/reports/unit-test-{platform}-{feature}.json` (if exists)
 
 ### Step 5: Commit Approval Gate (Required)
 

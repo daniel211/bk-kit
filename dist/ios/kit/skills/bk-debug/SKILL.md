@@ -46,8 +46,8 @@ Trivial shortcut: dispatch bk-{platform}-developer directly (skip analyze and re
 
 ### Foundation Context Loading
 Before dispatching the dev agent, load foundation context:
-1. Read `mk/docs/foundation/architecture.md` — extract architecture patterns, layer structure
-2. Read `mk/docs/foundation/code-guidelines.md` — extract naming conventions, DI patterns
+1. Read `bk/docs/foundation/architecture.md` — extract architecture patterns, layer structure
+2. Read `bk/docs/foundation/code-guidelines.md` — extract naming conventions, DI patterns
 3. Include foundation summary in dev agent dispatch prompt:
    ```
    Foundation Context:
@@ -109,7 +109,7 @@ For bugs classified as **Complex** (multiple possible root causes, unclear repro
    3. Rate confidence: high/medium/low
    4. If confidence is high, propose specific fix
    
-   Output: mk/dev/shared/reports/debug-hypothesis-{N}-{feature}.md
+   Output: bk/dev/shared/reports/debug-hypothesis-{N}-{feature}.md
    
    Format:
    ## Hypothesis: {hypothesis}

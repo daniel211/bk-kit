@@ -1,6 +1,6 @@
 # Foundation Synthesis
 
-Merge all scan data into `mk/docs/foundation/*.md` files.
+Merge all scan data into `bk/docs/foundation/*.md` files.
 
 ## Input Sources
 
@@ -18,13 +18,13 @@ Merge all scan data into `mk/docs/foundation/*.md` files.
 
 ## Write Order
 
-1. `mk/docs/foundation/overview.md` — from `templates/overview.md`
-2. `mk/docs/foundation/architecture.md` — from `templates/architecture.md`
-3. `mk/docs/foundation/code-guidelines.md` — from `templates/code-guidelines.md`
-4. `mk/docs/foundation/dependencies.md` — from `templates/dependencies.md`
-5. `mk/docs/foundation/build-targets.md` — from `templates/build-targets.md`
-6. `mk/docs/foundation/design-system.md` — from `templates/design-system.md` (skip if non-UI project)
-7. `mk/docs/foundation/project-roadmap.md` — from `templates/project-roadmap.md`
+1. `bk/docs/foundation/overview.md` — from `templates/overview.md`
+2. `bk/docs/foundation/architecture.md` — from `templates/architecture.md`
+3. `bk/docs/foundation/code-guidelines.md` — from `templates/code-guidelines.md`
+4. `bk/docs/foundation/dependencies.md` — from `templates/dependencies.md`
+5. `bk/docs/foundation/build-targets.md` — from `templates/build-targets.md`
+6. `bk/docs/foundation/design-system.md` — from `templates/design-system.md` (skip if non-UI project)
+7. `bk/docs/foundation/project-roadmap.md` — from `templates/project-roadmap.md`
 
 ## Rules
 
@@ -72,13 +72,13 @@ Show user a concise summary:
 
 ```
 Bootstrap complete for {app-name} ({platform})
-├── mk/docs/foundation/overview.md         — {N} dirs, {LOC} total LOC, {M} modules
-├── mk/docs/foundation/architecture.md     — {arch pattern}, {state mgmt}, {DI}
-├── mk/docs/foundation/code-guidelines.md  — {naming}, {N} lint rules, {P} patterns
-├── mk/docs/foundation/dependencies.md     — {N} core + {M} dev packages
-├── mk/docs/foundation/build-targets.md    — {CI platform}, {N} quality gates
-├── mk/docs/foundation/design-system.md    — {N} colors, {M} components (if UI)
-└── mk/docs/foundation/project-roadmap.md  — {N} TODOs, {M} improvements
+├── bk/docs/foundation/overview.md         — {N} dirs, {LOC} total LOC, {M} modules
+├── bk/docs/foundation/architecture.md     — {arch pattern}, {state mgmt}, {DI}
+├── bk/docs/foundation/code-guidelines.md  — {naming}, {N} lint rules, {P} patterns
+├── bk/docs/foundation/dependencies.md     — {N} core + {M} dev packages
+├── bk/docs/foundation/build-targets.md    — {CI platform}, {N} quality gates
+├── bk/docs/foundation/design-system.md    — {N} colors, {M} components (if UI)
+└── bk/docs/foundation/project-roadmap.md  — {N} TODOs, {M} improvements
 
 Next: /bk-plan {feature description}
 ```

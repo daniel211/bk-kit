@@ -53,7 +53,7 @@ Detect feature + operation từ `$ARGUMENTS` và existing spec state. Interview 
 | 2+ inputs (URD + Figma + API combos) | `full` | Run Phase 1 → 2 → 3 → 4 |
 | No inputs OR no feature OR ambiguous signals | `interview` | AskUserQuestion fallback (default) |
 
-**Foundation precondition:** `mk/docs/foundation/overview.md` must exist. Missing → abort, ask user to run `/bk-bootstrap`.
+**Foundation precondition:** `bk/docs/foundation/overview.md` must exist. Missing → abort, ask user to run `/bk-bootstrap`.
 
 **Conflict resolution:** Explicit subcommand flag > existing state (resume) > multi-input > single input > interview.
 
@@ -98,14 +98,14 @@ Verify outputs → write spec-summary.md → present results.
 
 | Output | Path | Condition |
 |--------|------|-----------|
-| Task state | `mk/dev/{feature-slug}/.spec-state.json` | Always (created during Intent Detection, updated every phase) |
-| Spec summary | `mk/dev/{feature-slug}/spec-summary.md` | Always |
-| SRS Overview | `mk/dev/{feature-slug}/srs/01-overview.md` | Phase 1: If URD or degraded accepted |
-| SRS Functional Reqs | `mk/dev/{feature-slug}/srs/02-functional-requirements.md` | Phase 1: If URD or degraded accepted |
-| SRS Non-Functional Reqs | `mk/dev/{feature-slug}/srs/03-nonfunctional-requirements.md` | Phase 1: If URD or degraded accepted |
-| SRS API Contract | `mk/dev/{feature-slug}/srs/04-api-contract.md` | Phase 3: Only if api_path provided |
-| SRS UI/UX | `mk/dev/{feature-slug}/srs/05-ui-ux-requirements.md` | Phase 2: After design extraction |
-| Design spec | `mk/dev/{feature-slug}/design/` | Phase 2: If Figma provided |
+| Task state | `bk/dev/{feature-slug}/.spec-state.json` | Always (created during Intent Detection, updated every phase) |
+| Spec summary | `bk/dev/{feature-slug}/spec-summary.md` | Always |
+| SRS Overview | `bk/dev/{feature-slug}/srs/01-overview.md` | Phase 1: If URD or degraded accepted |
+| SRS Functional Reqs | `bk/dev/{feature-slug}/srs/02-functional-requirements.md` | Phase 1: If URD or degraded accepted |
+| SRS Non-Functional Reqs | `bk/dev/{feature-slug}/srs/03-nonfunctional-requirements.md` | Phase 1: If URD or degraded accepted |
+| SRS API Contract | `bk/dev/{feature-slug}/srs/04-api-contract.md` | Phase 3: Only if api_path provided |
+| SRS UI/UX | `bk/dev/{feature-slug}/srs/05-ui-ux-requirements.md` | Phase 2: After design extraction |
+| Design spec | `bk/dev/{feature-slug}/design/` | Phase 2: If Figma provided |
 
 ## Step Output Format
 

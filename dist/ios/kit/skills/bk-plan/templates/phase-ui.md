@@ -19,7 +19,7 @@ owns: ["{glob patterns for files this phase creates/modifies}"]
 {One-line description.}
 
 ## Foundation References
-<!-- Auto-filled from mk/docs/foundation/ during plan synthesis -->
+<!-- Auto-filled from bk/docs/foundation/ during plan synthesis -->
 - Architecture: {{foundation.architecture}}
 - State Management: {{foundation.stateManagement}}
 - Naming Convention: {{foundation.naming}}

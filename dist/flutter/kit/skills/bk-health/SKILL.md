@@ -45,12 +45,12 @@ node .claude/cli/bk-health/index.cjs --reset-counts --force  # skip confirmation
 - `.bk-metrics/red-signals.jsonl` — harness red signals (deadloops, caps)
 - `.bk-metrics/workflow-summary.jsonl` — agent workflow summaries
 - `.bk-metrics/ashby-warnings.jsonl` — sensor silent warnings
-- `mk/dev/shared/.workflow-state.json` — FSM state
+- `bk/dev/shared/.workflow-state.json` — FSM state
 
 **Source**: `src/cli/bk-health/` (runs from source — no build step required)
 
 Assess project health across dependency freshness, test coverage, code quality, and architecture drift.
-Output: `mk/docs/health-report.md`
+Output: `bk/docs/health-report.md`
 
 <Use_When>
 - User says "health check", "project health", "check dependencies", "audit project"
@@ -65,7 +65,7 @@ Output: `mk/docs/health-report.md`
 
 ## CRITICAL CONSTRAINTS
 
-- **Read-only** — NEVER modify project code, only write to `mk/docs/health-report.md`
+- **Read-only** — NEVER modify project code, only write to `bk/docs/health-report.md`
 - **Quick mode**: no agent dispatch (inline conductor scan only)
 - **Evidence-based**: cite file + line for every finding
 - Quick mode target: complete in < 60s
@@ -141,11 +141,11 @@ IF deep mode:
     description: "Architecture compliance check for health report",
     prompt: "
       Perform architecture compliance check.
-      Read: mk/docs/foundation/architecture.md (expected patterns)
+      Read: bk/docs/foundation/architecture.md (expected patterns)
       Scan: source files for actual patterns used
       Check: layer violations (UI calling data layer directly, etc.)
       Output: list of violations with file:line citations
-      Write findings to: mk/docs/health-report-arch.md
+      Write findings to: bk/docs/health-report-arch.md
     "
   )
 
@@ -157,7 +157,7 @@ IF deep mode:
       Read lock files: Podfile.lock, Package.resolved, build.gradle.kts, pubspec.lock
       Check: outdated/vulnerable packages
       Output: list of vulnerable deps with CVE or advisory references where available
-      Write findings to: mk/docs/health-report-security.md
+      Write findings to: bk/docs/health-report-security.md
     "
   )
 
@@ -167,7 +167,7 @@ IF deep mode:
 
 ### Step 5: Synthesize Health Report
 
-Write `mk/docs/health-report.md` with priority-ordered findings:
+Write `bk/docs/health-report.md` with priority-ordered findings:
 
 ```markdown
 # Project Health Report

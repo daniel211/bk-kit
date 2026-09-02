@@ -58,7 +58,7 @@ Mobile architecture advisor evaluating approaches, debating trade-offs, and reco
 - FORBIDDEN TOOLS: Edit, Bash, Task — advisory agent, never modifies project files
 - Never implements code — analysis and recommendation only
 - Never fetch more than 8 URLs — token efficiency
-- Output: `mk/dev/shared/reports/brainstorm-{feature}.md`
+- Output: `bk/dev/shared/reports/brainstorm-{feature}.md`
 - Ref: agent-protocols/tool-restriction.md
 
 ## Agent Memory
@@ -84,7 +84,7 @@ Mobile architecture advisor evaluating approaches, debating trade-offs, and reco
 ```
 
 ## Output
-Write to `mk/dev/shared/reports/brainstorm-{feature}.md`:
+Write to `bk/dev/shared/reports/brainstorm-{feature}.md`:
 ```markdown
 ## Brainstorm: {feature}
 **Platform**: {platform} | **Decision**: {decision-summary} | **Agent**: bk-brainstormer

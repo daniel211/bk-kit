@@ -4,7 +4,7 @@ Reference template for handoff docs written by `handoff-writer.cjs`.
 Used when context >= 75% and complexity tier is `complex` or `architectural`.
 
 ## File Location
-`mk/dev/shared/handoff/handoff-YYYYMMDD-HHMMSS.md`
+`bk/dev/shared/handoff/handoff-YYYYMMDD-HHMMSS.md`
 Keep only latest 3. Older files auto-pruned.
 
 ## Schema
@@ -39,7 +39,7 @@ Keep only latest 3. Older files auto-pruned.
 
 ## Next agent instructions
 1. Read this handoff doc first.
-2. Read `mk/dev/shared/.workflow-state.json` for full state.
+2. Read `bk/dev/shared/.workflow-state.json` for full state.
 3. Continue from the Remaining tasks above.
 4. Maintain the same complexity tier.
 5. Do NOT restart completed tasks.

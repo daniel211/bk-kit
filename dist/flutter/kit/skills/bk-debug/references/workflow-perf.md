@@ -23,7 +23,7 @@ Task(subagent_type: "bk-debugger", model: "sonnet", prompt: "
   Performance issue: {description}
   Platform: {platform}
   Profile using platform tools. Identify bottleneck.
-  Output: mk/dev/shared/reports/debug-analysis-{feature}.json
+  Output: bk/dev/shared/reports/debug-analysis-{feature}.json
 ")
 ```
 
@@ -65,7 +65,7 @@ Task(subagent_type: "bk-performance-analyzer", model: "sonnet", prompt: "
   Compare before/after performance for: {area}
   Baseline: {before_metrics}
   Current: measure after fix
-  Output: mk/dev/shared/reports/performance-{feature}.md
+  Output: bk/dev/shared/reports/performance-{feature}.md
 ")
 ```
 
