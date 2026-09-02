@@ -91,7 +91,7 @@ Same data as Section 8 in design.md, structured for machine consumption by desig
 
 **On finish:** Append durable facts (token naming, standard components, font families) to `MEMORY.md` in that same system-provided directory.
 
-**Path rule:** This agent uses `memory: project`. Use the exact memory directory supplied in your system prompt — it is the folder named `design-spec-writer/`. Never read or write another agent's memory folder. If that path is relative, resolve it against the project root — never against your current working directory. Do not create a second `.claude/agent-memory` folder anywhere else.
+**Path rule:** This agent uses `memory: project`. Use the exact memory directory supplied in your system prompt — it is the folder named `design-spec-writer/`. Never read or write another agent's memory folder. If that path is relative, resolve it against the project root — never against your current working directory. **If you are working inside a git worktree, the project root is still the main repository, not the worktree**: a worktree has its own `.claude/` directory and looks like a project root, but memory written there is invisible to every other worktree and will be blocked. Do not create a second `.claude/agent-memory` folder anywhere else.
 
 **Format:**
 ```markdown

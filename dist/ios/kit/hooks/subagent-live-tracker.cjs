@@ -99,6 +99,26 @@ async function main() {
       appendJsonl(liveFile, JSON.stringify(entry) + '\n');
 
     } else if (eventName === 'SubagentStop') {
+      // SubagentStop fires far more often than subagents are dispatched: one live run
+      // recorded 5 spawns against 45 stops, spread evenly rather than bursting, so they
+      // are not duplicates of one completion. Whether the event marks a subagent finishing
+      // or something finer-grained cannot be told from the fields the kit currently reads.
+      // Record the payload's shape — keys and leaf types, never values — so the next run
+      // settles it instead of another guess.
+      try {
+        const shapeOf = (v, d) => {
+          if (v === null) return 'null';
+          if (Array.isArray(v)) return `array[${v.length}]`;
+          if (typeof v !== 'object') return typeof v;
+          if (d === 0) return 'object';
+          return Object.fromEntries(Object.keys(v).sort().map(k => [k, shapeOf(v[k], d - 1)]));
+        };
+        fs.writeFileSync(
+          path.join(root, '.bk-metrics', 'subagent-stop-payload-keys.json'),
+          JSON.stringify({ observedAt: new Date().toISOString(), shape: shapeOf(hookData, 3) }, null, 2) + '\n',
+        );
+      } catch { /* diagnostics are best-effort */ }
+
       // ── Stop event ───────────────────────────────────────────────────────────
       const { parseTranscriptAccurate, isOwnSessionTranscript } = require('./lib/token-accurate-parser.cjs');
       const sessionId = hookData.session_id || null;

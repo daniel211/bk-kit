@@ -77,7 +77,7 @@ Analyzes requirements, scouts existing codebase patterns, researches technical a
 
 **On finish:** If you discovered something new about this project that future runs should know, append to `MEMORY.md` in that same system-provided directory. Only save durable facts (not task-specific details).
 
-**Path rule:** This agent uses `memory: project`. Use the exact memory directory supplied in your system prompt — it is the folder named `bk-planner/`. Never read or write another agent's memory folder. If that path is relative, resolve it against the project root — never against your current working directory. Do not create a second `.claude/agent-memory` folder anywhere else.
+**Path rule:** This agent uses `memory: project`. Use the exact memory directory supplied in your system prompt — it is the folder named `bk-planner/`. Never read or write another agent's memory folder. If that path is relative, resolve it against the project root — never against your current working directory. **If you are working inside a git worktree, the project root is still the main repository, not the worktree**: a worktree has its own `.claude/` directory and looks like a project root, but memory written there is invisible to every other worktree and will be blocked. Do not create a second `.claude/agent-memory` folder anywhere else.
 
 **What to save:** project architecture patterns, platform conventions, recurring plan structures, risk patterns discovered.
 

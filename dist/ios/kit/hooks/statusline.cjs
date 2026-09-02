@@ -226,6 +226,29 @@ try {
   }
 
   /**
+   * How long until a window resets, at a useful precision for its scale.
+   *
+   *    45m      under an hour
+   *    3h12m    within two days — a rounded "3h" hides up to half an hour, which matters
+   *             when you are deciding whether to start something now or wait
+   *    6d3h     beyond that, minutes are noise
+   *
+   * @param {number} mins — whole minutes remaining, always positive
+   * @returns {string}
+   */
+  function formatResetIn(mins) {
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 48) {
+      const rem = mins % 60;
+      return rem ? `${hours}h${String(rem).padStart(2, '0')}m` : `${hours}h`;
+    }
+    const days = Math.floor(hours / 24);
+    const remH = hours % 24;
+    return remH ? `${days}d${remH}h` : `${days}d`;
+  }
+
+  /**
    * Render the account's rate-limit usage for line 1.
    *
    * Shape is documented for the statusline payload: `rate_limits.{five_hour,seven_day,
@@ -238,7 +261,7 @@ try {
    * "how much is left" and "how long until it comes back" without a mental calculation.
    *
    * @param {object|undefined} rateLimits — data.rate_limits
-   * @returns {string} e.g. "⏳ 5h 24% (2h) · 7d 41% (5d)", or '' when nothing is reported
+   * @returns {string} e.g. "⏳ 5h 24% (2h08m) · 7d 41% (5d3h)", or '' when nothing is reported
    */
   function renderRateLimits(rateLimits) {
     if (!rateLimits || typeof rateLimits !== 'object') return '';
@@ -257,13 +280,7 @@ try {
       let text = `${label} ${Math.round(pct)}%`;
       if (win.resets_at) {
         const mins = Math.round((win.resets_at * 1000 - Date.now()) / 60000);
-        if (mins > 0) {
-          // "(111h)" is arithmetic, not information — a seven-day window resets in days.
-          const hours = mins / 60;
-          text += hours >= 48 ? ` (${Math.round(hours / 24)}d)`
-            : hours >= 1 ? ` (${Math.round(hours)}h)`
-            : ` (${mins}m)`;
-        }
+        if (mins > 0) text += ` (${formatResetIn(mins)})`;
       }
       parts.push(pct >= 90 ? _red(text) : pct >= 70 ? _yellow(text) : text);
     }

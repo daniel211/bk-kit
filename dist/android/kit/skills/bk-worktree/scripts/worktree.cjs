@@ -920,12 +920,23 @@ function cmdFinish() {
   const noMerge = args.includes('--no-merge');
   const keepBranch = args.includes('--keep-branch');
 
-  // Uncommitted work in the worktree would be destroyed by `worktree remove --force`.
+  // Uncommitted work in the worktree would be destroyed by removing it. The kit's own
+  // telemetry does not count: hooks write .bk-metrics/ inside whichever tree they run in,
+  // so a kit-created worktree is untracked-dirty the moment an agent works in it, and
+  // treating that as user work made `finish` impossible on exactly the worktrees the kit
+  // creates. It is deleted below so `git worktree remove` does not refuse either.
+  const KIT_GENERATED = ['.bk-metrics/', '.bk-metrics'];
   const wtStatus = git(`-C "${worktreePath}" status --porcelain`, { silent: true });
-  if (wtStatus.success && wtStatus.output.trim()) {
+  const wtDirty = wtStatus.success
+    ? wtStatus.output.trim().split('\n').filter(Boolean).filter((line) => {
+        const file = line.slice(3).trim();
+        return !KIT_GENERATED.some((k) => file === k || file.startsWith(k));
+      })
+    : [];
+  if (wtDirty.length) {
     outputError('WORKTREE_DIRTY', `Worktree has uncommitted changes: ${worktreePath}`, {
       suggestion: `Commit or stash them first — finishing would discard them.\n  git -C "${worktreePath}" status`,
-      uncommittedFiles: wtStatus.output.trim().split('\n').length
+      uncommittedFiles: wtDirty.length
     });
   }
 
@@ -1010,6 +1021,11 @@ function cmdFinish() {
       wouldRemove: { worktreePath, deleteBranch: !keepBranch && !noMerge }
     });
     return;
+  }
+
+  // Drop the kit's own telemetry so the removal is not refused over files we generated.
+  for (const generated of KIT_GENERATED) {
+    try { fs.rmSync(path.join(worktreePath, generated), { recursive: true, force: true }); } catch { /* nothing to drop */ }
   }
 
   const removeResult = git(`worktree remove "${worktreePath}"`, { silent: true });

@@ -147,3 +147,43 @@ test('finish: refuses when the worktree has uncommitted changes', () => {
     rmSync(root, { recursive: true, force: true });
   }
 });
+
+test('finish: the kit\'s own telemetry does not count as uncommitted work', () => {
+  // Hooks write .bk-metrics/ into whichever tree they run in, so a kit-created worktree is
+  // untracked-dirty the moment an agent works in it. Treating that as user work made
+  // `finish` impossible on exactly the worktrees the kit creates — the same self-defeating
+  // check that had to be relaxed for the main checkout.
+  const root = makeRepo();
+  try {
+    addWorktreeWithWork(root, 'feat', 'a.md');
+    const wt = join(root, '.wt', 'feat');
+    mkdirSync(join(wt, '.bk-metrics'), { recursive: true });
+    writeFileSync(join(wt, '.bk-metrics', 'violations.jsonl'), '{}\n');
+
+    const { code, out } = runFinish(root, ['feat']);
+    assert.equal(code, 0, out);
+    assert.ok(existsSync(join(root, 'docs', 'a.md')), 'the work still lands');
+    assert.equal(git(root, 'worktree list').trim().split('\n').length, 1, 'worktree removed');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test('finish: an untracked file the user wrote still blocks', () => {
+  // The relaxation must not become "ignore everything untracked".
+  const root = makeRepo();
+  try {
+    addWorktreeWithWork(root, 'feat', 'a.md');
+    const wt = join(root, '.wt', 'feat');
+    mkdirSync(join(wt, '.bk-metrics'), { recursive: true });
+    writeFileSync(join(wt, '.bk-metrics', 'violations.jsonl'), '{}\n');
+    writeFileSync(join(wt, 'important.swift'), 'let x = 1\n');
+
+    const { code, out } = runFinish(root, ['feat']);
+    assert.equal(code, 1);
+    assert.match(out, /WORKTREE_DIRTY/);
+    assert.equal(git(root, 'worktree list').trim().split('\n').length, 2, 'worktree left alone');
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
