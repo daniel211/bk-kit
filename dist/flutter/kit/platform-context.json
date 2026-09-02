@@ -1,0 +1,77 @@
+{
+  "platform": "flutter",
+  "language": "dart",
+  "languageVersion": "3.0+",
+  "fileNaming": "snake_case",
+  "fileExtension": ".dart",
+  "commands": {
+    "build": "flutter build apk --debug",
+    "test": "flutter test --coverage",
+    "lint": "dart analyze",
+    "format": "dart format .",
+    "clean": "flutter clean",
+    "codegen": "dart run build_runner build --delete-conflicting-outputs"
+  },
+  "rules": [
+    "rules/mobile-shared-rules.md",
+    "rules/flutter-rules.md"
+  ],
+  "skills": [
+    "bk-cook",
+    "bk-test",
+    "bk-fix",
+    "bk-code-review",
+    "flutter"
+  ],
+  "dirs": {
+    "source": "lib/",
+    "test": "test/",
+    "uiTest": "integration_test/",
+    "resources": "assets/"
+  },
+  "conventions": {
+    "architecture": "Clean Architecture + Feature-first",
+    "async": "Future / Stream / async-await",
+    "di": "get_it + injectable",
+    "stateManagement": "Riverpod / Bloc",
+    "uiFramework": "Flutter Widgets",
+    "testFramework": "flutter_test",
+    "mockFramework": "mocktail"
+  },
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "description": "Library documentation lookup",
+      "scope": "foreground"
+    },
+    "figma": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "figma-mcp"
+      ],
+      "env": {
+        "FIGMA_API_KEY": "${FIGMA_API_KEY}"
+      },
+      "description": "Figma design extraction",
+      "scope": "foreground"
+    },
+    "flutter-tools": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@fluttermcp/server"
+      ],
+      "description": "Flutter device control and hot reload",
+      "scope": "foreground"
+    }
+  },
+  "templateVars": {
+    "namingConvention": "snake_case",
+    "lintCommand": "dart analyze"
+  }
+}

@@ -1,0 +1,77 @@
+{
+  "platform": "android",
+  "language": "kotlin",
+  "languageVersion": "1.9+",
+  "fileNaming": "PascalCase",
+  "fileExtension": ".kt",
+  "commands": {
+    "build": "./gradlew assembleDebug",
+    "test": "./gradlew test",
+    "lint": "./gradlew ktlintCheck detekt",
+    "format": "./gradlew ktlintFormat",
+    "clean": "./gradlew clean",
+    "codegen": null
+  },
+  "rules": [
+    "rules/mobile-shared-rules.md",
+    "rules/android-rules.md"
+  ],
+  "skills": [
+    "bk-cook",
+    "bk-test",
+    "bk-fix",
+    "bk-code-review",
+    "android"
+  ],
+  "dirs": {
+    "source": "app/src/main/java/",
+    "test": "app/src/test/java/",
+    "uiTest": "app/src/androidTest/java/",
+    "resources": "app/src/main/res/"
+  },
+  "conventions": {
+    "architecture": "MVVM + Clean Architecture",
+    "async": "Kotlin Coroutines + Flow",
+    "di": "Hilt / Koin",
+    "stateManagement": "StateFlow / MutableStateFlow",
+    "uiFramework": "Jetpack Compose",
+    "testFramework": "JUnit5",
+    "mockFramework": "MockK"
+  },
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "description": "Library documentation lookup",
+      "scope": "foreground"
+    },
+    "figma": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "figma-mcp"
+      ],
+      "env": {
+        "FIGMA_API_KEY": "${FIGMA_API_KEY}"
+      },
+      "description": "Figma design extraction",
+      "scope": "foreground"
+    },
+    "android-emulator": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@androidmcp/server"
+      ],
+      "description": "Android Emulator control and screenshot",
+      "scope": "foreground"
+    }
+  },
+  "templateVars": {
+    "namingConvention": "PascalCase",
+    "lintCommand": "./gradlew ktlintCheck"
+  }
+}

@@ -1,0 +1,153 @@
+{
+  "_comment": "Mobile SDK alias map for bk-docs-seeker. Key = short alias, value = context7.com org/repo path.",
+  "mappings": {
+    "swiftui": {
+      "repo": "apple/swiftui",
+      "context7Url": "https://context7.com/apple/swiftui/llms.txt",
+      "platform": "ios",
+      "language": "swift",
+      "tags": ["ui", "declarative", "ios", "macos", "watchos", "tvos"]
+    },
+    "uikit": {
+      "repo": "apple/uikit",
+      "context7Url": "https://context7.com/apple/uikit/llms.txt",
+      "platform": "ios",
+      "language": "swift",
+      "tags": ["ui", "imperative", "ios"]
+    },
+    "swift": {
+      "repo": "apple/swift",
+      "context7Url": "https://context7.com/apple/swift/llms.txt",
+      "platform": "ios",
+      "language": "swift",
+      "tags": ["language", "stdlib"]
+    },
+    "compose": {
+      "repo": "jetbrains/compose-multiplatform",
+      "context7Url": "https://context7.com/jetbrains/compose-multiplatform/llms.txt",
+      "platform": "android",
+      "language": "kotlin",
+      "tags": ["ui", "declarative", "android", "multiplatform"],
+      "aliases": ["jetpack-compose"]
+    },
+    "jetpack-compose": {
+      "repo": "jetbrains/compose-multiplatform",
+      "context7Url": "https://context7.com/jetbrains/compose-multiplatform/llms.txt",
+      "platform": "android",
+      "language": "kotlin",
+      "tags": ["ui", "declarative", "android"]
+    },
+    "material3": {
+      "repo": "material-components/material-components-android",
+      "context7Url": "https://context7.com/material-components/material-components-android/llms.txt",
+      "platform": "android",
+      "language": "kotlin",
+      "tags": ["ui", "design-system", "android"]
+    },
+    "flutter": {
+      "repo": "flutter/flutter",
+      "context7Url": "https://context7.com/flutter/flutter/llms.txt",
+      "platform": "cross-platform",
+      "language": "dart",
+      "tags": ["ui", "cross-platform", "ios", "android", "web"]
+    },
+    "dart": {
+      "repo": "dart-lang/dart",
+      "context7Url": "https://context7.com/dart-lang/dart/llms.txt",
+      "platform": "cross-platform",
+      "language": "dart",
+      "tags": ["language", "stdlib"]
+    },
+    "alamofire": {
+      "repo": "Alamofire/Alamofire",
+      "context7Url": "https://context7.com/Alamofire/Alamofire/llms.txt",
+      "platform": "ios",
+      "language": "swift",
+      "tags": ["networking", "http"]
+    },
+    "retrofit": {
+      "repo": "square/retrofit",
+      "context7Url": "https://context7.com/square/retrofit/llms.txt",
+      "platform": "android",
+      "language": "kotlin",
+      "tags": ["networking", "http", "rest"]
+    },
+    "moya": {
+      "repo": "Moya/Moya",
+      "context7Url": "https://context7.com/Moya/Moya/llms.txt",
+      "platform": "ios",
+      "language": "swift",
+      "tags": ["networking", "http", "abstraction"]
+    },
+    "kingfisher": {
+      "repo": "onevcat/Kingfisher",
+      "context7Url": "https://context7.com/onevcat/Kingfisher/llms.txt",
+      "platform": "ios",
+      "language": "swift",
+      "tags": ["images", "caching", "async"]
+    },
+    "coil": {
+      "repo": "coil-kt/coil",
+      "context7Url": "https://context7.com/coil-kt/coil/llms.txt",
+      "platform": "android",
+      "language": "kotlin",
+      "tags": ["images", "caching", "coroutines"]
+    },
+    "hilt": {
+      "repo": "google/dagger",
+      "context7Url": "https://context7.com/google/dagger/llms.txt",
+      "platform": "android",
+      "language": "kotlin",
+      "tags": ["di", "dependency-injection"]
+    },
+    "riverpod": {
+      "repo": "rrousselGit/riverpod",
+      "context7Url": "https://context7.com/rrousselGit/riverpod/llms.txt",
+      "platform": "cross-platform",
+      "language": "dart",
+      "tags": ["state-management", "flutter"]
+    },
+    "provider": {
+      "repo": "rrousselGit/provider",
+      "context7Url": "https://context7.com/rrousselGit/provider/llms.txt",
+      "platform": "cross-platform",
+      "language": "dart",
+      "tags": ["state-management", "flutter"]
+    },
+    "realm": {
+      "repo": "realm/realm-swift",
+      "context7Url": "https://context7.com/realm/realm-swift/llms.txt",
+      "platform": "ios",
+      "language": "swift",
+      "tags": ["database", "persistence", "local-storage"]
+    },
+    "firebase": {
+      "repo": "firebase/firebase-ios-sdk",
+      "context7Url": "https://context7.com/firebase/firebase-ios-sdk/llms.txt",
+      "platform": "ios",
+      "language": "swift",
+      "tags": ["backend", "auth", "realtime-db", "crashlytics"]
+    },
+    "rxswift": {
+      "repo": "ReactiveX/RxSwift",
+      "context7Url": "https://context7.com/ReactiveX/RxSwift/llms.txt",
+      "platform": "ios",
+      "language": "swift",
+      "tags": ["reactive", "rx", "streams"]
+    },
+    "combine": {
+      "repo": "apple/swift-combine",
+      "context7Url": "https://context7.com/apple/swift-combine/llms.txt",
+      "platform": "ios",
+      "language": "swift",
+      "tags": ["reactive", "streams", "first-party"]
+    },
+    "swiftdata": {
+      "repo": "apple/swiftdata",
+      "context7Url": "https://context7.com/apple/swiftdata/llms.txt",
+      "platform": "ios",
+      "language": "swift",
+      "tags": ["database", "persistence", "coredata-successor"]
+    }
+  }
+}

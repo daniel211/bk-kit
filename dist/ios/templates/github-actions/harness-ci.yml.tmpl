@@ -1,0 +1,122 @@
+# harness-ci.yml — MK Harness CI/CD Validation Workflow
+# Auto-generated from template: src/templates/github-actions/harness-ci.yml.tmpl
+# Copy to .github/workflows/harness-ci.yml in your project.
+
+name: MK Harness CI
+
+on:
+  push:
+    branches: [ main, develop, 'feature/**', 'fix/**' ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  NODE_VERSION: '18'
+  BK_PR_BUDGET: '5'
+
+jobs:
+  harness-check:
+    name: Harness Validation
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Full history for git merge-base cost tracking
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci --ignore-scripts
+          elif [ -f package.json ]; then
+            npm install --ignore-scripts
+          fi
+
+      - name: Run harness validation
+        id: harness
+        run: |
+          node .claude/cli/bk-harness-ci/index.cjs \
+            --format=junit \
+            --output=harness-report.xml \
+            --fail-on=error \
+            --budget-usd=${{ env.BK_PR_BUDGET }}
+        env:
+          BK_PROJECT_ROOT: ${{ github.workspace }}
+          GIT_BASE_REF: origin/${{ github.base_ref || 'main' }}
+          BK_HOOK_LOG_DISABLED: '1'
+        continue-on-error: true
+
+      - name: Upload JUnit report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: harness-report
+          path: harness-report.xml
+          retention-days: 30
+
+      - name: Publish test results
+        if: always()
+        uses: EnricoMi/publish-unit-test-result-action@v2
+        with:
+          files: harness-report.xml
+          check_name: Harness CI Results
+          comment_mode: always
+
+      - name: Generate PR summary
+        if: github.event_name == 'pull_request' && always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+
+            // Get JSON report for summary
+            let summary = { errors: 0, warnings: 0, total: 0 };
+            try {
+              const { execSync } = require('child_process');
+              const jsonOut = execSync(
+                'node .claude/cli/bk-harness-ci/index.cjs --format=json --fail-on=never',
+                { env: { ...process.env, BK_PROJECT_ROOT: process.env.GITHUB_WORKSPACE, BK_HOOK_LOG_DISABLED: '1' },
+                  encoding: 'utf8', timeout: 30000 }
+              );
+              const report = JSON.parse(jsonOut);
+              summary = report.summary || summary;
+            } catch (e) {
+              core.warning('Could not generate JSON summary: ' + e.message);
+            }
+
+            const icon = summary.errors > 0 ? '❌' : summary.warnings > 0 ? '⚠️' : '✅';
+            const body = [
+              `## ${icon} MK Harness CI Results`,
+              '',
+              `| Metric | Count |`,
+              `|--------|-------|`,
+              `| Errors | ${summary.errors} |`,
+              `| Warnings | ${summary.warnings} |`,
+              `| Total Findings | ${summary.total} |`,
+              '',
+              `<details><summary>Full report attached as artifact</summary>`,
+              `Download \`harness-report\` artifact for JUnit XML details.`,
+              `</details>`
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+      - name: Fail if errors
+        if: steps.harness.outcome == 'failure'
+        run: exit 2

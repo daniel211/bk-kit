@@ -1,0 +1,79 @@
+{
+  "platform": "ios",
+  "language": "swift",
+  "languageVersion": "5.9+",
+  "fileNaming": "PascalCase",
+  "fileExtension": ".swift",
+  "commands": {
+    "build": "xcodebuild -scheme App -sdk iphonesimulator build",
+    "buildNote": "Prefer Xcode MCP 'build' tool when available; xcodebuild is fallback",
+    "test": "xcodebuild test -scheme App -destination 'platform=iOS Simulator,name=iPhone 16'",
+    "testNote": "Prefer Xcode MCP 'test' tool when available; xcodebuild is fallback",
+    "lint": "swiftlint lint --strict",
+    "format": "swiftformat .",
+    "clean": "xcodebuild clean",
+    "codegen": null
+  },
+  "rules": [
+    "rules/mobile-shared-rules.md",
+    "rules/ios-rules.md"
+  ],
+  "skills": [
+    "bk-code",
+    "bk-test",
+    "bk-debug",
+    "bk-code-review-workflow",
+    "bk-ios"
+  ],
+  "dirs": {
+    "source": "Sources/",
+    "test": "Tests/",
+    "uiTest": "UITests/",
+    "resources": "Resources/"
+  },
+  "conventions": {
+    "architecture": "MVVM + Clean Architecture",
+    "async": "async/await, structured concurrency",
+    "di": "Swinject",
+    "stateManagement": "@Observable / @State",
+    "uiFramework": "SwiftUI",
+    "testFramework": "XCTest",
+    "mockFramework": "manual / protocol-based"
+  },
+  "mcpServers": {
+    "xcode": {
+      "command": "xcrun",
+      "args": [
+        "mcpbridge"
+      ],
+      "type": "native",
+      "description": "Xcode project build, test, and management (user adds via: claude mcp add --transport stdio xcode -- xcrun mcpbridge)",
+      "scope": "foreground"
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "description": "Library documentation lookup",
+      "scope": "foreground"
+    },
+    "figma": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "figma-mcp"
+      ],
+      "env": {
+        "FIGMA_API_KEY": "${FIGMA_API_KEY}"
+      },
+      "description": "Figma design extraction",
+      "scope": "foreground"
+    }
+  },
+  "templateVars": {
+    "namingConvention": "PascalCase",
+    "lintCommand": "swiftlint lint --strict"
+  }
+}

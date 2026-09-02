@@ -1,0 +1,347 @@
+{
+  "$schema": "./bk-harness-policy.schema.json",
+  "version": "1.0.0",
+  "deadloop": {
+    "tool_repetition": {
+      "enabled": true,
+      "warn_threshold": 3,
+      "block_threshold": 5,
+      "window_size": 10,
+      "ring_file": ".bk-metrics/tool-call-ring.json",
+      "exempt_tools": [
+        "Read",
+        "Glob",
+        "TodoWrite"
+      ]
+    },
+    "no_progress": {
+      "enabled": true,
+      "oscillation_window": 6,
+      "oscillation_block_threshold": 4,
+      "trivial_edit_max_chars": 20,
+      "trivial_edit_block_threshold": 5,
+      "file_edit_history": ".bk-metrics/file-edit-history.jsonl"
+    },
+    "phase_recurrence": {
+      "enabled": true,
+      "warn_count": 2,
+      "block_count": 3,
+      "halt_count": 4,
+      "bypass_env": "BK_HARNESS_RECURRENCE_OVERRIDE"
+    },
+    "subagent_iteration": {
+      "enabled": true,
+      "default_cap": 3,
+      "per_agent_caps": {
+        "bk-ios-developer": 3,
+        "bk-android-developer": 3,
+        "bk-flutter-developer": 3,
+        "bk-planner": 2,
+        "bk-code-reviewer": 5,
+        "bk-problem-solving": 2,
+        "bk-debugger": 4
+      },
+      "bypass_env": "BK_HARNESS_DISPATCH_OVERRIDE"
+    }
+  },
+  "kill_switch": {
+    "enabled": true,
+    "min_red_signals": 2,
+    "lookback_minutes": 30,
+    "red_signal_types": [
+      "tool_repetition_blocked",
+      "oscillation_blocked",
+      "phase_recurrence_blocked",
+      "subagent_cap_exceeded",
+      "budget_exceeded",
+      "fsm_invalid_transition_repeated",
+      "token_burn_spike",
+      "inferential_fail",
+      "ui_snapshot_gap",
+      "test_gap_persistent",
+      "native_lint_ios",
+      "native_lint_android",
+      "native_lint_flutter"
+    ],
+    "bypass_env": "BK_HARNESS_OVERRIDE",
+    "red_signals_file": ".bk-metrics/red-signals.jsonl"
+  },
+  "arch_fitness": {
+    "ios": {
+      "enabled": true,
+      "rules": {
+        "no_presentation_imports_infra": {
+          "enabled": true,
+          "severity": "error"
+        },
+        "viewmodel_no_network": {
+          "enabled": true,
+          "severity": "error"
+        },
+        "public_api_needs_doc": {
+          "enabled": true,
+          "severity": "warning"
+        },
+        "domain_no_ui_import": {
+          "enabled": true,
+          "severity": "error"
+        },
+        "no_force_unwrap_in_prod": {
+          "enabled": false,
+          "severity": "warning"
+        },
+        "singleton_limit": {
+          "enabled": true,
+          "severity": "warning",
+          "max_count": 5
+        }
+      },
+      "presentation_paths": [
+        "Presentation",
+        "Views",
+        "Screens"
+      ],
+      "domain_paths": [
+        "Domain",
+        "UseCase",
+        "UseCases"
+      ],
+      "infra_paths": [
+        "Data",
+        "Infrastructure",
+        "Network"
+      ],
+      "exclude_paths": [
+        "Tests",
+        "Preview Content",
+        "Pods",
+        ".build",
+        "Generated"
+      ]
+    },
+    "android": {
+      "enabled": true,
+      "rules": {
+        "no_presentation_imports_data": {
+          "enabled": true,
+          "severity": "error"
+        },
+        "viewmodel_no_network": {
+          "enabled": true,
+          "severity": "error"
+        },
+        "domain_no_android_import": {
+          "enabled": true,
+          "severity": "error"
+        },
+        "public_api_needs_kdoc": {
+          "enabled": true,
+          "severity": "warning"
+        }
+      },
+      "presentation_paths": [
+        "presentation",
+        "ui",
+        "screens"
+      ],
+      "domain_paths": [
+        "domain",
+        "usecase"
+      ],
+      "data_paths": [
+        "data",
+        "infrastructure"
+      ],
+      "exclude_paths": [
+        "test",
+        "androidTest",
+        "build",
+        ".gradle",
+        "generated"
+      ]
+    },
+    "flutter": {
+      "enabled": true,
+      "rules": {
+        "domain_no_flutter_import": {
+          "enabled": true,
+          "severity": "error"
+        },
+        "notifier_no_network": {
+          "enabled": true,
+          "severity": "error"
+        },
+        "public_api_needs_dartdoc": {
+          "enabled": true,
+          "severity": "warning"
+        }
+      },
+      "domain_paths": [
+        "domain",
+        "core/domain"
+      ],
+      "exclude_paths": [
+        "test",
+        ".dart_tool",
+        "build",
+        "generated_plugin_registrant.dart",
+        ".g.dart",
+        ".freezed.dart"
+      ]
+    }
+  },
+  "steerer": {
+    "enabled": true,
+    "min_violation_count": 3,
+    "lookback_days": 30,
+    "draft_path": "mk/dev/shared/.learned-preferences-draft.md",
+    "target_path": "mk/dev/shared/learned-preferences.md",
+    "backup_dir": ".bk-metrics/learned-preferences-backups"
+  },
+  "monitor": {
+    "violations_file": ".bk-metrics/violations.jsonl",
+    "decisions_file": ".bk-metrics/decisions.jsonl",
+    "rotate_max_lines": 5000,
+    "statusline_cache": ".bk-metrics/statusline-cache.json",
+    "statusline_cache_ttl_ms": 5000,
+    "ashby": {
+      "enabled": true,
+      "silent_days_warn": 7,
+      "warnings_file": ".bk-metrics/ashby-warnings.jsonl"
+    }
+  },
+  "token_monitoring": {
+    "enabled": true,
+    "burn_rate_threshold_per_min": 50000,
+    "consecutive_windows": 3,
+    "window_minutes": 1,
+    "lookback_window_minutes": 5,
+    "burn_window_file": ".bk-metrics/token-burn-window.jsonl",
+    "statusline_show_tokens": true,
+    "statusline_show_cost": true,
+    "statusline_show_rate": true
+  },
+  "inferential_review": {
+    "enabled": true,
+    "batch_size": 5,
+    "tier1_min_diff_chars": 20,
+    "tier1_max_file_size_bytes": 500000,
+    "file_patterns": [
+      "*.swift",
+      "*.kt",
+      "*.java",
+      "*.dart",
+      "*.ts",
+      "*.tsx",
+      "*.js"
+    ],
+    "exempt_path_patterns": [
+      "tests/",
+      "node_modules/",
+      ".generated.",
+      "build/"
+    ],
+    "quality_score_threshold": 0.7,
+    "timeout_ms": 60000,
+    "queue_file": ".bk-metrics/inferential-queue.jsonl",
+    "results_file": ".bk-metrics/inferential-results.jsonl",
+    "model": "claude-haiku-4-5",
+    "bypass_env": "BK_INFERENTIAL_SKIP"
+  },
+  "test_generation": {
+    "enabled": true,
+    "mode": "suggest",
+    "languages": [
+      "swift",
+      "kotlin",
+      "dart",
+      "typescript",
+      "javascript"
+    ],
+    "exclude_patterns": [
+      "**/node_modules/**",
+      "**/dist/**",
+      "**/build/**",
+      "**/*.generated.*"
+    ]
+  },
+  "ui_snapshot": {
+    "enabled": true,
+    "require_golden": false,
+    "platforms": [
+      "ios",
+      "android",
+      "flutter"
+    ]
+  },
+  "mutation_testing": {
+    "enabled": true,
+    "scan_on_manifest_change": true
+  },
+  "pbt_suggester": {
+    "enabled": true,
+    "min_cases": 10,
+    "sample_threshold": 0.7
+  },
+  "native_lint": {
+    "enabled": true,
+    "cache_ttl_seconds": 300,
+    "timeout_ms": 30000,
+    "ios": {
+      "enabled": true,
+      "tool": "swiftlint",
+      "block_on_error": false,
+      "config_path": ".swiftlint.yml"
+    },
+    "android": {
+      "enabled": true,
+      "preferred_tool": "detekt",
+      "allow_gradle_lint": false,
+      "block_on_error": false,
+      "detekt_config": "detekt.yml"
+    },
+    "flutter": {
+      "enabled": true,
+      "tool": "dart_analyze",
+      "block_on_error": false,
+      "analysis_options": "analysis_options.yaml"
+    },
+    "fallback_to_regex": true
+  },
+  "cost_budget": {
+    "enabled": true,
+    "pr_budget_usd": 5.0,
+    "session_budget_usd": 20.0,
+    "enforcement": "warn",
+    "ledger_path": ".bk-metrics/cost-ledger.jsonl"
+  },
+  "policy_overrides": {
+    "BK_HARNESS_POLICY_PATH": "Override path to policy file (absolute)",
+    "BK_HARNESS_OVERRIDE": "Bypass global kill-switch (one-time)",
+    "BK_HARNESS_DISPATCH_OVERRIDE": "Format: agent=N,agent=N (raise per-agent cap)",
+    "BK_HARNESS_RECURRENCE_OVERRIDE": "Bypass phase recurrence block (one-time)",
+    "BK_ARCH_FITNESS_SKIP": "Comma-separated rule IDs to skip",
+    "BK_INFERENTIAL_SKIP": "Set to 1 to bypass inferential review entirely",
+    "BK_INFERENTIAL_MODE": "Set to 'mock' to use deterministic mock results",
+    "BK_INFERENTIAL_MOCK_RESULT": "JSON-encoded mock result for BK_INFERENTIAL_MODE=mock"
+  },
+  "subagent_observability": {
+    "enabled": true,
+    "live_tracker": {
+      "jsonl_path": ".bk-metrics/subagent-live.jsonl",
+      "max_entries": 10000
+    },
+    "accurate_parser": {
+      "timeout_ms": 800,
+      "fallback_char_per_token": 4
+    },
+    "statusline": {
+      "max_display": 3,
+      "show_cost": true,
+      "show_tokens": true
+    },
+    "parallel_metric": {
+      "overlap_threshold_ms": 1000
+    }
+  }
+}

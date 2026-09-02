@@ -1,0 +1,612 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "bk-harness-policy",
+  "type": "object",
+  "required": [
+    "version",
+    "deadloop",
+    "kill_switch",
+    "arch_fitness",
+    "monitor"
+  ],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "deadloop": {
+      "type": "object",
+      "required": [
+        "tool_repetition",
+        "no_progress",
+        "phase_recurrence",
+        "subagent_iteration"
+      ],
+      "properties": {
+        "tool_repetition": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "warn_threshold": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "block_threshold": {
+              "type": "integer",
+              "minimum": 3
+            },
+            "window_size": {
+              "type": "integer",
+              "minimum": 5
+            },
+            "ring_file": {
+              "type": "string"
+            },
+            "exempt_tools": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "no_progress": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "oscillation_window": {
+              "type": "integer",
+              "minimum": 4
+            },
+            "oscillation_block_threshold": {
+              "type": "integer",
+              "minimum": 3
+            },
+            "trivial_edit_max_chars": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "trivial_edit_block_threshold": {
+              "type": "integer",
+              "minimum": 3
+            },
+            "file_edit_history": {
+              "type": "string"
+            }
+          }
+        },
+        "phase_recurrence": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "warn_count": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "block_count": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "halt_count": {
+              "type": "integer",
+              "minimum": 3
+            },
+            "bypass_env": {
+              "type": "string"
+            }
+          }
+        },
+        "subagent_iteration": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "default_cap": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "per_agent_caps": {
+              "type": "object"
+            },
+            "bypass_env": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "kill_switch": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "min_red_signals": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "lookback_minutes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "red_signal_types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "bypass_env": {
+          "type": "string"
+        },
+        "red_signals_file": {
+          "type": "string"
+        }
+      }
+    },
+    "arch_fitness": {
+      "type": "object",
+      "properties": {
+        "ios": {
+          "$ref": "#/definitions/platformFitness"
+        },
+        "android": {
+          "$ref": "#/definitions/platformFitness"
+        },
+        "flutter": {
+          "$ref": "#/definitions/platformFitness"
+        }
+      }
+    },
+    "steerer": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "min_violation_count": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "lookback_days": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "draft_path": {
+          "type": "string"
+        },
+        "target_path": {
+          "type": "string"
+        },
+        "backup_dir": {
+          "type": "string"
+        }
+      }
+    },
+    "monitor": {
+      "type": "object",
+      "properties": {
+        "violations_file": {
+          "type": "string"
+        },
+        "decisions_file": {
+          "type": "string"
+        },
+        "rotate_max_lines": {
+          "type": "integer",
+          "minimum": 100
+        },
+        "statusline_cache": {
+          "type": "string"
+        },
+        "statusline_cache_ttl_ms": {
+          "type": "integer",
+          "minimum": 500
+        },
+        "ashby": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "silent_days_warn": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "warnings_file": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "token_monitoring": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "burn_rate_threshold_per_min": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "consecutive_windows": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "window_minutes": {
+          "type": "number",
+          "minimum": 0.1
+        },
+        "lookback_window_minutes": {
+          "type": "number",
+          "minimum": 1
+        },
+        "burn_window_file": {
+          "type": "string"
+        },
+        "statusline_show_tokens": {
+          "type": "boolean"
+        },
+        "statusline_show_cost": {
+          "type": "boolean"
+        },
+        "statusline_show_rate": {
+          "type": "boolean"
+        }
+      }
+    },
+    "inferential_review": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "batch_size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tier1_min_diff_chars": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tier1_max_file_size_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "file_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "exempt_path_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "quality_score_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1000
+        },
+        "queue_file": {
+          "type": "string"
+        },
+        "results_file": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "bypass_env": {
+          "type": "string"
+        }
+      }
+    },
+    "test_generation": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "suggest",
+            "block"
+          ]
+        },
+        "languages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "exclude_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "ui_snapshot": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "require_golden": {
+          "type": "boolean"
+        },
+        "platforms": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "mutation_testing": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "scan_on_manifest_change": {
+          "type": "boolean"
+        }
+      }
+    },
+    "pbt_suggester": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "min_cases": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sample_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "native_lint": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "cache_ttl_seconds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 100
+        },
+        "fallback_to_regex": {
+          "type": "boolean"
+        },
+        "ios": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "tool": {
+              "type": "string"
+            },
+            "block_on_error": {
+              "type": "boolean"
+            },
+            "config_path": {
+              "type": "string"
+            }
+          }
+        },
+        "android": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "preferred_tool": {
+              "type": "string"
+            },
+            "allow_gradle_lint": {
+              "type": "boolean"
+            },
+            "block_on_error": {
+              "type": "boolean"
+            },
+            "detekt_config": {
+              "type": "string"
+            }
+          }
+        },
+        "flutter": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "tool": {
+              "type": "string"
+            },
+            "block_on_error": {
+              "type": "boolean"
+            },
+            "analysis_options": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "policy_overrides": {
+      "type": "object"
+    },
+    "cost_budget": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "pr_budget_usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "session_budget_usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "enforcement": {
+          "type": "string",
+          "enum": [
+            "warn",
+            "block",
+            "none"
+          ]
+        },
+        "ledger_path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "subagent_observability": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "live_tracker": {
+          "type": "object",
+          "properties": {
+            "jsonl_path": {
+              "type": "string"
+            },
+            "max_entries": {
+              "type": "integer",
+              "minimum": 100
+            }
+          }
+        },
+        "accurate_parser": {
+          "type": "object",
+          "properties": {
+            "timeout_ms": {
+              "type": "integer",
+              "minimum": 100
+            },
+            "fallback_char_per_token": {
+              "type": "number",
+              "minimum": 1
+            }
+          }
+        },
+        "statusline": {
+          "type": "object",
+          "properties": {
+            "max_display": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "show_cost": {
+              "type": "boolean"
+            },
+            "show_tokens": {
+              "type": "boolean"
+            }
+          }
+        },
+        "parallel_metric": {
+          "type": "object",
+          "properties": {
+            "overlap_threshold_ms": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "platformFitness": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "rules": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "error",
+                  "warning"
+                ]
+              },
+              "max_count": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "presentation_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "domain_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "data_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "infra_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "exclude_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
