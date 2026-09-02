@@ -24,8 +24,8 @@ Each tag also carries the three packed tarballs as GitHub Release assets — tha
 install path, and it works without an npm registry:
 
 ```bash
-gh release download v0.1.0 --repo daniel211/bk-kit --pattern 'beer-kit-ios-*.tgz'
-npm install -g ./beer-kit-ios-0.1.0.tgz
+gh release download v0.1.0 --repo daniel211/bk-kit --pattern 'beerkit-bk-ios-*.tgz'
+npm install -g ./beerkit-bk-ios-0.1.0.tgz
 
 cd ~/MyApp
 bk-ios init
