@@ -9,6 +9,7 @@ import { existsSync, readFileSync, cpSync, writeFileSync, mkdirSync } from 'node
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { hashFile } from '../lib/hash-tracker.mjs';
+import { buildPackageInventory, sourceFor } from '../lib/package-layout.mjs';
 
 /**
  * Classify a file's change state by comparing 3 hashes.
@@ -80,8 +81,16 @@ export function registerUpdate(program, platform) {
         process.exit(1);
       }
       const kitManifest = JSON.parse(readFileSync(kitManifestPath, 'utf8'));
-      const kitFiles = kitManifest.files || {};
       const kitDir = resolve(import.meta.dirname, '../kit');
+      const packageRoot = resolve(import.meta.dirname, '..');
+
+      // `init` installs two trees into .claude/: the kit itself, and the developer CLIs
+      // from the package's cli/ directory. kit-manifest.json only inventories the first,
+      // so every cli/ path recorded in .bk-version.json used to look like a file the
+      // package had dropped — update reported 18 "removed from package" warnings and
+      // never upgraded a single CLI file. Inventory both, and resolve each path against
+      // the tree it actually came from.
+      const kitFiles = buildPackageInventory(kitManifest.files, packageRoot);
 
       console.log(`Updating ${platform} kit in ${claudeDir}...\n`);
 
@@ -107,7 +116,7 @@ export function registerUpdate(program, platform) {
             break;
 
           case 'new': {
-            const srcPath = join(kitDir, relPath);
+            const srcPath = sourceFor(relPath, { kitDir, packageRoot });
             if (existsSync(srcPath)) {
               mkdirSync(join(targetPath, '..'), { recursive: true });
               cpSync(srcPath, targetPath);
@@ -119,7 +128,7 @@ export function registerUpdate(program, platform) {
           }
 
           case 'safe_update': {
-            const srcPath = join(kitDir, relPath);
+            const srcPath = sourceFor(relPath, { kitDir, packageRoot });
             if (existsSync(srcPath)) {
               mkdirSync(join(targetPath, '..'), { recursive: true });
               cpSync(srcPath, targetPath);
@@ -144,7 +153,7 @@ export function registerUpdate(program, platform) {
               break;
             }
             if (choice === 'take') {
-              const srcPath = join(kitDir, relPath);
+              const srcPath = sourceFor(relPath, { kitDir, packageRoot });
               if (existsSync(srcPath)) {
                 cpSync(srcPath, targetPath);
                 installedFiles[relPath] = kitHash;

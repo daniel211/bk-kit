@@ -801,6 +801,190 @@ function cmdCreate() {
   });
 }
 
+/**
+ * Parse `git worktree list --porcelain` into objects, excluding git-internal entries.
+ *
+ * @returns {Array<{path: string, branch: string|undefined}>}
+ */
+function listWorktrees() {
+  const result = git('worktree list --porcelain', { silent: true });
+  if (!result.success) {
+    outputError('WORKTREE_LIST_ERROR', 'Failed to list worktrees');
+  }
+  const worktrees = [];
+  let current = {};
+  result.output.split('\n').forEach(line => {
+    if (line.startsWith('worktree ')) {
+      if (current.path) worktrees.push(current);
+      current = { path: line.replace('worktree ', '') };
+    } else if (line.startsWith('branch ')) {
+      current.branch = line.replace('branch refs/heads/', '');
+    }
+  });
+  if (current.path) worktrees.push(current);
+  return worktrees.filter(w => !w.path.includes('.git/'));
+}
+
+/**
+ * Resolve a user-supplied name, path or branch to exactly one worktree.
+ * Exits with a helpful error when nothing matches or the term is ambiguous.
+ *
+ * Matching widens in stages — exact, then prefix, then substring for terms of four
+ * characters or more — so a short term cannot silently select an unrelated worktree.
+ *
+ * @param {string} searchTerm
+ * @returns {{path: string, branch: string|undefined}}
+ */
+function resolveWorktree(searchTerm) {
+  const term = searchTerm.toLowerCase();
+  const candidates = listWorktrees();
+  const fields = (w) => [path.basename(w.path).toLowerCase(), w.path.toLowerCase(), (w.branch || '').toLowerCase()];
+
+  let matches = candidates.filter(w => fields(w).some(f => f === term));
+  if (matches.length === 0) matches = candidates.filter(w => fields(w).some(f => f.startsWith(term)));
+  if (matches.length === 0 && term.length >= 4) matches = candidates.filter(w => fields(w).some(f => f.includes(term)));
+
+  if (matches.length === 0) {
+    outputError('WORKTREE_NOT_FOUND', `No worktree matching "${searchTerm}" found`, {
+      suggestion: 'Use "node worktree.cjs list" to see available worktrees',
+      availableWorktrees: candidates.map(w => path.basename(w.path))
+    });
+  }
+  if (matches.length > 1) {
+    outputError('MULTIPLE_WORKTREES_MATCH', `Multiple worktrees match "${searchTerm}"`, {
+      suggestion: 'Be more specific or use full path',
+      matchingWorktrees: matches.map(w => ({ name: path.basename(w.path), path: w.path, branch: w.branch }))
+    });
+  }
+  return matches[0];
+}
+
+/**
+ * Bring a worktree's committed work back to the main checkout, then clean up.
+ *
+ * Work done in a worktree lives on its own branch. Nothing in the kit merged it back, so
+ * a /bk-bootstrap run that used a worktree finished "successfully" while its seven
+ * generated documents sat on an unmerged branch, invisible in the main tree. `remove`
+ * would not have lost them — it declines to delete an unmerged branch — but it also would
+ * not have told anyone where they went.
+ *
+ * Refuses rather than guesses: an unclean worktree, an unclean main checkout, or a branch
+ * with nothing to contribute each stop the command with an explanation.
+ */
+function cmdFinish() {
+  if (!arg1) {
+    outputError('MISSING_WORKTREE', 'Worktree name or path is required', {
+      suggestion: 'Usage: node worktree.cjs finish <name-or-path> [--no-merge] [--keep-branch]'
+    });
+  }
+
+  checkGitRepo();
+  checkGitVersion();
+
+  const worktree = resolveWorktree(arg1);
+  const worktreePath = worktree.path;
+  const branchName = worktree.branch;
+  const noMerge = args.includes('--no-merge');
+  const keepBranch = args.includes('--keep-branch');
+
+  // Uncommitted work in the worktree would be destroyed by `worktree remove --force`.
+  const wtStatus = git(`-C "${worktreePath}" status --porcelain`, { silent: true });
+  if (wtStatus.success && wtStatus.output.trim()) {
+    outputError('WORKTREE_DIRTY', `Worktree has uncommitted changes: ${worktreePath}`, {
+      suggestion: `Commit or stash them first — finishing would discard them.\n  git -C "${worktreePath}" status`,
+      uncommittedFiles: wtStatus.output.trim().split('\n').length
+    });
+  }
+
+  const mainBranch = git('rev-parse --abbrev-ref HEAD', { silent: true }).output.trim();
+  let merged = false;
+  let commitsBrought = 0;
+
+  if (!noMerge && branchName) {
+    const ahead = git(`rev-list --count ${mainBranch}..${branchName}`, { silent: true });
+    commitsBrought = ahead.success ? parseInt(ahead.output.trim(), 10) || 0 : 0;
+
+    if (commitsBrought === 0) {
+      outputError('NOTHING_TO_MERGE', `Branch ${branchName} has no commits that ${mainBranch} lacks`, {
+        suggestion: `Nothing to bring back. Remove the worktree with:\n  node worktree.cjs finish ${arg1} --no-merge`
+      });
+    }
+
+    // Merging into a dirty checkout mixes the worktree's work with whatever is in
+    // progress here, and a conflict would leave both half-applied. Untracked files are
+    // excluded deliberately: they do not participate in a merge, and a worktree created
+    // inside the repository (.claude/worktrees/... is the kit's own default) makes the
+    // main checkout permanently untracked-dirty. Blocking on that would make `finish`
+    // unusable in exactly the layout the kit creates.
+    const mainStatus = git('status --porcelain --untracked-files=no', { silent: true });
+    if (mainStatus.success && mainStatus.output.trim()) {
+      outputError('MAIN_CHECKOUT_DIRTY', `Cannot merge into ${mainBranch}: there are uncommitted changes to tracked files`, {
+        suggestion: `Commit or stash them, then re-run. The worktree and its branch are untouched.\n  Branch holding the work: ${branchName}`,
+        uncommittedFiles: mainStatus.output.trim().split('\n').length
+      });
+    }
+
+    if (dryRun) {
+      output({
+        success: true, dryRun: true, message: 'Dry run - no changes made',
+        wouldMerge: { branch: branchName, into: mainBranch, commits: commitsBrought },
+        wouldRemove: { worktreePath, deleteBranch: !keepBranch }
+      });
+      return;
+    }
+
+    const mergeResult = git(`merge --no-ff "${branchName}" -m "merge: bring back work from worktree ${path.basename(worktreePath)}"`, { silent: true });
+    if (!mergeResult.success) {
+      outputError('MERGE_FAILED', `Merge of ${branchName} into ${mainBranch} failed`, {
+        suggestion: `Resolve it by hand; the worktree is left in place.\n  git merge --abort   # to back out`,
+        gitError: mergeResult.stderr
+      });
+    }
+    merged = true;
+  } else if (dryRun) {
+    output({
+      success: true, dryRun: true, message: 'Dry run - no changes made',
+      wouldRemove: { worktreePath, deleteBranch: !keepBranch && !noMerge }
+    });
+    return;
+  }
+
+  const removeResult = git(`worktree remove "${worktreePath}"`, { silent: true });
+  if (!removeResult.success) {
+    outputError('WORKTREE_REMOVE_FAILED', `Failed to remove worktree: ${worktreePath}`, {
+      suggestion: merged
+        ? `The merge succeeded — only the cleanup failed. Remove it manually:\n  git worktree remove "${worktreePath}"`
+        : (removeResult.stderr || 'Check the worktree state'),
+      gitError: removeResult.stderr
+    });
+  }
+
+  // `branch -d` refuses to delete anything unmerged, so work cannot be lost here.
+  // With --no-merge the branch is the only thing still holding the work, so it is kept
+  // regardless — deleting it would contradict what the success message promises.
+  let branchDeleted = false;
+  let branchKeptReason = null;
+  if (branchName && !keepBranch && !noMerge) {
+    const del = git(`branch -d "${branchName}"`, { silent: true });
+    if (del.success) branchDeleted = true;
+    else branchKeptReason = del.stderr ? del.stderr.trim() : 'not fully merged';
+  }
+
+  output({
+    success: true,
+    message: merged
+      ? `Brought ${commitsBrought} commit(s) from ${branchName} into ${mainBranch}, worktree removed`
+      : `Worktree removed${branchName ? ` (branch ${branchName} kept — its work was not merged)` : ''}`,
+    merged,
+    commitsBrought,
+    branch: branchName,
+    intoBranch: merged ? mainBranch : null,
+    removedWorktreePath: worktreePath,
+    branchDeleted,
+    branchKeptReason
+  });
+}
+
 function cmdRemove() {
   if (!arg1) {
     outputError('MISSING_WORKTREE', 'Worktree name or path is required', {
@@ -983,6 +1167,9 @@ function main() {
     case 'remove':
       cmdRemove();
       break;
+    case 'finish':
+      cmdFinish();
+      break;
     case 'info':
       cmdInfo();
       break;
@@ -991,7 +1178,7 @@ function main() {
       break;
     default:
       outputError('UNKNOWN_COMMAND', `Unknown command: ${command || '(none)'}`, {
-        suggestion: 'Available commands: create, remove, info, list'
+        suggestion: 'Available commands: create, finish, remove, info, list'
       });
   }
 }

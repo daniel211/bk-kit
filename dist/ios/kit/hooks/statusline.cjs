@@ -225,6 +225,82 @@ try {
     }
   }
 
+  /**
+   * Render the account's rate-limit usage for line 1.
+   *
+   * Shape is documented for the statusline payload: `rate_limits.{five_hour,seven_day,
+   * spend_limit}` each carry `used_percentage` (0-100; spend_limit may exceed 100) and
+   * `resets_at` as Unix epoch **seconds**. Windows are absent until Claude Code reports
+   * them, and `spend_limit` only appears behind a Claude apps gateway — so every field is
+   * treated as optional rather than assumed.
+   *
+   * Each window shows how much is spent and when it resets, so the footer answers both
+   * "how much is left" and "how long until it comes back" without a mental calculation.
+   *
+   * @param {object|undefined} rateLimits — data.rate_limits
+   * @returns {string} e.g. "⏳ 5h 24% (2h) · 7d 41% (5d)", or '' when nothing is reported
+   */
+  function renderRateLimits(rateLimits) {
+    if (!rateLimits || typeof rateLimits !== 'object') return '';
+
+    const windows = [
+      ['5h', rateLimits.five_hour],
+      ['7d', rateLimits.seven_day],
+      ['spend', rateLimits.spend_limit],
+    ];
+    const parts = [];
+
+    for (const [label, win] of windows) {
+      const pct = win && typeof win.used_percentage === 'number' ? win.used_percentage : null;
+      if (pct === null) continue;
+
+      let text = `${label} ${Math.round(pct)}%`;
+      if (win.resets_at) {
+        const mins = Math.round((win.resets_at * 1000 - Date.now()) / 60000);
+        if (mins > 0) {
+          // "(111h)" is arithmetic, not information — a seven-day window resets in days.
+          const hours = mins / 60;
+          text += hours >= 48 ? ` (${Math.round(hours / 24)}d)`
+            : hours >= 1 ? ` (${Math.round(hours)}h)`
+            : ` (${mins}m)`;
+        }
+      }
+      parts.push(pct >= 90 ? _red(text) : pct >= 70 ? _yellow(text) : text);
+    }
+
+    return parts.length ? `⏳ ${parts.join(' · ')}` : '';
+  }
+
+  /**
+   * Worktree indicator. A session can be editing a worktree while the developer believes
+   * they are on their branch — that is exactly how a /bk-bootstrap run left seven
+   * generated documents stranded on an unmerged branch.
+   *
+   * @param {object|undefined} worktree — data.worktree
+   * @returns {string}
+   */
+  function renderWorktree(worktree) {
+    const name = worktree && worktree.name;
+    return name ? _yellow(`🧰 wt:${name}`) : '';
+  }
+
+  /**
+   * Open pull request, or merge request on a GitLab remote (`pr.kind === "mr"`).
+   * review_state is independently optional, so it is only shown when present.
+   *
+   * @param {object|undefined} pr — data.pr
+   * @returns {string}
+   */
+  function renderPullRequest(pr) {
+    if (!pr || typeof pr.number !== 'number') return '';
+    const mark = { approved: '✓', changes_requested: '✗', pending: '⧗', draft: '▢' }[pr.review_state] || '';
+    const label = pr.kind === 'mr' ? 'MR' : 'PR';
+    const text = `🔀 ${label}#${pr.number}${mark ? ` ${mark}` : ''}`;
+    return pr.review_state === 'changes_requested' ? _red(text)
+      : pr.review_state === 'approved' ? _green(text)
+      : text;
+  }
+
   function buildHarnessSummary(policy, state, root, sessionId, contextData) {
     try {
       const lookback = policy.kill_switch.lookback_minutes || 30;
@@ -284,7 +360,8 @@ try {
         tokens_context_pct,
         context_size,
         cumulative_cost_usd,
-        burn_rate_per_min
+        burn_rate_per_min,
+        ...(contextData && contextData.session ? { session: contextData.session } : {})
       };
     } catch { return null; }
   }
@@ -356,6 +433,16 @@ try {
         }
       }
 
+      // Prompt cache — a cold cache is the difference between a cheap turn and an
+      // expensive one, and the payload reports it directly. Only shown once Claude Code
+      // has observed caching; the field is absent before the first API response.
+      const cache = summary.session && summary.session.prompt_cache;
+      if (cache && cache.caching_observed) {
+        const ratio = typeof cache.hit_ratio === 'number' ? Math.round(cache.hit_ratio * 100) : null;
+        const text = ratio === null ? 'cache:?' : `cache ${ratio}%`;
+        parts.push(cache.warm === false ? _yellow(`${text} cold`) : text);
+      }
+
       return parts.join(' · ');
     } catch { return ''; }
   }
@@ -380,6 +467,11 @@ try {
           (usage.cache_creation_input_tokens ?? 0) +
           (usage.cache_read_input_tokens ?? 0);
         contextPct = Math.min(100, Math.round(((totalTokens + AUTOCOMPACT_BUFFER) / contextSize) * 100));
+      } else if (typeof data.context_window?.used_percentage === 'number') {
+        // Fallback only. Claude Code's used_percentage is the raw fill level; the figure
+        // above deliberately adds the autocompact buffer so the bar warns before a compact
+        // actually happens. Preferring the reported value would quietly remove that margin.
+        contextPct = Math.round(data.context_window.used_percentage);
       }
 
       // --- Model ---
@@ -488,10 +580,15 @@ try {
       // --- Render output ---
       // Line 1: model + context bar + time
       let line1 = `⚡ ${modelName}`;
+      const effortLevel = data.effort?.level;
+      if (effortLevel) line1 += ` ·${effortLevel}`;
+      if (data.fast_mode) line1 += ` ${_yellow('fast')}`;
       if (contextBar) line1 += `  ${contextBar}`;
       line1 += `  🕐 ${timeStr}`;
       const kitVersion = readKitVersion(rawDir);
       if (kitVersion) line1 += `  🍺 bk ${kitVersion}`;
+      const rateLimitPart = renderRateLimits(data.rate_limits);
+      if (rateLimitPart) line1 += `  ${rateLimitPart}`;
 
       // Line 2: platform + project + workflow + agents + git + lines
       const line2Parts = [];
@@ -506,29 +603,52 @@ try {
         line2Parts.push(`🤖 ${runningCount} agents`);
       }
       if (gitPart) line2Parts.push(`🌿 ${gitPart}`);
+      const worktreePart = renderWorktree(data.worktree);
+      if (worktreePart) line2Parts.push(worktreePart);
+      const prPart = renderPullRequest(data.pr);
+      if (prPart) line2Parts.push(prPart);
       if (linesPart) line2Parts.push(`📝 ${linesPart}`);
 
       // --- Line 3: Harness monitoring line ---
       // Build context data for token monitoring display
       // The statusline is the only hook Claude Code hands its full status payload to.
-      // Record which top-level keys arrive so quota/usage-credit display can be built on
-      // observed fields rather than guessed ones — the payload shape is not documented
-      // here, and inventing a field name would silently render nothing. Keys only, never
-      // values.
+      // Record its *shape* — keys, and the type of each leaf — so features are built on
+      // observed fields rather than guessed ones. Never values: this payload carries
+      // account-level rate-limit state.
       try {
-        const keysPath = path.join(rawDir, '.bk-metrics', 'statusline-payload-keys.json');
-        fs.writeFileSync(keysPath, JSON.stringify({
-          observedAt: new Date().toISOString(),
-          topLevel: Object.keys(data || {}).sort(),
-          nested: Object.fromEntries(
-            Object.entries(data || {})
-              .filter(([, v]) => v && typeof v === 'object' && !Array.isArray(v))
-              .map(([k, v]) => [k, Object.keys(v).sort()]),
-          ),
-        }, null, 2) + '\n');
+        const shapeOf = (value, depth) => {
+          if (value === null) return 'null';
+          if (Array.isArray(value)) return `array[${value.length}]`;
+          if (typeof value !== 'object') return typeof value;
+          if (depth === 0) return 'object';
+          return Object.fromEntries(
+            Object.keys(value).sort().map((k) => [k, shapeOf(value[k], depth - 1)]),
+          );
+        };
+        fs.writeFileSync(
+          path.join(rawDir, '.bk-metrics', 'statusline-payload-keys.json'),
+          JSON.stringify({ observedAt: new Date().toISOString(), shape: shapeOf(data || {}, 3) }, null, 2) + '\n',
+        );
       } catch { /* diagnostics are best-effort — never break the statusline */ }
 
+      // Facts the payload reports that are worth having but not worth screen space.
+      // bk-health and the cost tooling read these from .bk-metrics/statusline-cache.json.
+      const _session = {
+        claude_code_version: data.version || null,
+        session_name: data.session_name || null,
+        effort: data.effort?.level || null,
+        fast_mode: data.fast_mode || false,
+        thinking_enabled: data.thinking?.enabled ?? null,
+        exceeds_200k_tokens: data.exceeds_200k_tokens ?? null,
+        model_id: data.model?.id || null,
+        output_style: data.output_style?.name || null,
+        agent_name: data.agent?.name || null,
+        prompt_cache: data.prompt_cache || null,
+        api_cost_usd: data.cost?.total_cost_usd ?? null,
+      };
+
       const _contextData = {
+        session: _session,
         total: (usage.input_tokens || 0) +
                (usage.cache_creation_input_tokens || 0) +
                (usage.cache_read_input_tokens || 0),

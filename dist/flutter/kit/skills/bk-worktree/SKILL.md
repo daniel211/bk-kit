@@ -88,9 +88,33 @@ Based on project context, run in background:
 | Command | Usage | Description |
 |---------|-------|-------------|
 | `create` | `create [project] <feature>` | Create worktree |
-| `remove` | `remove <name-or-path>` | Remove worktree |
+| `finish` | `finish <name-or-path> [--no-merge] [--keep-branch]` | Merge the worktree's commits back into the current branch, then remove it |
+| `remove` | `remove <name-or-path>` | Remove worktree (discards uncommitted changes; keeps an unmerged branch) |
 | `info` | `info` | Repo info with worktree location |
 | `list` | `list` | List worktrees |
+
+## Finishing a worktree
+
+Work done in a worktree lives on its own branch and is invisible in the main checkout
+until something merges it. `finish` closes that loop:
+
+```bash
+node worktree.cjs finish <name> [--dry-run]
+```
+
+It refuses rather than guesses. An uncommitted change in the worktree, an uncommitted
+change to a *tracked* file in the main checkout, or a branch with nothing the current
+branch lacks each stop the command and say why. Untracked files in the main checkout are
+ignored on purpose — the kit's own worktrees live under `.claude/worktrees/`, which would
+otherwise leave every project permanently "dirty".
+
+- `--no-merge` — remove the worktree and keep its branch, when the work should not land yet
+- `--keep-branch` — merge, remove the worktree, keep the branch
+
+**Always prefer `finish` over `remove` after an agent has worked in a worktree.** `remove`
+discards uncommitted changes and leaves an unmerged branch behind without saying where the
+work went — which is how a `/bk-bootstrap` run once finished "successfully" with seven
+generated documents stranded on a branch nobody looked at.
 
 ## Notes
 
