@@ -1,8 +1,8 @@
 ---
 name: bk-gemini-review
-description: "Cross-model AI code review powered by Gemini CLI. Inspects architecture compliance, concurrency safety, security, and error handling."
+description: "Cross-model AI code review powered by Antigravity CLI (agy). Inspects architecture compliance, concurrency safety, security, and error handling."
 user-invocable: true
-argument-hint: "[feature or files] [--model gemini-2.5-flash] [--fast]"
+argument-hint: "[feature or files] [--model gemini-3.1-pro-high] [--fast]"
 ---
 
 # Gemini Review: $ARGUMENTS
@@ -35,14 +35,14 @@ Per `.claude/rules/approval-rules.md`: review is No-risk — auto-approve, no ga
 Check that `gemini` CLI is available in the environment:
 
 ```bash
-which gemini
+command -v agy      # "where agy" on Windows
 ```
 
 If `gemini` is not found:
-- Gemini CLI was retired on 2026-06-18 for free/Pro/Ultra tiers. If the user is not on a
-  Gemini Code Assist Standard/Enterprise licence, do NOT send them installing — tell them
-  to use `/bk-review --engine claude` instead. On an enterprise licence:
-  `npm install -g @google/gemini-cli`
+- Install Antigravity CLI — it runs natively on macOS, Linux and Windows:
+  `brew install --cask antigravity-cli` (macOS) or
+  `curl -fsSL https://antigravity.google/cli/install.sh | bash`, then run `agy` once to
+  authenticate. The retired `gemini` CLI is no longer used.
 - Authenticate via `gemini` or set `export GEMINI_API_KEY="..."`
 
 ### Step 2: Execute Gemini Review Script
@@ -57,8 +57,9 @@ node {skill_dir}/scripts/gemini-review.mjs \
 ```
 
 Options:
-- `--model <name>`: Defaults to `gemini-2.5-flash` (override via `GEMINI_MODEL`). The old
-  `gemini-2.5-pro` default now returns 404 — see docs/antigravity-cli-migration.md.
+- `--model <name>`: Defaults to `gemini-3.1-pro-high`; `--fast` selects
+  `gemini-3.8-flash-high`. Override via `AGY_MODEL`. Run `agy models` to list what the
+  account can reach. Claude models are refused — the point is cross-model review.
 - `--fast`: Fast scan using `gemini-2.5-flash`.
 - `--files <file1,file2>`: Specify exact files instead of git diff.
 

@@ -66,7 +66,7 @@ Task(subagent_type: "bk-gemini-reviewer", model: "sonnet", run_in_background: tr
   Files: {file_list or impl-result path}
   TOOL RESTRICTION: You are a READ-ONLY agent for project code. Do NOT use Edit tool. Use Bash strictly to invoke gemini review harness.
   Architecture rules: .claude/rules/{platform}-rules.md
-  Model: gemini-2.5-flash
+  Model: gemini-3.1-pro-high
   Output: bk/dev/shared/reports/code-review-gemini-{feature}.md (+ .json)
 ")
 ```

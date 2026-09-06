@@ -24,9 +24,12 @@ try {
   // The harness itself, plus read-only inspection an agent may reasonably reach for
   // while assembling scope. Anything else is a violation.
   const HARNESS_BASH_ALLOWLIST = [
-    /(?:^|[/\s;&|])gemini(?:\s|$)/,        // gemini CLI
-    /gemini-review\.mjs(?:\s|$)/,          // the runner script
-    /^\s*(?:which|command\s+-v|type)\s/,   // availability probes
+    /(?:^|[/\s;&|])agy(?:\s|$)/,                  // Antigravity CLI — the current harness
+    /(?:^|[/\s;&|])gemini(?:\s|$)/,               // retired Gemini CLI, still tolerated
+    /gemini-review\.mjs(?:\s|$)/,                 // the runner script
+    // Availability probes. `where` is the Windows spelling the runner uses; omitting it
+    // flagged every probe on Windows as a violation.
+    /^\s*(?:which|command\s+-v|where|type)\s/,
     /^\s*git\s+(?:diff|status|log|show|ls-files|rev-parse|branch)\b/,
     /^\s*(?:ls|cat|head|tail|wc|find|grep|rg|pwd|echo)\b/
   ];
@@ -124,7 +127,7 @@ try {
           : JSON.stringify(toolResponse);
 
         if (/"tool_name"\s*:\s*"Edit"/.test(resultText)) {
-          errors.push(`[TOOL-RESTRICT] Read-only agent "${agentType}" used forbidden tool (Edit)`);
+          errors.push(`[TOOL-RESTRICT] Read-only+Harness agent "${agentType}" used forbidden tool (Edit)`);
         }
 
         // Bash is granted for the review harness only — flag anything else.

@@ -93,56 +93,83 @@ if (!SUPPORTED_PLATFORMS.includes(platform)) {
 
 // Model selection.
 //
-// The former default `gemini-2.5-pro` is gone: Google retired Gemini CLI on 2026-06-18 for
-// the free / AI Pro / AI Ultra tiers, and the API now answers 404 "no longer available to
-// new users". `gemini-3.1-pro` is granted a free-tier quota of 0. As of 2026-09-06 the only
-// model observed still answering on a non-enterprise account is `gemini-2.5-flash`, so that
-// is the default — including under `--fast`, which currently selects the same model.
-//
-// This is a residual state, not a stable one. Callers with a Gemini Code Assist
-// Standard/Enterprise licence should pass `--model` or set GEMINI_MODEL. See
-// docs/antigravity-cli-migration.md.
-const DEFAULT_MODEL = 'gemini-2.5-flash';
-const RETIRED_MODELS = new Set(['gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-1.5-flash']);
+// Model ids come from Antigravity CLI (`agy models`), not the retired Gemini CLI. All three
+// below were verified answering on 2026-09-06 — including `gemini-3.1-pro-high`, which the
+// old CLI refused with a free-tier quota of 0. `agy` routes through a different entitlement,
+// so `--fast` means something again.
+const DEFAULT_MODEL = 'gemini-3.1-pro-high';
+const FAST_MODEL = 'gemini-3.8-flash-high';
 
-const selectedModel = customModel || process.env.GEMINI_MODEL || DEFAULT_MODEL;
+// Models served only by the retired Gemini CLI. Passing one is a leftover config, not a
+// choice — say so rather than letting it fail at the API.
+const RETIRED_MODELS = new Set([
+  'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'
+]);
+
+// The whole point of this agent is that a different model reviews what Claude wrote.
+// `agy models` offers Claude models, so selecting one silently restores the confirmation
+// bias this agent exists to remove. Refuse rather than quietly defeat the purpose.
+const SELF_REVIEW_MODELS = /^claude[-.]/i;
+
+const selectedModel = customModel
+  || process.env.AGY_MODEL
+  || process.env.GEMINI_MODEL          // pre-migration name, still honoured
+  || (fastMode ? FAST_MODEL : DEFAULT_MODEL);
+
+if (SELF_REVIEW_MODELS.test(selectedModel)) {
+  console.error(`\n❌ ERROR: "${selectedModel}" is a Claude model.`);
+  console.error('  This agent exists to have a DIFFERENT model review what Claude wrote;');
+  console.error('  pointing it at Claude restores the bias it removes.');
+  console.error('  Use a Gemini model here, or run /bk-review --engine claude instead.\n');
+  process.exit(1);
+}
 
 if (RETIRED_MODELS.has(selectedModel)) {
-  console.warn(`\n⚠️  Model "${selectedModel}" is retired and will almost certainly return 404.`);
-  console.warn(`   Gemini CLI stopped serving free/Pro/Ultra tiers on 2026-06-18.`);
-  console.warn(`   Try --model ${DEFAULT_MODEL}, or use /bk-review --engine claude.\n`);
+  console.warn(`\n⚠️  Model "${selectedModel}" belongs to the retired Gemini CLI and is not an`);
+  console.warn(`   Antigravity model id. Run "agy models" to list what is available.`);
+  console.warn(`   Falling back to ${DEFAULT_MODEL}.\n`);
 }
-if (fastMode && !customModel && !process.env.GEMINI_MODEL) {
-  console.log('[bk-gemini-review] Note: --fast is a no-op right now; no faster model is reachable.');
-}
+// Fall back to the tier the caller asked for: --fast should not silently upgrade to the
+// heavy default just because the requested model was a retired id.
+const effectiveModel = RETIRED_MODELS.has(selectedModel)
+  ? (fastMode ? FAST_MODEL : DEFAULT_MODEL)
+  : selectedModel;
 
-console.log(`[bk-gemini-review] Initializing Gemini Code Review`);
+console.log(`[bk-gemini-review] Initializing Gemini Code Review (via Antigravity CLI)`);
 console.log(`  Feature:  ${feature}`);
 console.log(`  Platform: ${platform} (from ${platformSource})`);
-console.log(`  Model:    ${selectedModel}`);
+console.log(`  Model:    ${effectiveModel}`);
 
-// 1. Locate gemini binary. `which` is absent on Windows and not guaranteed by POSIX;
+// 1. Locate the agy binary. `which` is absent on Windows and not guaranteed by POSIX;
 //    `where` is the Windows equivalent, `command -v` the portable shell builtin.
-const geminiBin = process.env.GEMINI_CLI_PATH || (() => {
-  const probe = process.platform === 'win32' ? 'where gemini' : 'command -v gemini';
-  try {
-    // `where` can list several matches — take the first.
-    return execSync(probe, { encoding: 'utf8' }).split('\n')[0].trim() || null;
-  } catch (_) {
-    return null;
-  }
-})();
+const agyBin = process.env.AGY_CLI_PATH
+  || process.env.GEMINI_CLI_PATH       // pre-migration name, still honoured
+  || (() => {
+    const probe = process.platform === 'win32' ? 'where agy' : 'command -v agy';
+    try {
+      // `where` can list several matches — take the first.
+      return execSync(probe, { encoding: 'utf8' }).split('\n')[0].trim() || null;
+    } catch (_) {
+      return null;
+    }
+  })();
 
-if (!geminiBin) {
-  console.error('\n❌ ERROR: Google Gemini CLI ("gemini") not found in PATH.');
+if (!agyBin) {
+  console.error('\n❌ ERROR: Antigravity CLI ("agy") not found in PATH.');
   console.error('');
-  console.error('  Note: Google retired Gemini CLI on 2026-06-18 for the free, AI Pro and');
-  console.error('  AI Ultra tiers, replacing it with Antigravity CLI. Installing it only');
-  console.error('  helps if you hold a Gemini Code Assist Standard/Enterprise licence:');
-  console.error('    npm install -g @google/gemini-cli');
-  console.error('    gemini   # then authenticate, or set GEMINI_API_KEY');
+  console.error('  Google replaced Gemini CLI with Antigravity CLI on 2026-06-18.');
+  console.error('  Install it (runs natively on macOS, Linux and Windows):');
+  if (process.platform === 'darwin') {
+    console.error('    brew install --cask antigravity-cli');
+    console.error('    or: curl -fsSL https://antigravity.google/cli/install.sh | bash');
+  } else if (process.platform === 'win32') {
+    console.error('    See https://antigravity.google/docs/cli/install/ for the Windows installer');
+  } else {
+    console.error('    curl -fsSL https://antigravity.google/cli/install.sh | bash');
+  }
+  console.error('    then run "agy" once to authenticate.');
   console.error('');
-  console.error('  On any other tier, use the Claude reviewer instead:');
+  console.error('  Or skip it entirely and use the Claude reviewer:');
   console.error('    /bk-review --engine claude');
   console.error('');
   process.exit(1);
@@ -227,6 +254,13 @@ if (existsSync(templatePath)) {
   promptTemplate = 'You are a senior code reviewer. Review the following code for architecture, concurrency, security, and error handling. Output JSON only.';
 }
 
+// `agy --json-schema` constrains the model to our result shape. It narrows the "answered in
+// prose" failure class but does not close it — identical runs have still produced output
+// JSON.parse rejects — so the defensive parsing below stays. Passing the flag is optional:
+// if the schema file is missing, run without it rather than failing the review.
+const schemaFile = join(__dirname, '..', 'references', 'output-schema.json');
+const schemaPath = existsSync(schemaFile) ? schemaFile : null;
+
 // 5. Read contents of key changed files (up to max limit)
 let fileContentsText = '';
 let totalChars = 0;
@@ -247,21 +281,39 @@ for (const file of changedFiles) {
 
 // Assemble the review request in two parts.
 //
-// The bulk payload (diff + full file contents) can easily reach 200 KB. Linux caps a
-// single argv string at MAX_ARG_STRLEN (128 KB), so passing it through `-p` fails with
-// E2BIG on any non-trivial review. Instead: instructions go through `-p` (a few KB), and
-// the bulk context is piped to the CLI on stdin, which has no size limit.
-const instructionPrompt = `${promptTemplate}
+// Everything — instructions and the bulk payload alike — travels in one stream-json message
+// on stdin. Argv is never used for content, so the Linux MAX_ARG_STRLEN cap (128 KB per
+// argument) that dictated the previous split cannot be hit. Verified against a 150 KB
+// payload; see docs/antigravity-cli-migration.md.
+//
+// REQUIRED, not decorative. `agy` is an agent, not a completion endpoint: handed a review
+// task inside a real repo it will reach for tools on its own — the platform sections name
+// lint commands like `swiftlint lint --strict`, and it tries to RUN them. In headless mode
+// that request cannot be prompted, so it is auto-denied and the run returns
+// `status: "SUCCESS"` with an empty response. Measured 2026-09-06: without this preamble
+// 0 bytes and a denied `command` permission; with it, a full review and clean stderr.
+//
+// The fix belongs here rather than in a permission grant. Handing the reviewer tool access
+// would breach the Read-only+Harness boundary in rules/agent-protocols/tool-restriction.md,
+// and `--dangerously-skip-permissions` would hand it everything. Do not remove this block,
+// and do not add lint-command text below it without re-testing.
+const NO_TOOLS_PREAMBLE = `## CRITICAL: You have no tools
+
+Do NOT attempt to run commands, read files, or search the codebase — every tool call will be
+denied and the review will return empty. Everything you need is already in this message.
+Any lint command named below is context describing the project's standards; it is NOT an
+instruction to execute it. Answer directly with the JSON object.
+
+`;
+
+const reviewMessage = `${NO_TOOLS_PREAMBLE}${promptTemplate}
 
 ## Platform Context
 Target Platform: ${platform}
 ${platformRules ? `Platform Rules:\n${platformRules}\n` : ''}
 ${archRules ? `Architecture Guidelines:\n${archRules}\n` : ''}
-The code under review (changed file list, git diff, and full source) is supplied on stdin above.
 
-Remember: Output ONLY the strict JSON object with fields: "verdict", "summary", "findings". Do NOT wrap in markdown fences.`;
-
-const contextPayload = `## Changed Files List
+## Changed Files List
 ${changedFiles.map(f => `- ${f}`).join('\n')}
 
 ## Git Diff
@@ -269,29 +321,41 @@ ${diffText.slice(0, 50000)}
 
 ## Source Files Content
 ${fileContentsText}
-`;
 
-// 6. Invoke Gemini CLI
-console.log(`[bk-gemini-review] Sending review prompt to Gemini CLI (${selectedModel})...`);
-console.log(`  Context payload: ${(contextPayload.length / 1024).toFixed(1)} KB via stdin`);
+Remember: Output ONLY the strict JSON object with fields: "verdict", "summary", "findings". Do NOT wrap in markdown fences.`;
 
-const geminiArgs = [
-  '-m', selectedModel,
-  '-p', instructionPrompt,
-  '--output-format', 'json'
+// NDJSON, one message per line. The key is `event`, not `type` — an undocumented detail
+// recovered by probing; a wrong shape is rejected with `input_tokens: 0`.
+const streamMessage = JSON.stringify({
+  event: 'user',
+  message: { role: 'user', content: [{ type: 'text', text: reviewMessage }] }
+}) + '\n';
+
+// 6. Invoke Antigravity CLI
+console.log(`[bk-gemini-review] Sending review to Antigravity CLI (${effectiveModel})...`);
+console.log(`  Payload: ${(Buffer.byteLength(reviewMessage) / 1024).toFixed(1)} KB via stream-json`);
+
+// `-p` swallows the following token as its value, so the attached form `-p=` is required
+// whenever the prompt comes from stdin rather than argv.
+const agyArgs = [
+  '-p=',
+  '--input-format', 'stream-json',
+  '--output-format', 'stream-json',
+  '--model', effectiveModel,
+  ...(schemaPath ? ['--json-schema', schemaPath] : [])
 ];
 
-function runGemini() {
+function runAgy() {
   return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(geminiBin, geminiArgs, {
+    const child = spawn(agyBin, agyArgs, {
       cwd: PROJECT_ROOT,
       env: { ...process.env },
       stdio: ['pipe', 'pipe', 'pipe']
     });
 
-    // Feed the bulk review context on stdin (see note at instructionPrompt).
+    // The entire review — instructions and code — goes in as one NDJSON message.
     child.stdin.on('error', err => rejectPromise(err));
-    child.stdin.end(contextPayload, 'utf8');
+    child.stdin.end(streamMessage, 'utf8');
 
     let stdoutData = '';
     let stderrData = '';
@@ -306,10 +370,37 @@ function runGemini() {
 
     child.on('close', code => {
       if (code !== 0) {
-        rejectPromise(new Error(`Gemini CLI exited with code ${code}: ${stderrData || stdoutData}`));
-      } else {
-        resolvePromise(stdoutData);
+        rejectPromise(new Error(`Antigravity CLI exited with code ${code}: ${stderrData || stdoutData}`));
+        return;
       }
+      // A zero exit is not success. `agy` reports transport-level failures inside the
+      // result event — a denied tool, for instance, returns status SUCCESS with an empty
+      // response. Surface the CLI's own error before the payload is parsed.
+      const result = extractResultEvent(stdoutData);
+      if (!result) {
+        rejectPromise(new Error(`No result event in Antigravity CLI output: ${stderrData || stdoutData.slice(0, 500)}`));
+        return;
+      }
+      if (result.status && result.status !== 'SUCCESS') {
+        rejectPromise(new Error(`Antigravity CLI returned status ${result.status}: ${result.error || '(no detail)'}`));
+        return;
+      }
+      // An empty response under status SUCCESS means the model produced nothing. The usual
+      // cause is a denied tool request, which `agy` reports only on stderr — without this
+      // check the failure surfaces as a misleading "could not be parsed" further down.
+      if (!result.response) {
+        const denied = /permission|auto-denied/i.test(stderrData);
+        rejectPromise(new Error(
+          denied
+            ? `Antigravity CLI produced no output: a tool permission was auto-denied in headless `
+              + `mode. The reviewer is supposed to need no tools — check that the no-tools preamble `
+              + `is still present in the prompt. CLI said: ${stderrData.trim().slice(0, 300)}`
+            : `Antigravity CLI returned an empty response with status SUCCESS. `
+              + `${stderrData.trim().slice(0, 300) || '(no stderr)'}`
+        ));
+        return;
+      }
+      resolvePromise(result.response);
     });
 
     child.on('error', err => {
@@ -318,33 +409,97 @@ function runGemini() {
   });
 }
 
+/**
+ * `--output-format stream-json` emits an NDJSON event stream (`init`, `step_update`,
+ * `result`), not a single object — parsing the whole of stdout never works. Pull the
+ * terminal `result` event and hand back its payload.
+ */
+function extractResultEvent(stdoutData) {
+  for (const line of stdoutData.split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    let event;
+    try {
+      event = JSON.parse(trimmed);
+    } catch (_) {
+      continue;              // progress lines and CLI chatter are not all valid JSON
+    }
+    if (event && event.event === 'result' && event.result) return event.result;
+  }
+  return null;
+}
+
 function stripFences(text) {
   const trimmed = text.trim();
   if (!trimmed.startsWith('```')) return trimmed;
   return trimmed.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
 }
 
-function parseGeminiOutput(rawOutput) {
-  let parsed = null;
-  try {
-    parsed = JSON.parse(stripFences(rawOutput));
-  } catch (_) {
-    return null;
-  }
-
-  // `--output-format json` wraps the model's text in a `response` field, so the outer
-  // parse succeeds but yields the envelope, not the review. Unwrap one level before
-  // deciding the output is unusable. (Checking `findings` rather than parse success is
-  // what makes this work — the envelope is itself valid JSON.)
-  if (parsed && !Array.isArray(parsed.findings) && typeof parsed.response === 'string') {
-    try {
-      parsed = JSON.parse(stripFences(parsed.response));
-    } catch (_) {
-      return null;
+/**
+ * Yield each complete top-level `{...}` in `text`, tracking string state so braces inside
+ * string literals do not throw the depth count off.
+ *
+ * Needed because `--json-schema` makes `agy` append its own schema-conformant object after
+ * the model's answer: the response is two JSON objects back to back, and `JSON.parse` on
+ * the whole string dies at the boundary.
+ */
+function* jsonObjectsIn(text) {
+  let depth = 0, start = -1, inString = false, escaped = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inString) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === '"') inString = false;
+      continue;
+    }
+    if (ch === '"') { inString = true; continue; }
+    if (ch === '{') {
+      if (depth === 0) start = i;
+      depth++;
+    } else if (ch === '}') {
+      if (depth === 0) continue;               // stray brace, ignore
+      depth--;
+      if (depth === 0 && start >= 0) {
+        yield text.slice(start, i + 1);
+        start = -1;
+      }
     }
   }
+}
 
-  return parsed && Array.isArray(parsed.findings) ? parsed : null;
+/**
+ * Pull the review object out of the model's answer.
+ *
+ * Deliberately keyed on the presence of a `findings` array rather than on parse success:
+ * several shapes here are valid JSON without being the review — an `--output-format json`
+ * envelope, or `agy`'s trailing structured-output object.
+ */
+function parseGeminiOutput(rawOutput) {
+  const text = stripFences(rawOutput);
+
+  // Fast path: the whole response is exactly the review.
+  try {
+    const whole = JSON.parse(text);
+    if (whole && Array.isArray(whole.findings)) return whole;
+    // Legacy envelope: model text nested under `response`.
+    if (whole && typeof whole.response === 'string') {
+      const inner = JSON.parse(stripFences(whole.response));
+      if (inner && Array.isArray(inner.findings)) return inner;
+    }
+  } catch (_) {
+    // Fall through — concatenated or prose-wrapped output lands here.
+  }
+
+  // Scan for the first embedded object that actually looks like a review.
+  for (const candidate of jsonObjectsIn(text)) {
+    try {
+      const parsed = JSON.parse(candidate);
+      if (parsed && Array.isArray(parsed.findings)) return parsed;
+    } catch (_) { /* not this one */ }
+  }
+
+  return null;
 }
 
 /**
@@ -371,35 +526,42 @@ function failHarness(message, remediation, rawOutput) {
  */
 function remediationFor(errMessage) {
   const m = String(errMessage);
-  if (/no longer available|not found for API version|ModelNotFoundError|\b404\b/i.test(m)) {
+  if (/no longer available|not found|ModelNotFoundError|unknown model|\b404\b/i.test(m)) {
     // Do not suggest the model that just failed.
-    const alt = selectedModel === DEFAULT_MODEL
-      ? 'No known-good Gemini model remains on non-enterprise tiers'
-      : `Try --model ${DEFAULT_MODEL}`;
-    return `Model "${selectedModel}" is unavailable on this account. Gemini CLI was retired on `
-      + `2026-06-18 for free/Pro/Ultra tiers. ${alt}, or use /bk-review --engine claude.`;
+    const alt = effectiveModel === DEFAULT_MODEL
+      ? `Run "agy models" to list what this account can reach`
+      : `Try --model ${DEFAULT_MODEL}, or run "agy models" to list what is available`;
+    return `Model "${effectiveModel}" is not available to this account. ${alt}. `
+      + 'Or use /bk-review --engine claude.';
   }
   if (/quota|rate limit|RESOURCE_EXHAUSTED|limit: 0|retry in/i.test(m)) {
     return 'Quota exhausted for this model on this account. Wait for the quota window to reset, '
-      + 'pick another --model, or use /bk-review --engine claude.';
+      + 'pick a lighter --model (or --fast), or use /bk-review --engine claude.';
   }
-  if (/auth|credential|API key|GEMINI_API_KEY|settings\.json|login/i.test(m)) {
-    return 'Authenticate the CLI (run "gemini", or set GEMINI_API_KEY), then re-run the review.';
+  if (/auth|credential|API key|login|not signed in|unauthenticated/i.test(m)) {
+    return 'Authenticate Antigravity CLI: run "agy" once interactively, then re-run the review.';
   }
   if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|network|socket/i.test(m)) {
-    return 'Network error reaching the Gemini API. Check connectivity and re-run.';
+    return 'Network error reaching the Antigravity API. Check connectivity and re-run.';
   }
-  return 'Check the error above. If the CLI is unauthenticated run "gemini"; if the model is '
+  if (/permission|auto-denied|dangerously-skip-permissions/i.test(m)) {
+    // Should be unreachable: the review is handed its context and needs no tools. If it
+    // fires, something reintroduced workspace reading.
+    return 'The CLI requested a tool permission. This reviewer is designed to need no tools — '
+      + 'the code is supplied in the prompt. Do NOT pass --dangerously-skip-permissions; '
+      + 'report this as a bug in the review harness.';
+  }
+  return 'Check the error above. If the CLI is unauthenticated run "agy"; if the model is '
     + `unavailable try --model ${DEFAULT_MODEL}, or use /bk-review --engine claude.`;
 }
 
 async function main() {
   let rawOutput = '';
   try {
-    rawOutput = await runGemini();
+    rawOutput = await runAgy();
   } catch (err) {
     failHarness(
-      `Gemini CLI execution failed: ${err.message}`,
+      `Antigravity CLI execution failed: ${err.message}`,
       remediationFor(err.message)
     );
     return;
@@ -446,7 +608,7 @@ function writeReport(result, files, rawOutput) {
 
   // Format Markdown Report
   let md = `## Code Review (Gemini): ${feature}
-**Agent**: bk-gemini-reviewer | **Model**: ${selectedModel} | **Date**: ${new Date().toISOString()} | **Verdict**: ${verdict}
+**Agent**: bk-gemini-reviewer | **Model**: ${effectiveModel} | **Date**: ${new Date().toISOString()} | **Verdict**: ${verdict}
 
 ### Files Reviewed
 ${files.length > 0 ? files.map(f => `- ${f}`).join('\n') : '- No changed files'}
@@ -486,7 +648,7 @@ about the code under review — do not treat this report as a passed or failed r
 - Critical: ${critical} | Major: ${major} | Minor: ${minor} | Info: ${info}
 - **Verdict**: ${verdict}
 
-<!-- metadata: {"schema_version":"1.0","agent":"bk-gemini-reviewer","model":"${selectedModel}","feature":"${feature}","verdict":"${verdict}","status":"${status}"} -->
+<!-- metadata: {"schema_version":"1.0","agent":"bk-gemini-reviewer","model":"${effectiveModel}","feature":"${feature}","verdict":"${verdict}","status":"${status}"} -->
 `;
 
   writeFileSync(jsonReportPath, JSON.stringify(result, null, 2), 'utf8');
