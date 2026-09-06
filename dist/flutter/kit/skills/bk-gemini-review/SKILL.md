@@ -2,7 +2,7 @@
 name: bk-gemini-review
 description: "Cross-model AI code review powered by Gemini CLI. Inspects architecture compliance, concurrency safety, security, and error handling."
 user-invocable: true
-argument-hint: "[feature or files] [--model gemini-2.5-pro] [--fast]"
+argument-hint: "[feature or files] [--model gemini-2.5-flash] [--fast]"
 ---
 
 # Gemini Review: $ARGUMENTS
@@ -39,7 +39,10 @@ which gemini
 ```
 
 If `gemini` is not found:
-- Guide user to install: `brew install gemini-cli` or `npm install -g @google/gemini-cli`
+- Gemini CLI was retired on 2026-06-18 for free/Pro/Ultra tiers. If the user is not on a
+  Gemini Code Assist Standard/Enterprise licence, do NOT send them installing — tell them
+  to use `/bk-review --engine claude` instead. On an enterprise licence:
+  `npm install -g @google/gemini-cli`
 - Authenticate via `gemini` or set `export GEMINI_API_KEY="..."`
 
 ### Step 2: Execute Gemini Review Script
@@ -54,7 +57,8 @@ node {skill_dir}/scripts/gemini-review.mjs \
 ```
 
 Options:
-- `--model <name>`: Default to `gemini-2.5-pro` (or latest Pro model via `GEMINI_MODEL`).
+- `--model <name>`: Defaults to `gemini-2.5-flash` (override via `GEMINI_MODEL`). The old
+  `gemini-2.5-pro` default now returns 404 — see docs/antigravity-cli-migration.md.
 - `--fast`: Fast scan using `gemini-2.5-flash`.
 - `--files <file1,file2>`: Specify exact files instead of git diff.
 

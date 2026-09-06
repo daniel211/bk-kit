@@ -28,14 +28,16 @@ function hasCommand(bin) {
 }
 
 /**
- * Install hint for the Gemini CLI, matching the host's package manager.
+ * Install hint for the Gemini CLI.
+ *
+ * Homebrew's `gemini-cli` formula is deprecated upstream and gets disabled on 2026-12-18,
+ * so it is no longer offered. npm remains, but only helps on a Gemini Code Assist
+ * Standard/Enterprise licence — Google retired the CLI for free/Pro/Ultra on 2026-06-18.
+ *
  * @returns {string}
  */
 function geminiInstallHint() {
-  const npm = '"npm install -g @google/gemini-cli"';
-  return process.platform === 'darwin'
-    ? `"brew install gemini-cli" or ${npm}`
-    : npm;
+  return '"npm install -g @google/gemini-cli" (Code Assist Standard/Enterprise only)';
 }
 
 /**
@@ -156,10 +158,15 @@ export function runDoctor(targetDir, platform) {
     });
   }
 
-  // 7. Optional tool check: Gemini CLI for cross-model reviewer
-  check('gemini CLI available (bk-gemini-reviewer)', () => {
+  // 7. Optional tool check: Gemini CLI for cross-model reviewer.
+  //    Google retired this CLI on 2026-06-18 for free/Pro/Ultra tiers, so a missing binary
+  //    is expected for most users and must not read as something they should go fix.
+  check('gemini CLI available (bk-gemini-reviewer, optional)', () => {
     if (hasCommand('gemini')) return true;
-    console.log(`    Optional: "gemini" CLI not found. Install via ${geminiInstallHint()} to enable bk-gemini-reviewer.`);
+    console.log('    Optional and retired: Google replaced Gemini CLI with Antigravity CLI on');
+    console.log('    2026-06-18 for free/Pro/Ultra tiers. bk-gemini-reviewer is unavailable —');
+    console.log('    use "/bk-review --engine claude" instead (no setup needed).');
+    console.log(`    On a Code Assist Standard/Enterprise licence: ${geminiInstallHint()}`);
     return 'warn';
   });
 

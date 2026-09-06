@@ -63,7 +63,7 @@ Write `bk/dev/shared/reports/code-review-gemini-{feature}.md`:
 
 ```markdown
 ## Code Review (Gemini): {feature}
-**Agent**: bk-gemini-reviewer | **Model**: gemini-2.5-pro | **Date**: {ISO8601} | **Verdict**: approve / request_changes
+**Agent**: bk-gemini-reviewer | **Model**: {model} | **Date**: {ISO8601} | **Verdict**: approve / request_changes / error
 
 ### Files Reviewed
 - {file_path}

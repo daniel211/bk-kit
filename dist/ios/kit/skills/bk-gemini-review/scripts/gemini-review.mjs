@@ -91,8 +91,30 @@ if (!SUPPORTED_PLATFORMS.includes(platform)) {
   process.exit(1);
 }
 
-// Select Gemini Model: Default to latest Pro model, fallback to Flash when --fast is used
-const selectedModel = customModel || process.env.GEMINI_MODEL || (fastMode ? 'gemini-2.5-flash' : 'gemini-2.5-pro');
+// Model selection.
+//
+// The former default `gemini-2.5-pro` is gone: Google retired Gemini CLI on 2026-06-18 for
+// the free / AI Pro / AI Ultra tiers, and the API now answers 404 "no longer available to
+// new users". `gemini-3.1-pro` is granted a free-tier quota of 0. As of 2026-09-06 the only
+// model observed still answering on a non-enterprise account is `gemini-2.5-flash`, so that
+// is the default — including under `--fast`, which currently selects the same model.
+//
+// This is a residual state, not a stable one. Callers with a Gemini Code Assist
+// Standard/Enterprise licence should pass `--model` or set GEMINI_MODEL. See
+// docs/antigravity-cli-migration.md.
+const DEFAULT_MODEL = 'gemini-2.5-flash';
+const RETIRED_MODELS = new Set(['gemini-2.5-pro', 'gemini-1.5-pro', 'gemini-1.5-flash']);
+
+const selectedModel = customModel || process.env.GEMINI_MODEL || DEFAULT_MODEL;
+
+if (RETIRED_MODELS.has(selectedModel)) {
+  console.warn(`\n⚠️  Model "${selectedModel}" is retired and will almost certainly return 404.`);
+  console.warn(`   Gemini CLI stopped serving free/Pro/Ultra tiers on 2026-06-18.`);
+  console.warn(`   Try --model ${DEFAULT_MODEL}, or use /bk-review --engine claude.\n`);
+}
+if (fastMode && !customModel && !process.env.GEMINI_MODEL) {
+  console.log('[bk-gemini-review] Note: --fast is a no-op right now; no faster model is reachable.');
+}
 
 console.log(`[bk-gemini-review] Initializing Gemini Code Review`);
 console.log(`  Feature:  ${feature}`);
@@ -113,11 +135,16 @@ const geminiBin = process.env.GEMINI_CLI_PATH || (() => {
 
 if (!geminiBin) {
   console.error('\n❌ ERROR: Google Gemini CLI ("gemini") not found in PATH.');
-  console.error('Please install it using:');
-  console.error('  npm install -g @google/gemini-cli');
-  if (process.platform === 'darwin') console.error('  or: brew install gemini-cli');
-  console.error('Then authenticate with:');
-  console.error('  gemini (select Google login or set GEMINI_API_KEY)\n');
+  console.error('');
+  console.error('  Note: Google retired Gemini CLI on 2026-06-18 for the free, AI Pro and');
+  console.error('  AI Ultra tiers, replacing it with Antigravity CLI. Installing it only');
+  console.error('  helps if you hold a Gemini Code Assist Standard/Enterprise licence:');
+  console.error('    npm install -g @google/gemini-cli');
+  console.error('    gemini   # then authenticate, or set GEMINI_API_KEY');
+  console.error('');
+  console.error('  On any other tier, use the Claude reviewer instead:');
+  console.error('    /bk-review --engine claude');
+  console.error('');
   process.exit(1);
 }
 
@@ -338,6 +365,34 @@ function failHarness(message, remediation, rawOutput) {
   process.exit(1);
 }
 
+/**
+ * Point the user at the actual cause. A blanket "authenticate the CLI" sends someone
+ * whose model was retired or whose quota is exhausted off in the wrong direction.
+ */
+function remediationFor(errMessage) {
+  const m = String(errMessage);
+  if (/no longer available|not found for API version|ModelNotFoundError|\b404\b/i.test(m)) {
+    // Do not suggest the model that just failed.
+    const alt = selectedModel === DEFAULT_MODEL
+      ? 'No known-good Gemini model remains on non-enterprise tiers'
+      : `Try --model ${DEFAULT_MODEL}`;
+    return `Model "${selectedModel}" is unavailable on this account. Gemini CLI was retired on `
+      + `2026-06-18 for free/Pro/Ultra tiers. ${alt}, or use /bk-review --engine claude.`;
+  }
+  if (/quota|rate limit|RESOURCE_EXHAUSTED|limit: 0|retry in/i.test(m)) {
+    return 'Quota exhausted for this model on this account. Wait for the quota window to reset, '
+      + 'pick another --model, or use /bk-review --engine claude.';
+  }
+  if (/auth|credential|API key|GEMINI_API_KEY|settings\.json|login/i.test(m)) {
+    return 'Authenticate the CLI (run "gemini", or set GEMINI_API_KEY), then re-run the review.';
+  }
+  if (/ENOTFOUND|ECONNREFUSED|ETIMEDOUT|network|socket/i.test(m)) {
+    return 'Network error reaching the Gemini API. Check connectivity and re-run.';
+  }
+  return 'Check the error above. If the CLI is unauthenticated run "gemini"; if the model is '
+    + `unavailable try --model ${DEFAULT_MODEL}, or use /bk-review --engine claude.`;
+}
+
 async function main() {
   let rawOutput = '';
   try {
@@ -345,7 +400,7 @@ async function main() {
   } catch (err) {
     failHarness(
       `Gemini CLI execution failed: ${err.message}`,
-      'Authenticate the CLI (run "gemini", or set GEMINI_API_KEY), confirm network access, then re-run the review.'
+      remediationFor(err.message)
     );
     return;
   }
