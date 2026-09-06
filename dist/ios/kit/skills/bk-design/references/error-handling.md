@@ -1,6 +1,9 @@
 # Error Handling
 
-Timeout, MCP failures, and graceful degradation strategies for Figma MCP-dependent screen extraction.
+Timeout, fetch failures, and graceful degradation for screen extraction.
+
+Figma is read over its REST API by `.claude/scripts/figma-cli.mjs`; there is no MCP server in
+this path. A failed fetch is a CLI exit code with a message, not a silent empty tool result.
 Agent must produce useful output even when MCP calls fail or time out.
 
 ## Timeout Priority
@@ -28,9 +31,9 @@ When time runs low, prioritize deliverables in this order:
 **Action:** Retry with reduced depth.
 
 ```
-get_design_context(nodeId, depth=5) -> timeout
-  -> Retry: get_design_context(nodeId, depth=3)
-  -> Still timeout: get_design_context(nodeId, depth=1) + selective deep-dive
+figma-cli nodes (nodeId, depth=5) -> timeout
+  -> Retry: figma-cli nodes (nodeId, depth=3)
+  -> Still timeout: figma-cli nodes (nodeId, depth=1) + selective deep-dive
 ```
 
 ### Level 2: Tool Returns Error
@@ -40,11 +43,11 @@ get_design_context(nodeId, depth=5) -> timeout
 
 | Failed Tool | Alternative |
 |-------------|------------|
-| `get_design_context` | `get_node` per child |
-| `scan_text_nodes` | `characters` field from deeper get_design_context |
-| `get_styles` | Style names from get_design_context nodes |
-| `save_screenshots` (disk) | `get_screenshot` (inline, base64) |
-| `get_variable_defs` | `boundVariables` IDs from get_design_context |
+| `figma-cli screen` | `figma-cli nodes` per child branch |
+| `raw/text.json` | `characters` fields inside `raw/node.json` |
+| `raw/styles.json` | `styleRefs` on nodes in `raw/node.json` |
+| `figma-cli export` (disk) | `figma-cli export --format png` (always to disk) |
+| `raw/variables.json` | `boundVariables` ids in `raw/node.json` |
 
 ### Level 3: MCP Server Unresponsive
 
@@ -53,7 +56,7 @@ get_design_context(nodeId, depth=5) -> timeout
 
 ```markdown
 ## Design Tokens
-[MCP UNAVAILABLE] — get_styles failed. Token names from node style names only.
+[DEGRADED] — styles.json unavailable. Token names from node style names only.
 
 | Token | Hex | Figma Style |
 |-------|-----|-------------|
@@ -70,8 +73,8 @@ depth=5 truncated -> depth=3 per section -> depth=1 + selective deep-dive
 ```
 
 For each section:
-1. `get_design_context(sectionId, depth=1)` — identify children
-2. `get_design_context(childId, depth=2)` — per important child
+1. `figma-cli nodes (sectionId, depth=1)` — identify children
+2. `figma-cli nodes (childId, depth=2)` — per important child
 3. Stop when enough data for design.md section
 
 ---
@@ -95,10 +98,10 @@ When forced to deliver partial results (timeout or persistent MCP failure):
 
 ### What to Include
 
-- Header section with source URL and frame info (from initial get_design_context)
+- Header section with source URL and frame info (from `raw/discovery.json`)
 - Screen Structure (ASCII wireframe from screenshot)
 - Partial Layout Tree (whatever depth was achieved)
-- Text Content (from scan_text_nodes if available)
+- Text Content (from `raw/text.json` if available)
 - screenshot.png (saved early in pipeline)
 
 ### What to Flag
@@ -128,23 +131,23 @@ When partial:
 
 ## Common Issues and Solutions
 
-### get_design_context returns "Node not found"
+### figma-cli nodes returns "Node not found"
 
 The Figma file may not be active in the desktop app. Ask user to open the file,
-or try `save_screenshots` first (may work independently).
+or try `figma-cli export` first (it uses a different endpoint).
 
 ### Screenshot too large for inline display
 
-Tall/complex frames produce large base64. Use `save_screenshots` to save directly
+Tall or complex frames render slowly. `figma-cli export` writes straight to disk
 to disk instead of `get_screenshot` inline.
 
-### save_screenshots rejects path
+### figma-cli export rejects the path
 
 Use relative paths only: `bk/dev/{flow}/{screen-slug}/file.png`
 
 ### Text content missing diacritics
 
-Always use `characters` field from TEXT nodes in get_design_context.
+Always use `characters` field from TEXT nodes in figma-cli nodes.
 Never manually transcribe Vietnamese text.
 
 ### Complex screen with 50+ nodes
@@ -157,9 +160,9 @@ Use section-based parallel extraction:
 ### Figma output is truncated
 
 Progressive depth: `depth=1` for structure, then fetch specific nodes individually
-with `get_design_context` at higher depth.
+with `figma-cli nodes` at higher depth.
 
-### scan_text_nodes fails on mixed-format text
+### raw/text.json fails on mixed-format text
 
 Bug was fixed in read-handlers.ts (isMixed checks for fontSize and fontName).
-If still failing: fall back to `characters` field from deeper get_design_context.
+If still failing: fall back to `characters` field from deeper figma-cli nodes.

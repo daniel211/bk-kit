@@ -53,6 +53,7 @@ function parseArgs(argv) {
     else if (a === '--ashby') flags.ashby = true;
     else if (a === '--resume') flags.resume = true;
     else if (a === '--reset-counts') flags.resetCounts = true;
+    else if (a === '--feature') flags.feature = args[++i];
     else if (a === '--mutation-check') flags.mutationCheck = true;
     else if (a === '--verify-sensors') flags.verifySensors = true;
     else if (a === '--json') flags.json = true;
@@ -244,7 +245,7 @@ async function main() {
   // ── Reset-counts ──────────────────────────────────────────────────────
   if (flags.resetCounts) {
     try {
-      const result = await resetCounts({ projectRoot, force: flags.force, agent: flags.agent });
+      const result = await resetCounts({ projectRoot, force: flags.force, agent: flags.agent, feature: flags.feature });
       if (flags.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
       } else {

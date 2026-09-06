@@ -10,12 +10,12 @@ Strategy depends on frame height.
 
 ### Large Frames (height > 800px) — Section-Based Parallel
 
-1. `get_design_context(screenId, depth=1)` — identify top sections
+1. `figma-cli nodes --ids {screenId} --depth 1` — identify top sections
 2. **Filter:** keep only `type === "FRAME"` children (skip CONNECTOR, INSTANCE guides)
 3. Parallel calls per section:
-   - `get_design_context(headerId, depth=2)` — standard depth
-   - `get_design_context(contentId, depth=3)` — deeper for main content
-   - `get_design_context(footerId, depth=2)` — standard depth
+   - `figma-cli nodes --ids {headerId} --depth 2` — standard depth
+   - `figma-cli nodes --ids {contentId} --depth 3` — deeper for main content
+   - `figma-cli nodes --ids {footerId} --depth 2` — standard depth
 4. Effective depth from screen root: 3-4 levels
 5. Each call is small (~2-3K tokens), total ~6-8K
 
@@ -23,7 +23,7 @@ Strategy depends on frame height.
 
 ### Small Frames (height <= 800px) — Single Call
 
-- `get_design_context(screenId, depth=3, detail=full)` — ~5K tokens
+- `figma-cli nodes --ids {screenId} --depth 3` — ~5K tokens
 
 ---
 
@@ -39,16 +39,17 @@ Strategy depends on frame height.
 
 ## Token Mapping Protocol
 
-Agent calls `get_styles` and `get_variable_defs` from Figma MCP inline per screen.
+Style names and design tokens come from `raw/styles.json` and `raw/variables.json`, which
+`figma-cli screen` writes once per screen.
 
-1. `get_styles` — all style names + values (paint, text, effect styles)
-2. `get_variable_defs` — variable names + values per mode
-3. For each node in get_design_context:
+1. `raw/styles.json` — style ids resolved to names (paint, text, effect styles)
+2. `raw/variables.json` — variable names + values per mode (absent without a Figma Enterprise plan)
+3. For each node in `raw/node.json`:
    a. Read `fillStyleName` — slugify — `$primary-brand-500`
    b. Read `strokeStyleName` — slugify — `$neutral-gray-100`
    c. Read `textStyleName` — slugify — `$text-16-md-bold`
    d. Read `effectStyleName` — slugify — `$drop-shadow-sm`
-   e. Read `boundVariables` — map variable ID — variable name from get_variable_defs
+   e. Read `boundVariables` — map variable ID to its name via `raw/variables.json`
 4. Define in Design Tokens section: `$name` — hex — Figma style name
 5. Reference `$name` everywhere else in Layout Tree, Component Breakdown
 6. Values WITHOUT style name — hex + flag `⚠ no token`
@@ -66,9 +67,9 @@ Standard components (skip — recognizable by INSTANCE name or component-contrac
   Input field, Divider, Tab bar, KeyValue_mobile, Alert
 
 Custom/unknown components (deep-dive):
-- `get_design_context(nodeId, depth=2, detail=compact)` — ~0.5-1K tokens
+- `figma-cli nodes --ids {nodeId} --depth 2` — ~0.5-1K tokens
 - Max 3 deep-dives per screen to cap context growth
-- If still insufficient — `get_node(nodeId)` for full tree
+- If still insufficient — `figma-cli nodes --ids {nodeId}` with no `--depth` for the full tree
 
 ---
 
@@ -111,14 +112,14 @@ Icon INSTANCE nodes often have `fills: NO_FILLS` at the instance level. The actu
 **Rule:** For icon INSTANCEs (`componentName` containing "Icon", "icon", or status icons):
 1. Report INSTANCE background fill (if any)
 2. Drill into child VECTOR node and report strokes color
-3. Use `get_design_context(iconId, depth=2)` to access VECTOR children
+3. Use `figma-cli nodes --ids {iconId} --depth 2` to access VECTOR children
 
 ### Section 8 — Icon Node ID Depth
 
 For `ic-*` assets in Section 8, the node ID must point to the **innermost Icon INSTANCE** (square: 24x24, 20x20, 48x48), not a parent action frame (wider: 80x24).
 
-**Rule:** After recording a node ID for an `ic-*` asset, check its dimensions from the Layout Tree or `get_design_context` response. If `width != height` → drill deeper:
-1. `get_design_context(nodeId, depth=2)` to list children
+**Rule:** After recording a node ID for an `ic-*` asset, check its dimensions from the Layout Tree or `raw/node.json`. If `width != height` → drill deeper:
+1. `figma-cli nodes --ids {nodeId} --depth 2` to list children
 2. Find child with `type: "INSTANCE"` and name containing "Icon"
 3. Use that child's compound ID in Section 8
 

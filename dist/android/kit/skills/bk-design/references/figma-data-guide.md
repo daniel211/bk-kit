@@ -1,66 +1,75 @@
-# MCP Tools Guide
+# Figma Data Guide
 
-Complete reference for Figma MCP tools used in design extraction.
-Single source of truth for tool categories, capabilities, and decision matrix.
+How the design pipeline reads Figma, and what the data looks like when it arrives.
+Single source of truth for both engines: `claude` and `agy` read the same files.
 
-## Tool Categories
+## There is no Figma MCP server
 
-### Core Tools (every extraction)
+The pipeline calls Figma's REST API through `.claude/scripts/figma-cli.mjs`. Two MCP servers
+exist and neither works for this:
 
-| Tool | Purpose | Key Parameters |
-|------|---------|---------------|
-| `get_design_context` | Node structure, styles, layout, text | `nodeId`, `depth` (1-5), `detail` (minimal/compact/full) |
-| `save_screenshots` | Screenshot to disk, asset export | `items[]`, `scale`, `format` (PNG/PDF/SVG) |
+| Server | What it offers | Why not |
+|--------|----------------|---------|
+| `npx figma-mcp` | add_figma_file, post_comment, read_comments, reply_to_comment, view_node | Comment tooling. Extracts nothing. |
+| Figma Dev Mode MCP | get_design_context, get_metadata, get_screenshot, get_variable_defs | No node export, so no screenshots to disk and no assets. |
 
-### Enhancement Tools (once per flow, cached)
+An older `figma-mcp-go` server is referenced in this kit's history. It is installed nowhere
+and has no recorded install path. Its documented response fields are Figma REST fields
+verbatim, so it was a wrapper over this API — which is what the CLI now calls directly.
 
-| Tool | Purpose | Key Parameters |
-|------|---------|---------------|
-| `get_styles` | Paint styles (including gradients), text styles, effect styles | — |
-| `get_fonts` | Font inventory for the file | — |
-| `get_node` | Full node data when truncated by depth limit | `nodeId` |
-| `get_variable_defs` | Design token collections with modes (Light/Dark) | — |
+**Requires** `FIGMA_API_KEY`, or the token in `~/.config/beer-kit/figma.env` or a project
+`.env`. Run `bk doctor` to check.
 
-### Discovery Tools (when needed)
+## Commands
 
-| Tool | Purpose | Key Parameters |
-|------|---------|---------------|
-| `search_nodes` | Find nodes by name or type | `query`, `types[]` |
-| `scan_text_nodes` | All text nodes under a subtree (any depth) | `nodeId` |
-| `scan_nodes_by_types` | Filter nodes by type (FRAME, INSTANCE, etc.) | `nodeId`, `types[]` |
-| `get_local_components` | Component inventory with property definitions | — |
+| Need | Command |
+|------|---------|
+| Discover screens from a URL | `figma-cli discover --url "{url}" --out {flow}/raw/discovery.json` |
+| Everything for one screen | `figma-cli screen --file {key} --ids {nodeId} --out-dir {flow}/{slug}/raw` |
+| Go deeper into one branch | `figma-cli nodes --file {key} --ids {id} --depth 3` |
+| Text only | `figma-cli text --file {key} --ids {id}` |
+| Component inventory | `figma-cli components --url "{url}"` |
+| Design tokens | `figma-cli variables --file {key}` |
+| Style names | `figma-cli styles --file {key}` |
+| Screenshot to disk | `figma-cli export --file {key} --ids {id} --format png --scale 2 --out-dir {dir} --name screenshot` |
+| Icon export (vector) | `figma-cli export --format pdf` (iOS) or `--format svg` |
+| Image export (raster) | `figma-cli export --format png --scale 1\|2\|3` |
 
-### Preview Tools (quick check only)
+## What `screen` writes
 
-| Tool | Purpose | Key Parameters |
-|------|---------|---------------|
-| `get_screenshot` | Inline base64 image (NOT for export) | `nodeId`, `scale` |
+| File | Contents | Depth |
+|------|----------|-------|
+| `node.json` | Node tree, pruned to the fields below | Limited (default 6) |
+| `text.json` | Every TEXT node with `characters` verbatim | Full |
+| `components.json` | Component masters, sets, and the instances on this screen | Full |
+| `styles.json` | Style ids resolved to names | — |
+| `variables.json` | Design tokens with modes, when available | — |
+| `asset-candidates.json` | Every icon/image node, with size and squareness | Full |
 
----
+**`node.json` is depth-limited and this matters.** One real screen serialises to 3.1 MB
+unpruned; six levels brings it to 82 KB. Assets sit below that limit, which is why
+`asset-candidates.json` exists and is walked at full depth — a spec written from `node.json`
+alone lists no assets at all. A node cut off by the limit carries `childrenTruncated: N`
+rather than passing for a leaf; when a section needs what was cut, fetch that branch with
+`figma-cli nodes --ids {childId}`.
 
-## Decision Matrix
+## Two limits worth knowing before you start
 
-| Need | Primary Tool | Fallback |
-|------|-------------|----------|
-| Structure overview | `get_design_context(depth=1)` | — |
-| Full extraction | `get_design_context(depth=3)` + section-parallel | `get_node` per child |
-| Text content | `characters` field from get_design_context | `scan_text_nodes` |
-| Instance text values | `componentProperties` from get_design_context | deep-dive into INSTANCE children |
-| Design tokens | `get_styles` + `get_variable_defs` | style names from get_design_context |
-| Component contracts | `get_local_components` + depth=3 per component | manual extraction from screens |
-| Find component by name | `search_nodes` | manual scan |
-| Screenshot to disk | `save_screenshots(scale=2)` | — |
-| Icon export (vector) | `save_screenshots(format=PDF)` | `format=SVG` |
-| Image export (raster) | `save_screenshots(format=PNG, scale=1/2/3)` | — |
-| Multi-screen discovery | `get_design_context(depth=1)` on PAGE/SECTION | `scan_nodes_by_types(types=["FRAME"])` |
-| Quick visual check | `get_screenshot` | Read saved PNG |
-| Mixed text styles | `styledSegments` from get_design_context / scan_text_nodes | — |
+**Variables need Enterprise.** `figma-cli variables` returns 403 without the
+`file_variables:read` scope and a Figma Enterprise plan. That is a normal state: design
+tokens then come from `styles.json` names and the raw values in `node.json`. Say so in
+Section 4 rather than inventing token names.
+
+**A screen holds instances, not components.** Component masters live elsewhere in the file,
+so walking a screen for `COMPONENT` nodes finds nothing. The inventory comes from the maps
+the REST response carries, which `components.json` already contains.
 
 ---
 
 ## Serializer Fields Reference
 
-Fields available in `get_design_context` responses after enhanced serializer:
+Fields present in `raw/node.json` after `figma-cli` prunes the REST response. The names are
+Figma's own — this table is the contract between the API and the spec.
 
 ### Layout & Structure
 
@@ -197,35 +206,26 @@ When a TEXT node has mixed fills, fonts, or weights, an additional `styledSegmen
 
 ---
 
-## Section-Parallel Call Pattern
 
-For large frames (height > 800px), use section-based parallel extraction:
+## Fetching a large screen in parts
+
+For frames over ~800px, fetch section by section rather than pulling the whole tree deep:
 
 ```
-Step 1: get_design_context(screenId, depth=1)
-  -> Returns: Header (FRAME), Content (FRAME), Footer (FRAME)
-  -> Filter: type === "FRAME" only
-
-Step 2 (parallel):
-  get_design_context(headerId, depth=2)     <- ~2K tokens
-  get_design_context(contentId, depth=3)    <- ~3-4K tokens
-  get_design_context(footerId, depth=2)     <- ~1-2K tokens
-
-Step 3: Merge responses -> full screen tree
+1. figma-cli nodes --ids {screenId} --depth 1    → Header, Content, Footer (FRAME only)
+2. figma-cli nodes --ids {headerId}  --depth 2
+   figma-cli nodes --ids {contentId} --depth 3
+   figma-cli nodes --ids {footerId}  --depth 2
+3. Merge → the full screen tree
 ```
 
-**Effective depth:** 1 (screen -> section) + 3 (section -> leaf) = 4 levels from root.
-**Token efficiency:** ~6-8K total vs ~9K for depth=5 single call, with BETTER coverage.
+Effective depth 1 + 3 = four levels from the root, at a fraction of the payload of one deep
+call, with better coverage of the parts that matter.
 
----
+## Not needed for spec generation
 
-## Tools NOT Needed for Spec Generation
-
-| Tool | Why Skip |
-|------|----------|
-| `get_document` | Too large; get_design_context is targeted |
-| `get_metadata` | File info already in get_design_context response |
-| `get_selection` | Spec uses explicit nodeId, not selection |
-| `get_viewport` | Irrelevant for spec extraction |
-| `get_annotations` | Dev annotations, not design data |
-| All write tools | Spec extraction is read-only |
+| Endpoint | Why skip |
+|----------|----------|
+| `GET /files/:key` (whole file) | Enormous; the nodes endpoint is targeted |
+| Comments API | Dev annotations, not design data |
+| Any write endpoint | Spec extraction is read-only |

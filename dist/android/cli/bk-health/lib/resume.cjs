@@ -99,7 +99,13 @@ async function resumeWorkflow(opts = {}) {
 
 /**
  * Reset phase recurrence and/or agent dispatch counts.
- * @param {{ projectRoot: string, force?: boolean, agent?: string }} opts
+ *
+ * Dispatch counts are keyed by feature, then by agent:
+ * `{ [feature]: { [agent]: n } }`. Resetting one agent clears it in every feature — a user
+ * reaching for this is unblocking themselves, not auditing, and asking which feature the
+ * count belongs to would defeat the point.
+ *
+ * @param {{ projectRoot: string, force?: boolean, agent?: string, feature?: string }} opts
  * @returns {{ success: boolean, message: string }}
  */
 async function resetCounts(opts = {}) {
@@ -112,9 +118,12 @@ async function resetCounts(opts = {}) {
   }
 
   const targetAgent = opts.agent || null;
+  const targetFeature = opts.feature || null;
   const descr = targetAgent
-    ? `agent dispatch count for "${targetAgent}"`
-    : 'all phase_recurrence_count + agent_dispatch_count';
+    ? `agent dispatch count for "${targetAgent}"${targetFeature ? ` in feature "${targetFeature}"` : ' (all features)'}`
+    : targetFeature
+      ? `agent dispatch counts for feature "${targetFeature}"`
+      : 'all phase_recurrence_count + agent_dispatch_count';
 
   if (!opts.force) {
     const confirmed = await askConfirm(`This will reset ${descr}. Confirm?`);
@@ -125,11 +134,30 @@ async function resetCounts(opts = {}) {
 
   const updated = { ...state };
 
-  if (targetAgent) {
-    // Reset single agent
-    if (updated.agent_dispatch_count) {
-      updated.agent_dispatch_count = { ...updated.agent_dispatch_count };
-      delete updated.agent_dispatch_count[targetAgent];
+  if (targetAgent || targetFeature) {
+    const counts = updated.agent_dispatch_count || {};
+    // The pre-feature shape was `{ [agent]: number }`. It has no feature dimension, but it
+    // is keyed by agent — so an --agent reset is still exactly expressible, and clearing
+    // more than was asked for would throw away counts the caller wanted kept.
+    const isLegacy = Object.values(counts).some((v) => typeof v === 'number');
+    if (isLegacy) {
+      const next = { ...counts };
+      if (targetAgent) delete next[targetAgent];
+      else next && Object.keys(next).forEach((k) => delete next[k]);
+      updated.agent_dispatch_count = next;
+    } else {
+      const next = {};
+      for (const [feature, agents] of Object.entries(counts)) {
+        if (targetFeature && feature !== targetFeature) {
+          next[feature] = agents;
+          continue;
+        }
+        if (!targetAgent) continue;                 // whole feature cleared
+        const remaining = { ...agents };
+        delete remaining[targetAgent];
+        if (Object.keys(remaining).length > 0) next[feature] = remaining;
+      }
+      updated.agent_dispatch_count = next;
     }
   } else {
     // Reset all

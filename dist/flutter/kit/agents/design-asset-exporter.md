@@ -5,7 +5,7 @@ tools: [Read, Glob, Grep, Write, Bash]
 disallowedTools: [Edit, Task]
 model: sonnet
 permissionMode: default
-mcpServers: [figma-mcp-go]
+mcpServers: []
 executionMode: either
 ---
 
@@ -15,14 +15,24 @@ executionMode: either
 
 Export icons and images from Figma design specs into platform-specific asset folders. Self-contained — all export rules are inline. No external skill references needed.
 
+Exports go through `.claude/scripts/figma-cli.mjs export`, which renders nodes with Figma's
+REST API and writes the returned bytes straight to disk. There is no Figma MCP server and no
+`save_screenshots` tool. Rendering is deterministic, so an export either produces a file with
+a byte count or reports the node as skipped — never a plausible-looking claim with nothing
+behind it.
+
 ## Process
 
 1. Read **tech stack** and **flow path** from dispatch prompt
 2. Glob `{flow}/*/assets.json` — read each file (structured JSON, no markdown parsing)
 3. Merge all assets arrays, **deduplicate** by asset name (same icon across screens = export once, use first occurrence)
 4. **Validate node IDs** — every ID must match `^\d+:\d+$` or `^I?\d+:\d+(;\d+:\d+)*$`
-   - For `ic-*` assets: verify node is square icon (width == height). If not → `get_design_context(nodeId, depth=2)` to find Icon INSTANCE child
-5. **Batch export** via `save_screenshots` — format determined by tech stack (see below)
+   - For `ic-*` assets: verify node is square icon (width == height). If not →
+     `figma-cli nodes --ids {nodeId} --depth 2` to find the Icon INSTANCE child.
+     `{flow}/{slug}/raw/asset-candidates.json` already records size and squareness per node,
+     so check there first rather than re-fetching.
+5. **Batch export** via `figma-cli export` — format determined by tech stack (see below).
+   Pass every node of one format in a single `--ids` list; the CLI batches at 50 per request.
 6. **Write report** — `{flow}/raw/asset-export-report.json`
 7. **Generate platform metadata + dedup check** — run script via Bash (replaces manual Write calls):
    ```bash
@@ -49,39 +59,34 @@ Export icons and images from Figma design specs into platform-specific asset fol
 Export to `.imageset/` structure. Script generates `Contents.json` — do NOT write Contents.json manually.
 
 **Icons (PDF):**
-```
-save_screenshots(items=[{
-  nodeId: "{nodeId}", outputPath: "{flow}/assets/{name}.imageset/{name}.pdf", format: "PDF"
-}])
+```bash
+node .claude/scripts/figma-cli.mjs export \
+  --file {fileKey} --ids {nodeId} --format pdf \
+  --out-dir {flow}/assets/{name}.imageset --name {name}
 ```
 
-**PDF fallback — khi save_screenshots PDF fail (node có children nhưng PDF render lỗi, e.g. complex gradients):**
+**PDF fallback — khi export PDF fail (node có children nhưng PDF render lỗi, e.g. complex gradients):**
 Export PNG @1x/@2x/@3x thay thế. **NEVER export @2x only.**
-> Only applies when `children != []` (node has content). External library nodes (children==[]) are handled earlier — see Node ID Validation.
+> Only applies when the node has content. External library nodes render blank in every
+> format and are handled earlier — see Node ID Validation.
+```bash
+for scale in 1 2 3; do
+  node .claude/scripts/figma-cli.mjs export \
+    --file {fileKey} --ids {nodeId} --format png --scale $scale \
+    --out-dir {flow}/assets/{name}.imageset --name {name}
+done
 ```
-save_screenshots(items=[
-  { nodeId: "{nodeId}", outputPath: "{flow}/assets/{name}.imageset/{name}@1x.png", scale: 1 },
-  { nodeId: "{nodeId}", outputPath: "{flow}/assets/{name}.imageset/{name}@2x.png", scale: 2 },
-  { nodeId: "{nodeId}", outputPath: "{flow}/assets/{name}.imageset/{name}@3x.png", scale: 3 }
-])
-```
+> `--scale 1` writes `{name}.png`; scales above 1 write `{name}@2x.png` and `{name}@3x.png`.
 Record trong report: `"format": "PNG", "scales": ["@1x", "@2x", "@3x"], "note": "PDF export failed — PNG fallback. {lý do}"`.
 
-**Images (PNG @1x/@2x/@3x):**
-```
-save_screenshots(items=[
-  { nodeId: "{nodeId}", outputPath: "{flow}/assets/{name}.imageset/{name}@1x.png", scale: 1 },
-  { nodeId: "{nodeId}", outputPath: "{flow}/assets/{name}.imageset/{name}@2x.png", scale: 2 },
-  { nodeId: "{nodeId}", outputPath: "{flow}/assets/{name}.imageset/{name}@3x.png", scale: 3 }
-])
-```
+**Images (PNG @1x/@2x/@3x):** same three-scale loop as the PDF fallback above.
 
 ### Other Platforms — export to .imageset (script reorganises)
 
 Export into `.imageset/` structure — script moves files into platform-correct layout.
 
-Icons: `save_screenshots(items=[{nodeId, outputPath: "{flow}/assets/{name}.imageset/{name}.svg", format: "SVG"}])`
-Images: `save_screenshots(items=[scale @1x/@2x/@3x as PNG into {flow}/assets/{name}.imageset/])`
+Icons: `figma-cli export --ids {nodeId} --format svg --out-dir {flow}/assets/{name}.imageset --name {name}`
+Images: the same three-scale PNG loop, into `{flow}/assets/{name}.imageset/`
 
 ## Naming Conventions
 
@@ -98,34 +103,30 @@ Images: `save_screenshots(items=[scale @1x/@2x/@3x as PNG into {flow}/assets/{na
 | `20715:112652` | Yes | Export directly |
 | `I20715:114058;1813:23687;1490:22019` | Yes | Compound INSTANCE path — exportable |
 | `34333:372935` | Yes | Export directly |
-| "header back icon" | **NO** | Resolve: `get_design_context(parentId, depth=2)` |
+| "header back icon" | **NO** | Resolve: `figma-cli nodes --ids {parentId} --depth 2` |
 
 Resolution process:
 1. Find parent component's node ID from assets.json context
-2. `get_design_context(parentNodeId, depth=2)` to list children
+2. `figma-cli nodes --ids {parentNodeId} --depth 2` to list children
 3. Identify correct INSTANCE/VECTOR node
 4. Use resolved node ID for export
 
-**External Library Detection (REQUIRED before any export):**
+**External Library Detection:**
 
-After resolving compound path to terminal nodeId, for INSTANCE nodes:
-1. Call `get_node(terminal)` → check `children` field
-2. `IF type == "INSTANCE" AND children == []`:
-   - Skip immediately with reason: `"external-library-component"`
-   - Do NOT attempt save_screenshots — neither PDF nor PNG will produce visible output
-   - Add to skipped list in report
+An `INSTANCE` with no children is a component whose master lives in an external Figma
+library. The API returns an empty shell with no vector paths, so every export format renders
+blank.
 
-```
-// Detection check before export
-node = get_node(terminal)
-IF node.type == "INSTANCE" AND node.children == []:
-    → skip("external-library-component")
-    → no save_screenshots call (both PDF and PNG would be blank)
-ELSE:
-    → proceed with export
-```
+Two ways this surfaces, and both are already handled for you:
 
-> Note: `INSTANCE.children == []` means component master resides in an external Figma library. The Figma API returns an empty INSTANCE shell with no vector paths — all export formats produce blank/transparent output.
+1. `{flow}/{slug}/raw/asset-candidates.json` records each node's children and size — a
+   childless INSTANCE is visible there before any export is attempted.
+2. `figma-cli export` records `{"nodeId": "...", "skipped": "figma returned no image for
+   this node"}` when Figma declines to render, instead of writing a zero-byte file that
+   would pass an existence check and fail at build time.
+
+Copy those entries into the report's skipped list with reason `external-library-component`.
+Do not retry them in another format — the shell is empty in all of them.
 
 ## Export Report Format
 
@@ -163,12 +164,12 @@ The `rendering` field drives `Contents.json` template-rendering-intent for iOS:
 
 ## Constraints
 
-- Never write "manual export" — `save_screenshots` exports ANY node type at any scale
+- Never write "manual export" — `figma-cli export` renders ANY node type at any scale
 - Never write Contents.json manually — always delegate to `generate-assets.py`
 - Reject node IDs that are descriptions — resolve before exporting
 - Export at INSTANCE level (e.g., 24x24 frame), not inner VECTOR level
 - Export ALL icons — do not skip any assuming they are "system icons"
-- Batch exports — combine all items in a single `save_screenshots` call when possible
+- Batch exports — pass all node ids of one format in a single `--ids` list
 - Tech stack determines format — always read from dispatch prompt, never assume
 - Output: `{flow}/assets/` + `{flow}/raw/asset-export-report.json`
 - **Return format (STRICT):** Final message MUST be exactly 1 line:

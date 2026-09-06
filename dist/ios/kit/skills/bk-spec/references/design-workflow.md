@@ -36,6 +36,70 @@ Before each step: `TaskUpdate(status: "in_progress")`. After: `TaskUpdate(status
 
 Do NOT create per-screen sub-tasks. Step 2 remains a single task throughout. Per-screen progress is tracked via metadata updates and filesystem post-verify (see Step 2 instructions).
 
+## Engine Selection
+
+Design extraction runs on one of two engines that produce **identical output**. Resolve once,
+before Step 1, and record the answer in `.spec-state.json` as `design_engine`.
+
+Priority: `--engine` flag → `BK_DESIGN_ENGINE` env → `platform-context.json:designEngine` →
+default. **The shipped default is `claude`.**
+
+| Engine | Step 1 | Step 2 | Step 3 |
+|--------|--------|--------|--------|
+| `claude` | design-validator | design-spec-writer × N | design-asset-exporter |
+| `agy` | design-agy-extractor (`--mode discovery`) | design-agy-extractor × N (`--mode screen`) | design-asset-exporter |
+| `dual` | design-validator | both engines → `design-spec-diff.mjs` | design-asset-exporter |
+
+Asset export stays on the claude engine in every case — see Step 3.
+
+### Preflight
+
+**Every engine needs a Figma token**, because every engine reads Figma the same way — over
+REST, via `.claude/scripts/figma-cli.mjs`. Check it first:
+
+```bash
+node .claude/scripts/figma-cli.mjs discover --url "{figma_url}" --out {flow}/raw/discovery.json
+```
+
+Exit 2 means no token. Stop and tell the user to set `FIGMA_API_KEY` or write
+`~/.config/beer-kit/figma.env`; no engine can proceed without it, so there is nothing to
+fall back to.
+
+**Only when the resolved engine is `agy` or `dual`**, additionally check that agy can run:
+
+```bash
+node -e "import('.claude/scripts/agy-preflight.mjs').then(m=>console.log(JSON.stringify(m.preflightAgyBinary())))"
+```
+
+| Result | Action |
+|--------|--------|
+| `ok: true` | Proceed on agy. Record `design_engine` in `.spec-state.json`. |
+| `ok: false` | **Fall back to `claude` for the whole flow.** Print `reason` and `remedy` verbatim, record `design_engine: "claude"` and `design_engine_fallback: "<reason>"`. Do NOT stop and do NOT ask — the claude engine produces the same output from the same data. |
+
+There is no Figma MCP check any more. Neither engine uses one.
+
+### Runtime fallback (per unit, not per flow)
+
+If preflight passed but a dispatch still fails, the failure is scoped to that unit:
+
+| Extractor exit | Meaning | Action |
+|---|---|---|
+| 0 | Files written and verified | Continue |
+| 2 | agy cannot run here | Re-dispatch **this unit only** to the claude agent |
+| 3 | Ran but failed the contract | Retry once on agy, then re-dispatch to the claude agent |
+
+Append every fallback to `.spec-state.json`:
+
+```json
+"engine_fallbacks": [{ "unit": "03-detail", "from": "agy", "reason": "exit 3: design.md had 7 of 9 sections" }]
+```
+
+Step 5 reads this array and names the affected screens in the review report. A flow that
+silently mixed engines is a flow nobody can reason about later.
+
+**Never pass `--dangerously-skip-permissions`**, and never tell the user to. When the runner
+prints allow-rules, pass them through **verbatim** — a reworded permission rule does not work.
+
 ## Workflow Steps
 
 ### Step 1: Figma Discovery
@@ -50,6 +114,20 @@ Task(
   prompt: "Figma URL: {figma_url}
     Flow: bk/dev/{feature-slug}/design/
     Task: Parse URL, discover screens, extract component contracts.
+  "
+)
+```
+
+**On engine `agy`**, dispatch this instead — same output files, so the verify below is unchanged:
+
+```
+Task(
+  subagent_type: "design-agy-extractor",
+  model: "sonnet",
+  description: "Figma discovery (agy)",
+  prompt: "Mode: discovery
+    Figma URL: {figma_url}
+    Flow: bk/dev/{feature-slug}/design/
   "
 )
 ```
@@ -164,6 +242,27 @@ Task(
 // ... repeat for each screen in the SAME message (or per wave if M > 15)
 ```
 
+**On engine `agy`**, the per-screen dispatch is:
+
+```
+Task(
+  subagent_type: "design-agy-extractor",
+  model: "sonnet",
+  description: "Design spec {slug} (agy)",
+  prompt: "Mode: screen
+    Screen: {nodeId} | Slug: {slug}
+    Flow: bk/dev/{feature-slug}/design/
+    Tech stack: {ios|android|flutter}
+  "
+)
+```
+
+Cap agy waves at **5 concurrent dispatches**, not 15: each one starts its own CLI process
+with its own MCP connection, so the limit is the machine, not the API.
+
+A `FALLBACK:` or `RETRY:` return is not a failed screen — apply §Runtime fallback and count
+the screen once the claude re-dispatch lands.
+
 **As each agent returns:** increment `screensCompleted` and refresh `activeForm`:
 
 ```
@@ -197,6 +296,33 @@ AskUserQuestion (Vietnamese):
 - **Thử lại lần nữa** → reset retry counter, re-run dispatch for missing only
 - **Huỷ** → trigger Cancel Handling
 
+### Step 2b: Engine cross-check (`--engine dual` only)
+
+Both engines extract every approved screen, to **separate paths** — never the same file, or
+the slower dispatch silently overwrites the faster one:
+
+- `{slug}/design.md` — claude, **canonical**
+- `{slug}/design.agy.md` — agy, the reviewer
+
+Then, per screen:
+
+```bash
+node .claude/skills/bk-design/scripts/design-spec-diff.mjs \
+  --a bk/dev/{feature-slug}/design/{slug}/design.md \
+  --b bk/dev/{feature-slug}/design/{slug}/design.agy.md \
+  --out bk/dev/{feature-slug}/design/raw/engine-diff-{slug}.md
+```
+
+Exit 4 means CRITICAL differences — the engines read node ids differently, or one dropped a
+section. Collect those screens and present them once via AskUserQuestion:
+
+- **Xem khác biệt** → show the diff reports, then continue
+- **Tiếp tục** → record `engine_diff_unresolved: [slugs]` in `.spec-state.json`, continue
+- **Huỷ** → Cancel Handling
+
+The canonical `design.md` is never modified by this step. Dual mode buys a second opinion,
+not an automatic merge — resolving a real disagreement is a judgement call, not a diff.
+
 ### Step 3: Asset Export
 
 ```
@@ -210,6 +336,11 @@ Task(
   "
 )
 ```
+
+> **Always the claude engine, on every setting.** Asset export writes binaries — PDF, SVG,
+> PNG at three scales — and a blank or truncated file cannot be caught by reading text. It
+> stays where the verification story is proven until Phase 2 of the engine plan says
+> otherwise.
 
 **Verify** `bk/dev/{feature-slug}/design/raw/asset-export-report.json`.
 
@@ -275,6 +406,9 @@ Task(
     7. If 01-overview.md exists: verify screen IDs cross-reference SRS use cases
     8. Screens with 0 assets are valid (popups, modals) — do NOT flag
     9. Design.md files up to 900 lines are acceptable — do NOT flag
+    10. Read `.spec-state.json`: if `engine_fallbacks` is non-empty, name those screens and
+        the reason in the report — a flow that mixed engines must say so. If
+        `engine_diff_unresolved` is set (dual mode), list those screens as open items.
     TOOL RESTRICTION: READ-ONLY agent. Do NOT use Edit, Bash, or Task tools.
     Output: bk/dev/shared/reports/design-review-{feature-slug}.md
     Verdict: OKAY or REVISE with specific issues

@@ -6,7 +6,7 @@ disallowedTools: [Edit, Task]
 model: sonnet
 permissionMode: default
 memory: project
-mcpServers: [figma-mcp-go]
+mcpServers: []
 executionMode: either
 skills: [bk-design]
 ---
@@ -16,6 +16,9 @@ skills: [bk-design]
 ## Role
 
 Single-screen design extraction specialist. Receives a screen nodeId, extracts pixel-perfect spec from Figma, outputs a structured design.md. Follows bk-design skill for methodology — Iron Laws, Self-Check, and extraction patterns.
+
+Figma is read over its REST API through `.claude/scripts/figma-cli.mjs`, which needs
+`FIGMA_API_KEY` (or `~/.config/beer-kit/figma.env`). There is no Figma MCP server.
 
 Background: See `_base-background-lite.md` for shared read-only agent cognitive patterns.
 
@@ -30,12 +33,29 @@ Agent receives via dispatch prompt:
 ## Process
 
 1. **ORIENT** — Read `raw/component-contracts.json` for standard component recognition. Read agent memory for cached project facts.
-2. **CAPTURE** — `save_screenshots` for this screen at scale=2 → `{slug}/screenshot.png`.
-3. **ACQUIRE** — Call `get_styles`, `get_variable_defs` from Figma MCP for token mapping. Call `get_design_context` per screen section (section-parallel for large frames, single call for small).
+2. **FETCH** — one command pulls everything this screen needs and saves the screenshot:
+
+   ```bash
+   node .claude/scripts/figma-cli.mjs screen \
+     --file {fileKey} --ids {nodeId} \
+     --out-dir {flow}/{slug}/raw
+   node .claude/scripts/figma-cli.mjs export \
+     --file {fileKey} --ids {nodeId} --format png --scale 2 \
+     --out-dir {flow}/{slug} --name screenshot
+   ```
+
+   This writes `raw/node.json` (the node tree, pruned to spec-relevant fields),
+   `raw/text.json` (every string, `characters` verbatim), `raw/components.json`,
+   `raw/styles.json` (style ids resolved to names) and `raw/variables.json` when the plan
+   allows it. Never transcribe text from the screenshot — copy it from `text.json`.
+
+3. **ACQUIRE** — Read those files. `node.json` is depth-limited, so assets and deep leaves
+   are NOT in it; use `raw/asset-candidates.json` for Section 8, and `figma-cli nodes
+   --ids {childId}` to go deeper into one branch when a section needs it.
 4. **EXTRACT** — Merge sections, map tokens, write design.md (per design-md-format.md), write assets.json (structured asset list from Section 8 data). For extraction:
    - Scan `effects[]` for every node: extract type, color, offset, blur, spread → Section 4.4
    - Scan `fills[]` for GRADIENT type: extract `gradientStops[]{color, position}`, angle from `gradientHandlePositions` → Section 4.3
-   - Call `get_styles()` → map named effect styles to token names → Section 4.4
+   - Read `raw/styles.json` → map named effect styles to token names → Section 4.4
    - Typography: extract `lineHeightPx/fontSize` ratio for multiplier, `letterSpacing` → Section 4.2
 5. **VERIFY** — Visual compare against screenshot.png. Run Self-Check. Fix gaps before claiming "complete".
 6. **DELIVER** — Glob verify files exist. Update agent memory with durable facts.
@@ -78,7 +98,7 @@ Same data as Section 8 in design.md, structured for machine consumption by desig
 - Never claim "complete" without Self-Check passing
 - Timeout priority: design.md > visual compare. Skip visual compare first under pressure
 - Every Section 8 Node ID must be exact Figma node ID (`NNNNN:NNNNN` or `I?NNNNN:NNNNN(;NNNNN:NNNNN)*`)
-- Never write descriptions as Node ID — resolve via `get_design_context(parentId, depth=2)`
+- Never write descriptions as Node ID — resolve via `figma-cli nodes --ids {parentId} --depth 2`
 - Asset naming: `ic-` (icons), `img-` (images), `bg-` (backgrounds). Never `icon-` or `image-`
 - **Return format (STRICT):** Final message MUST be exactly 1 line:
   `DONE: {slug} ({N} lines, {M} assets)`

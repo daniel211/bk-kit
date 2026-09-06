@@ -1,6 +1,6 @@
 # beer-kit v2 — Mobile Dev Toolkit
 
-> 19 agents | 38 skills | 58 hooks | 3 MCP servers
+> 20 agents | 38 skills | 58 hooks | 2 MCP servers
 
 ## Principles
 
@@ -58,7 +58,6 @@ Choose model upfront. On failure → dispatch helper skill, NOT retry with highe
 |--------|-------------|-------|
 | xcode | Xcode project build, test, and management (user adds via: claude mcp add --transport stdio xcode -- xcrun mcpbridge) | foreground |
 | context7 | Library documentation lookup | foreground |
-| figma | Figma design extraction | foreground |
 
 Background agents: NO MCP access — use Grep/Glob/Read fallback.
 

@@ -9,10 +9,34 @@
 import { execSync, spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
+
+/**
+ * Locate the kit root — the directory holding both `skills/` and `scripts/`.
+ *
+ * This script runs from two layouts with different depths: `src/skills/_base/<skill>/scripts/`
+ * in the kit repo and `.claude/skills/<skill>/scripts/` in an installed kit. A fixed number
+ * of `..` segments is therefore wrong in one of them. Walking up until both sibling
+ * directories appear is correct in both, and fails loudly rather than importing nothing.
+ *
+ * Kept inline rather than shared: resolving the root is what makes sharing possible, so it
+ * cannot itself be imported from the root.
+ *
+ * @returns {string}
+ */
+function kitRoot() {
+  let cur = __dirname;
+  for (let i = 0; i < 8; i++) {
+    if (existsSync(join(cur, 'skills')) && existsSync(join(cur, 'scripts'))) return cur;
+    const parent = dirname(cur);
+    if (parent === cur) break;
+    cur = parent;
+  }
+  throw new Error(`Could not locate the kit root (skills/ + scripts/) above ${__dirname}`);
+}
 
 // Helper to find project root (looking for package.json or .git or bk/)
 function findProjectRoot() {
@@ -91,49 +115,27 @@ if (!SUPPORTED_PLATFORMS.includes(platform)) {
   process.exit(1);
 }
 
-// Model selection.
-//
-// Model ids come from Antigravity CLI (`agy models`), not the retired Gemini CLI. All three
-// below were verified answering on 2026-09-06 — including `gemini-3.1-pro-high`, which the
-// old CLI refused with a free-tier quota of 0. `agy` routes through a different entitlement,
-// so `--fast` means something again.
-const DEFAULT_MODEL = 'gemini-3.1-pro-high';
-const FAST_MODEL = 'gemini-3.8-flash-high';
+// Model selection is shared with the design engine — see scripts/agy-model-resolver.mjs.
+// Two copies of the model list means one of them is wrong the day Google retires an id,
+// and the stale copy is always the one nobody is looking at.
+const { extractResultEvent, parseStructuredOutput } = await import(pathToFileURL(join(kitRoot(), 'scripts', 'agy-stream.mjs')).href);
+const { resolveModel, DEFAULT_MODEL } = await import(pathToFileURL(join(kitRoot(), 'scripts', 'agy-model-resolver.mjs')).href);
 
-// Models served only by the retired Gemini CLI. Passing one is a leftover config, not a
-// choice — say so rather than letting it fail at the API.
-const RETIRED_MODELS = new Set([
-  'gemini-2.5-pro', 'gemini-2.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash'
-]);
+const { model: effectiveModel, warnings: modelWarnings, error: modelError } = resolveModel({
+  requested: customModel,
+  fast: fastMode,
+  // The whole point of this agent is that a different model reviews what Claude wrote.
+  rejectClaude: true
+});
 
-// The whole point of this agent is that a different model reviews what Claude wrote.
-// `agy models` offers Claude models, so selecting one silently restores the confirmation
-// bias this agent exists to remove. Refuse rather than quietly defeat the purpose.
-const SELF_REVIEW_MODELS = /^claude[-.]/i;
-
-const selectedModel = customModel
-  || process.env.AGY_MODEL
-  || process.env.GEMINI_MODEL          // pre-migration name, still honoured
-  || (fastMode ? FAST_MODEL : DEFAULT_MODEL);
-
-if (SELF_REVIEW_MODELS.test(selectedModel)) {
-  console.error(`\n❌ ERROR: "${selectedModel}" is a Claude model.`);
-  console.error('  This agent exists to have a DIFFERENT model review what Claude wrote;');
-  console.error('  pointing it at Claude restores the bias it removes.');
+if (modelError) {
+  console.error(`\n❌ ERROR: ${modelError}`);
   console.error('  Use a Gemini model here, or run /bk-review --engine claude instead.\n');
   process.exit(1);
 }
-
-if (RETIRED_MODELS.has(selectedModel)) {
-  console.warn(`\n⚠️  Model "${selectedModel}" belongs to the retired Gemini CLI and is not an`);
-  console.warn(`   Antigravity model id. Run "agy models" to list what is available.`);
-  console.warn(`   Falling back to ${DEFAULT_MODEL}.\n`);
+for (const warning of modelWarnings) {
+  console.warn(`\n⚠️  ${warning}\n`);
 }
-// Fall back to the tier the caller asked for: --fast should not silently upgrade to the
-// heavy default just because the requested model was a retired id.
-const effectiveModel = RETIRED_MODELS.has(selectedModel)
-  ? (fastMode ? FAST_MODEL : DEFAULT_MODEL)
-  : selectedModel;
 
 console.log(`[bk-gemini-review] Initializing Gemini Code Review (via Antigravity CLI)`);
 console.log(`  Feature:  ${feature}`);
@@ -410,65 +412,6 @@ function runAgy() {
 }
 
 /**
- * `--output-format stream-json` emits an NDJSON event stream (`init`, `step_update`,
- * `result`), not a single object — parsing the whole of stdout never works. Pull the
- * terminal `result` event and hand back its payload.
- */
-function extractResultEvent(stdoutData) {
-  for (const line of stdoutData.split('\n')) {
-    const trimmed = line.trim();
-    if (!trimmed) continue;
-    let event;
-    try {
-      event = JSON.parse(trimmed);
-    } catch (_) {
-      continue;              // progress lines and CLI chatter are not all valid JSON
-    }
-    if (event && event.event === 'result' && event.result) return event.result;
-  }
-  return null;
-}
-
-function stripFences(text) {
-  const trimmed = text.trim();
-  if (!trimmed.startsWith('```')) return trimmed;
-  return trimmed.replace(/^```(?:json)?\n?/, '').replace(/\n?```$/, '');
-}
-
-/**
- * Yield each complete top-level `{...}` in `text`, tracking string state so braces inside
- * string literals do not throw the depth count off.
- *
- * Needed because `--json-schema` makes `agy` append its own schema-conformant object after
- * the model's answer: the response is two JSON objects back to back, and `JSON.parse` on
- * the whole string dies at the boundary.
- */
-function* jsonObjectsIn(text) {
-  let depth = 0, start = -1, inString = false, escaped = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (inString) {
-      if (escaped) escaped = false;
-      else if (ch === '\\') escaped = true;
-      else if (ch === '"') inString = false;
-      continue;
-    }
-    if (ch === '"') { inString = true; continue; }
-    if (ch === '{') {
-      if (depth === 0) start = i;
-      depth++;
-    } else if (ch === '}') {
-      if (depth === 0) continue;               // stray brace, ignore
-      depth--;
-      if (depth === 0 && start >= 0) {
-        yield text.slice(start, i + 1);
-        start = -1;
-      }
-    }
-  }
-}
-
-/**
  * Pull the review object out of the model's answer.
  *
  * Deliberately keyed on the presence of a `findings` array rather than on parse success:
@@ -476,30 +419,7 @@ function* jsonObjectsIn(text) {
  * envelope, or `agy`'s trailing structured-output object.
  */
 function parseGeminiOutput(rawOutput) {
-  const text = stripFences(rawOutput);
-
-  // Fast path: the whole response is exactly the review.
-  try {
-    const whole = JSON.parse(text);
-    if (whole && Array.isArray(whole.findings)) return whole;
-    // Legacy envelope: model text nested under `response`.
-    if (whole && typeof whole.response === 'string') {
-      const inner = JSON.parse(stripFences(whole.response));
-      if (inner && Array.isArray(inner.findings)) return inner;
-    }
-  } catch (_) {
-    // Fall through — concatenated or prose-wrapped output lands here.
-  }
-
-  // Scan for the first embedded object that actually looks like a review.
-  for (const candidate of jsonObjectsIn(text)) {
-    try {
-      const parsed = JSON.parse(candidate);
-      if (parsed && Array.isArray(parsed.findings)) return parsed;
-    } catch (_) { /* not this one */ }
-  }
-
-  return null;
+  return parseStructuredOutput(rawOutput, (o) => Array.isArray(o.findings));
 }
 
 /**

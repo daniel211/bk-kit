@@ -1,6 +1,6 @@
 # beer-kit v2 — Mobile Dev Toolkit
 
-> 19 agents | 38 skills | 58 hooks | 3 MCP servers
+> 20 agents | 38 skills | 58 hooks | 2 MCP servers
 
 ## Principles
 
@@ -57,7 +57,6 @@ Choose model upfront. On failure → dispatch helper skill, NOT retry with highe
 | Server | Description | Scope |
 |--------|-------------|-------|
 | context7 | Library documentation lookup | foreground |
-| figma | Figma design extraction | foreground |
 | android-emulator | Android Emulator control and screenshot | foreground |
 
 Background agents: NO MCP access — use Grep/Glob/Read fallback.

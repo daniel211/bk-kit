@@ -142,7 +142,7 @@ Update: `TaskUpdate(taskId, status: "in_progress")` before dispatch, `TaskUpdate
 
    **4a. Design Specs Handoff (Consumer-only — NO dispatch)**
 
-   Design extraction is owned by `/bk-spec` (uses `design-validator` + `design-spec-writer` + `design-asset-exporter` via `figma-mcp-go` MCP). `/bk-plan` consumes existing outputs — never re-extracts.
+   Design extraction is owned by `/bk-spec` (uses `design-validator` + `design-spec-writer` + `design-asset-exporter` via the `figma` MCP). `/bk-plan` consumes existing outputs — never re-extracts.
 
    ```
    has_figma_signal = (--figma flag OR Figma URL in description OR frame names in PRD/BRD)

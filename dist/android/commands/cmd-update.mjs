@@ -29,16 +29,37 @@ function classifyChange(kitHash, installHash, currentHash) {
 }
 
 /**
- * Prompt user for conflict resolution via readline.
+ * Resolve one conflict, asking the user only when someone is there to ask.
+ *
+ * A closed stdin used to end the update where it stood: `rl.question` never fires, the
+ * process exits, and the kit is left half-updated with .bk-version.json still naming the
+ * old version. Non-interactive runs — CI, scripts, an agent driving the CLI — are exactly
+ * where this command gets used, so they now resolve to `keep`, which changes nothing the
+ * user wrote.
+ *
  * @param {string} filePath — relative path of conflicting file
+ * @param {"prompt"|"keep"|"take"} strategy
  * @returns {Promise<"keep"|"take"|"skip_all">}
  */
-async function promptConflict(filePath) {
+async function promptConflict(filePath, strategy = 'prompt') {
+  console.log(`\n  ⚠ Conflict: ${filePath}`);
+  console.log('    Package updated this file, but you also modified it locally.');
+
+  if (strategy !== 'prompt') {
+    console.log(`    --conflict ${strategy}: ${strategy === 'take' ? 'taking the package version' : 'keeping yours'}.`);
+    return strategy;
+  }
+  if (!process.stdin.isTTY) {
+    console.log('    Not a terminal, so nothing can be asked: keeping yours.');
+    console.log('    Re-run with --conflict take to accept package versions instead.');
+    return 'keep';
+  }
+
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   return new Promise((resolve) => {
-    console.log(`\n  ⚠ Conflict: ${filePath}`);
-    console.log('    Package updated this file, but you also modified it locally.');
     console.log('    [k] Keep yours  [t] Take package version  [s] Skip all conflicts');
+    // A closed stdin resolves rather than hanging — see above.
+    rl.once('close', () => resolve('keep'));
     rl.question('    Choice: ', (answer) => {
       rl.close();
       const choice = (answer || '').trim().toLowerCase();
@@ -59,7 +80,13 @@ export function registerUpdate(program, platform) {
     .command('update')
     .description('Update .claude/ kit to latest package version')
     .option('--target <dir>', 'Target project directory', '.')
+    .option('--conflict <strategy>', 'How to resolve conflicts without asking: keep | take', 'prompt')
     .action(async (opts) => {
+      if (!['prompt', 'keep', 'take'].includes(opts.conflict)) {
+        console.error(`Error: --conflict must be one of: prompt, keep, take (got "${opts.conflict}")`);
+        process.exit(1);
+      }
+
       const targetDir = resolve(opts.target);
       const claudeDir = join(targetDir, '.claude');
       const versionPath = join(targetDir, '.bk-version.json');
@@ -146,7 +173,7 @@ export function registerUpdate(program, platform) {
               break;
             }
 
-            const choice = await promptConflict(relPath);
+            const choice = await promptConflict(relPath, opts.conflict);
             if (choice === 'skip_all') {
               skipAll = true;
               skipped++;

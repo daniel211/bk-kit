@@ -22,7 +22,7 @@ Extract structured data from provided sources into `inputs/` directory.
 | Source | Path/URL | Script |
 |--------|----------|--------|
 | OpenAPI | `{path to spec file}` | `transform-openapi` |
-| Figma | `{URL or data path}` | `parse-figma` |
+| Figma | `{URL}` | owned by `/bk-spec` — read its `design/*/design.md` outputs, do not re-extract |
 | Docs | `{path to docs directory}` | `combine` (docs-intake) |
 
 _Remove rows for sources not provided._
@@ -44,11 +44,6 @@ mkdir -p {plan-dir}/inputs
 npx tsx src/scripts/cli.ts transform-openapi \
   --input {openapi-spec-path} \
   --output {plan-dir}/inputs/api.json
-
-# Figma → DesignOutput
-npx tsx src/scripts/cli.ts parse-figma \
-  --input {figma-data-path} \
-  --output {plan-dir}/inputs/design.json
 
 # Combine → GenerationInput
 npx tsx src/scripts/cli.ts combine \

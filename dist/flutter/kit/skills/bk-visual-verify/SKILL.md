@@ -9,6 +9,9 @@ argument-hint: "[figma-image] [screenshot-image] [--threshold 85]"
 
 AI-powered visual comparison between Figma design export and app screenshot. Uses Gemini vision to score layout, colors, spacing, typography, and alignment. Returns pass/fail with specific discrepancies.
 
+Runs through the **Antigravity CLI (`agy`)** by default, falling back to a direct Gemini API
+call when `agy` is unavailable. Both paths print the same JSON, so callers need no branch.
+
 <Use_When>
 - After UI implementation to verify visual accuracy against Figma design
 - Visual regression check before committing UI changes
@@ -20,7 +23,7 @@ AI-powered visual comparison between Figma design export and app screenshot. Use
 - No Figma reference image available
 - Logic-only or API-only changes (no UI)
 - Backend-only features
-- When GEMINI_API_KEY is not configured
+- When neither `agy` nor `GEMINI_API_KEY` is available
 </Do_Not_Use_When>
 
 ## Scoring
@@ -59,11 +62,19 @@ ls -lh {figma_image} {screenshot_image}
 ```
 
 If either file is missing: **STOP** — **use `AskUserQuestion` tool** to ask user to provide both image paths.
-If `GEMINI_API_KEY` not set: **STOP** — **use `AskUserQuestion` tool** to instruct user to set the env var.
 
-### Step 2: Run Gemini Vision Comparison
+### Step 2: Run the Vision Comparison
 
-Execute the comparison script with both images:
+**Primary — Antigravity CLI:**
+```bash
+node {skill_dir}/scripts/visual-compare-agy.mjs \
+  --figma {figma_image} \
+  --screenshot {screenshot_image} \
+  --threshold {threshold|85}
+```
+
+Exit 2 means agy cannot run here. **Then, and only then**, use the API-key path:
+
 ```bash
 python3 {skill_dir}/scripts/visual-compare.py \
   --figma {figma_image} \
@@ -71,8 +82,16 @@ python3 {skill_dir}/scripts/visual-compare.py \
   --threshold {threshold|85}
 ```
 
-The script sends both images to Gemini with a structured comparison prompt.
-See `references/comparison-prompt-template.md` for the prompt used.
+If both are unavailable: **STOP** — use `AskUserQuestion` to ask whether to install `agy`
+or set `GEMINI_API_KEY`.
+
+Both scripts send the images with the same rubric from
+`references/comparison-prompt-template.md` — the agy runner reads that file rather than
+restating it, so the two paths score against one standard.
+
+The agy path needs `read_file(*)` in `~/.gemini/antigravity-cli/settings.json` under
+`permissions.allow`; headless agy cannot prompt for approval and auto-denies otherwise. The
+runner prints the exact snippet when this happens. Never use `--dangerously-skip-permissions`.
 
 ### Step 3: Parse and Report Results
 
@@ -118,12 +137,14 @@ If FAIL (score < threshold):
 ## Constraints
 
 - Images must be PNG or JPEG, < 20MB each
-- Requires `GEMINI_API_KEY` environment variable
-- Script uses `gemini-2.5-flash` model
-- Exit code 0 = pass, 1 = fail
+- Needs either `agy` on PATH (preferred) or `GEMINI_API_KEY` for the fallback
+- The agy path defaults to the flash tier: vision comparison is a bounded judgement, not
+  deep reasoning, and the pro tier costs far more for no better answer
+- Exit codes: 0 = pass, 1 = fail, 2 = engine unavailable (try the other path), 3 = no usable result
 
 ## References
 
 - Comparison prompt: `references/comparison-prompt-template.md`
 - Scoring criteria: `references/scoring-criteria.md`
-- Script: `scripts/visual-compare.py`
+- Primary script: `scripts/visual-compare-agy.mjs`
+- Fallback script: `scripts/visual-compare.py`

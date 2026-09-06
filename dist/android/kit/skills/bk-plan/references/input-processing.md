@@ -7,7 +7,7 @@ Extract structured data from user-provided sources into `inputs/`.
 | Source | Detect By | Script / Handler |
 |--------|-----------|--------|
 | Design (via /bk-spec) | Figma signal OR UI signal | Consume `bk/dev/{feature}/design/*/design.md` produced by `/bk-spec`. NO re-extract in /bk-plan. |
-| Figma (CLI, deprecated) | `--figma URL` + FIGMA_TOKEN env | figma-mcp-adapter.ts → figma-parser.ts (legacy — prefer /bk-spec) |
+| Figma | — | Owned by `/bk-spec`; `/bk-plan` reads its outputs and never extracts |
 | Figma (local fallback) | `design-app/` folder or `bk/docs/design/*.md` files | Read design spec .md files directly (last resort) |
 | OpenAPI | `--openapi PATH` or *.yaml/*.json with openapi/swagger field | openapi-transformer.ts |
 | Docs | `--docs PATH` or *.md files in specified directory | docs-intake.ts |
@@ -19,7 +19,7 @@ Extract structured data from user-provided sources into `inputs/`.
 
 ## Design Resolution (Consumer Mode)
 
-`/bk-plan` does NOT extract Figma. Design extraction is owned by `/bk-spec` (uses `figma-mcp-go` MCP with `design-validator` → `design-spec-writer` × N → `design-asset-exporter`).
+`/bk-plan` does NOT extract Figma. Design extraction is owned by `/bk-spec` (uses the `figma` MCP with `design-validator` → `design-spec-writer` × N → `design-asset-exporter`).
 
 ```
 Design Resolution Priority (in /bk-plan Step 4a):
@@ -27,7 +27,6 @@ Design Resolution Priority (in /bk-plan Step 4a):
      → consume bk/dev/{feature}/design/*/design.md, write inputs/design-refs.json
   2. Figma signal OR UI signal detected but no spec-state.json
      → STOP, AskUserQuestion route user back to /bk-spec --design
-  3. Legacy figma-mcp-adapter.ts CLI (FIGMA_TOKEN env)
      → deprecated path; only invoke if user explicitly opts in
   4. Local design-app/ folder fallback
      → last resort for legacy projects
@@ -120,9 +119,6 @@ Run the scripts via npx tsx from the source repo root:
 ```bash
 # OpenAPI → ApiOutput
 npx tsx src/scripts/cli.ts transform-openapi --input {path} --output {plan-dir}/inputs/api.json
-
-# Figma → DesignOutput (needs FIGMA_TOKEN or MCP)
-npx tsx src/scripts/cli.ts parse-figma --input {figma-data-path} --output {plan-dir}/inputs/design.json
 
 # Combine all → GenerationInput
 npx tsx src/scripts/cli.ts combine \

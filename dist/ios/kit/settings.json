@@ -13,16 +13,6 @@
       "-y",
       "@upstash/context7-mcp"
     ]
-  },
-  "figma": {
-    "command": "npx",
-    "args": [
-      "-y",
-      "figma-mcp"
-    ],
-    "env": {
-      "FIGMA_API_KEY": "${FIGMA_API_KEY}"
-    }
   }
 },
   "hooks": {

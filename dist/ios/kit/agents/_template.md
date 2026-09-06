@@ -7,7 +7,7 @@ model: sonnet            # sonnet for background, opus for dev/planner
 effort: medium           # baseline effort (low/medium/high/xhigh). Phase 02 may override via state-based hint.
 memory: project
 permissionMode: plan                # plan for read-only, default for write agents
-mcpServers: []                      # [serena] for dev agents, [figma-mcp-go] for design
+mcpServers: []                      # [serena] for dev agents, [figma] for design
 skills: []                          # platform + domain skills
 ---
 

@@ -6,6 +6,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 
 /**
@@ -167,6 +168,46 @@ export function runDoctor(targetDir, platform) {
     console.log('    Optional: Antigravity CLI ("agy") not found, so bk-gemini-reviewer cannot run.');
     console.log(`    Install it with ${agyInstallHint()}, then run "agy" once to authenticate.`);
     console.log('    Or skip it — "/bk-review --engine claude" works with no setup.');
+    return 'warn';
+  });
+
+  // 8. Figma access, which backs the design extraction trio (design-validator,
+  //    design-spec-writer, design-asset-exporter). Both engines read Figma over its REST
+  //    API, so the only requirement is a token — there is no MCP server to check. Design
+  //    work is optional, so a missing token is a warning, never an error.
+  check('Figma token available (design extraction, optional)', () => {
+    const names = ['FIGMA_API_KEY', 'FIGMA_ACCESS_TOKEN', 'FIGMA_TOKEN'];
+    const fromEnv = names.find((name) => process.env[name]);
+    if (fromEnv) {
+      console.log(`    Found in the environment (${fromEnv}).`);
+      return true;
+    }
+
+    // The same files figma-rest.mjs reads, in the same order. Only presence is checked —
+    // the token itself is never read here, and never printed anywhere.
+    const candidates = [
+      join(homedir(), '.config', 'beer-kit', 'figma.env'),
+      join(targetDir, '.env')
+    ];
+    const found = candidates.find((file) => {
+      if (!existsSync(file)) return false;
+      try {
+        return names.some((name) => new RegExp(`^\\s*(export\\s+)?${name}\\s*=`, 'm')
+          .test(readFileSync(file, 'utf8')));
+      } catch (_) {
+        return false;
+      }
+    });
+
+    if (found) {
+      console.log(`    Found in ${found.replace(homedir(), '~')}.`);
+      return true;
+    }
+
+    console.log('    No Figma token found. Design extraction cannot read Figma without one.');
+    console.log('    Create one at https://www.figma.com/developers/api#access-tokens, then:');
+    console.log('      printf \'FIGMA_API_KEY=%s\\n\' "$KEY" > ~/.config/beer-kit/figma.env');
+    console.log('    Skip this if the project has no Figma designs.');
     return 'warn';
   });
 

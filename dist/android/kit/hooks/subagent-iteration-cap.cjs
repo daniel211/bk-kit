@@ -33,18 +33,64 @@ try {
 
   /**
    * Extract subagent type from Task tool input.
-   * Looks at description or prompt for recognized agent names.
+   *
+   * The name pattern is matched against `description` only, never the prompt. A dispatch
+   * prompt routinely mentions other agents ("as bk-code-reviewer noted"), and scanning it
+   * would charge the dispatch to whichever agent happened to be named first.
    */
   function extractAgentType(toolInput) {
     if (!toolInput) return null;
-    // Direct subagent_type field
     if (toolInput.subagent_type) return toolInput.subagent_type;
-    // Check description for agent name pattern
-    const text = toolInput.description || toolInput.prompt || '';
+    const text = toolInput.description || '';
     if (!text) return null;
-    // Match bk-xxx-agent or bk-xxx patterns
     const match = text.match(/\b(bk-[a-z][a-z0-9-]+)/i);
     return match ? match[1] : null;
+  }
+
+  /**
+   * Which feature this dispatch belongs to.
+   *
+   * The cap is meant to catch a conductor looping on ONE feature, so the count has to be
+   * scoped to one. `state.feature` cannot carry that alone: it exists in the state file but
+   * nothing ever writes a value into it, so every dispatch a project ever made shared a
+   * single bucket and the counter became a ratchet — agents hit their cap permanently,
+   * across features and across sessions, and the block claimed a feature scope it did not
+   * have.
+   *
+   * The identity is in the dispatch itself. Every workflow addresses a feature by path —
+   * `bk/dev/{feature-slug}/...` — so the prompt names it even when the state file does not.
+   *
+   * @param {object} toolInput
+   * @param {object} state
+   * @returns {string} a feature key; 'unscoped' when nothing identifies one
+   */
+  function extractFeatureKey(toolInput, state) {
+    const text = `${toolInput.prompt || ''}\n${toolInput.description || ''}`;
+    // `shared` is the cross-feature scratch directory, not a feature.
+    const match = text.match(/\bbk\/(?:dev|specs)\/(?!shared\b)([a-z0-9][a-z0-9._-]*)\//i);
+    if (match) return match[1];
+    if (state && typeof state.feature === 'string' && state.feature) return state.feature;
+    return 'unscoped';
+  }
+
+  /**
+   * Read counts for one feature, migrating the old flat shape.
+   *
+   * The previous shape was `{ [agent]: n }` with no feature dimension. Those numbers cannot
+   * be attributed to a feature after the fact, and carrying them forward would preserve
+   * exactly the ratchet this change exists to remove — a project would stay blocked on a
+   * count it accumulated weeks ago. They are dropped; `agent_dispatch_history` keeps the
+   * timestamped record.
+   *
+   * @param {object} state
+   * @param {string} featureKey
+   * @returns {{counts: object, all: object}}
+   */
+  function readCounts(state, featureKey) {
+    const raw = state.agent_dispatch_count || {};
+    const isLegacy = Object.values(raw).some((v) => typeof v === 'number');
+    const all = isLegacy ? {} : raw;
+    return { counts: { ...(all[featureKey] || {}) }, all };
   }
 
   async function main() {
@@ -77,8 +123,9 @@ try {
     }
 
     const state = readWorkflowState() || {};
-    const dispatchCounts = state.agent_dispatch_count || {};
-    const currentCount = dispatchCounts[agentType] || 0;
+    const featureKey = extractFeatureKey(toolInput, state);
+    const { counts, all: allCounts } = readCounts(state, featureKey);
+    const currentCount = counts[agentType] || 0;
 
     // Determine cap
     const perAgentCaps = cfg.per_agent_caps || {};
@@ -93,14 +140,21 @@ try {
       // BLOCK
       const history = (state.agent_dispatch_history || []).slice(-10);
       const histTable = history.map(h =>
-        `  ${new Date(h.ts).toISOString()} ${h.agent}`
+        `  ${new Date(h.ts).toISOString()} ${h.agent}${h.feature ? ` (${h.feature})` : ''}`
       ).join('\n');
+
+      const scopeNote = featureKey === 'unscoped'
+        ? `No feature could be identified from this dispatch, so the count is shared by every\n` +
+          `dispatch that also names none. If that is the whole story here, the count may not\n` +
+          `reflect a real loop — check the history below before decomposing anything.\n\n`
+        : '';
 
       const reason =
         `AGENT DISPATCH CAP EXCEEDED — "${agentType}" dispatched ${currentCount} times ` +
-        `for feature "${state.feature || 'current'}".\n` +
+        `for feature "${featureKey}".\n` +
         `Limit (policy): ${effectiveCap}\n\n` +
-        `Điều này CỰC KỲ BẤT THƯỜNG. Có thể do:\n` +
+        scopeNote +
+        `Nếu đây thực sự là vòng lặp, nguyên nhân thường là:\n` +
         `1. Conductor đang retry mù thay vì escalate\n` +
         `2. Approach hiện tại không thể giải, cần breakthrough\n` +
         `3. Feature quá lớn, cần decompose\n\n` +
@@ -109,8 +163,10 @@ try {
         `- AskUserQuestion với options:\n` +
         `  • "Decompose feature and restart" — break into sub-features\n` +
         `  • "Escalate to human review" — stop, ask specific question\n` +
+        `  • "Reset the count" — node .claude/cli/bk-health/index.cjs --reset-counts ` +
+        `--agent ${agentType} --force\n` +
         `  • "Override cap (+5 dispatches)" — set BK_HARNESS_DISPATCH_OVERRIDE=${agentType}=${currentCount + 5}\n\n` +
-        `Dispatch history (last 10):\n${histTable || '  (none)'}`;
+        `Dispatch history (last 10, all features):\n${histTable || '  (none)'}`;
 
       process.stderr.write(`[subagent-iteration-cap] BLOCK: ${agentType} at count=${currentCount} (cap=${effectiveCap})\n`);
 
@@ -135,19 +191,23 @@ try {
       process.exit(2);
     }
 
-    // Under cap — increment count
-    dispatchCounts[agentType] = currentCount + 1;
+    // Under cap — increment this feature's count
+    counts[agentType] = currentCount + 1;
+    const dispatchCounts = { ...allCounts, [featureKey]: counts };
 
     // Append to history
     const history = state.agent_dispatch_history || [];
-    history.push({ ts: Date.now(), agent: agentType });
+    history.push({ ts: Date.now(), agent: agentType, feature: featureKey });
     // Keep last 50
     const trimmedHistory = history.slice(-50);
 
     try {
       writeWorkflowState({
         agent_dispatch_count: dispatchCounts,
-        agent_dispatch_history: trimmedHistory
+        agent_dispatch_history: trimmedHistory,
+        // Other hooks read state.feature and have only ever seen null. Record what this
+        // dispatch identified so they stop guessing too.
+        ...(featureKey !== 'unscoped' ? { feature: featureKey } : {})
       });
     } catch { /* fail-open */ }
 

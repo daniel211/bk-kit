@@ -58,22 +58,22 @@
       ],
       "description": "Library documentation lookup",
       "scope": "foreground"
-    },
-    "figma": {
-      "command": "npx",
-      "args": [
-        "-y",
-        "figma-mcp"
-      ],
-      "env": {
-        "FIGMA_API_KEY": "${FIGMA_API_KEY}"
-      },
-      "description": "Figma design extraction",
-      "scope": "foreground"
     }
   },
   "templateVars": {
     "namingConvention": "PascalCase",
     "lintCommand": "swiftlint lint --strict"
+  },
+  "externalServices": {
+    "figma": {
+      "type": "rest",
+      "script": "scripts/figma-cli.mjs",
+      "env": [
+        "FIGMA_API_KEY"
+      ],
+      "tokenFile": "~/.config/beer-kit/figma.env",
+      "description": "Design extraction reads Figma over its REST API. No MCP server: the npx figma-mcp package offers comment tools only, and Figma Dev Mode MCP has no node export.",
+      "note": "The Variables API additionally needs the file_variables:read scope and a Figma Enterprise plan; without it design tokens come from style names and raw values."
+    }
   }
 }
