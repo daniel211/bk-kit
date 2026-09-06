@@ -53,11 +53,13 @@ timestamp. `bk-<platform> doctor` checks an installed `.claude/` against that ma
 
 ---
 
+<!-- auto:agy-guide -->
+
 # Dùng Antigravity CLI (agy) — hướng dẫn cho team
 
-Áp dụng từ kit **v0.3.0**. Bản gốc là `docs/antigravity-cli-guide.md` trong repo nguồn
-`beer-kit`; chép lại ở đây để người cài từ repo này đọc được ngay mà không cần quyền vào repo
-nguồn. Khi sửa, sửa ở bản gốc rồi chép lại sang đây.
+Bản gốc là `docs/antigravity-cli-guide.md` trong repo nguồn `beer-kit`, chép sang đây tự
+động mỗi lần release để người cài từ repo này đọc được mà không cần quyền vào repo nguồn.
+**Đừng sửa trực tiếp ở đây** — sửa bản gốc, lần release sau sẽ ghi đè.
 
 > **agy là TÙY CHỌN.** Không cài agy thì toàn bộ kit vẫn chạy đầy đủ bằng engine `claude` mặc
 > định. agy chỉ thêm lựa chọn cho ba việc bên dưới. Đọc §1 để biết có cần hay không trước khi
@@ -312,8 +314,6 @@ node .claude/scripts/figma-cli.mjs discover --url "<figma-url>"
 
 ---
 
----
-
 ## Liên quan
 
 | Tài liệu | Ở đâu |
@@ -322,10 +322,10 @@ node .claude/scripts/figma-cli.mjs discover --url "<figma-url>"
 | Vì sao chuyển từ `gemini` CLI sang `agy` | `docs/antigravity-cli-migration.md` (repo beer-kit) |
 | Thiết kế engine design + bài học kỹ thuật | `docs/kit-dev/plan-design-engine-agy.md` (repo beer-kit) |
 
-Hai dòng cuối nằm trong repo nguồn `beer-kit`; nếu bạn không có quyền truy cập repo đó thì
-không cần — mọi thứ để cài và dùng đều nằm trong tài liệu này.
+Hai dòng cuối nằm trong repo nguồn; nếu bạn không có quyền truy cập thì không cần — mọi thứ
+để cài và dùng đều nằm trong tài liệu này.
 
----
+<!-- /auto:agy-guide -->
 
 ## Related
 
