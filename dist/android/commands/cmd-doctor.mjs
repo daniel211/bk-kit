@@ -28,16 +28,17 @@ function hasCommand(bin) {
 }
 
 /**
- * Install hint for the Gemini CLI.
+ * Install hint for Antigravity CLI, the reviewer's backing CLI since kit 0.2.0.
  *
- * Homebrew's `gemini-cli` formula is deprecated upstream and gets disabled on 2026-12-18,
- * so it is no longer offered. npm remains, but only helps on a Gemini Code Assist
- * Standard/Enterprise licence — Google retired the CLI for free/Pro/Ultra on 2026-06-18.
+ * Matched to the host: `agy` runs natively on macOS, Linux and Windows, but the install
+ * channel differs. The retired `gemini` CLI is deliberately not offered.
  *
  * @returns {string}
  */
-function geminiInstallHint() {
-  return '"npm install -g @google/gemini-cli" (Code Assist Standard/Enterprise only)';
+function agyInstallHint() {
+  if (process.platform === 'darwin') return '"brew install --cask antigravity-cli"';
+  if (process.platform === 'win32') return 'the installer at https://antigravity.google/docs/cli/install/';
+  return '"curl -fsSL https://antigravity.google/cli/install.sh | bash"';
 }
 
 /**
@@ -158,15 +159,14 @@ export function runDoctor(targetDir, platform) {
     });
   }
 
-  // 7. Optional tool check: Gemini CLI for cross-model reviewer.
-  //    Google retired this CLI on 2026-06-18 for free/Pro/Ultra tiers, so a missing binary
-  //    is expected for most users and must not read as something they should go fix.
-  check('gemini CLI available (bk-gemini-reviewer, optional)', () => {
-    if (hasCommand('gemini')) return true;
-    console.log('    Optional and retired: Google replaced Gemini CLI with Antigravity CLI on');
-    console.log('    2026-06-18 for free/Pro/Ultra tiers. bk-gemini-reviewer is unavailable —');
-    console.log('    use "/bk-review --engine claude" instead (no setup needed).');
-    console.log(`    On a Code Assist Standard/Enterprise licence: ${geminiInstallHint()}`);
+  // 7. Optional tool check: Antigravity CLI, which backs bk-gemini-reviewer since 0.2.0.
+  //    Optional by design — /bk-review --engine claude needs no external CLI — so a missing
+  //    binary is a warning with a way forward, not an error.
+  check('agy CLI available (bk-gemini-reviewer, optional)', () => {
+    if (hasCommand('agy')) return true;
+    console.log('    Optional: Antigravity CLI ("agy") not found, so bk-gemini-reviewer cannot run.');
+    console.log(`    Install it with ${agyInstallHint()}, then run "agy" once to authenticate.`);
+    console.log('    Or skip it — "/bk-review --engine claude" works with no setup.');
     return 'warn';
   });
 
