@@ -5,13 +5,15 @@ paths:
 
 # Tool Restriction Protocol
 
-> Enforce tool boundaries per agent type. Read-only agents MUST NOT use Edit or Bash.
+> Enforce tool boundaries per agent type. No agent below may modify project code
+> except the Write/Edit categories that explicitly allow it.
 
 ## Agent Tool Categories
 
 | Category | Agents | Allowed Tools | Forbidden Tools |
 |----------|--------|---------------|-----------------|
 | **Read-only** | bk-code-reviewer, bk-security-auditor, bk-performance-analyzer, bk-test-architect | Read, Grep, Glob, Write (reports only) | Edit, Bash, Task |
+| **Read-only+Harness** | bk-gemini-reviewer | Read, Grep, Glob, Write (reports only), Bash (harness allowlist only) | Edit, Task |
 | **Write+Run** | bk-unit-test-agent | Read, Write, Edit, Grep, Glob, Bash | Task |
 | **Write** | bk-device-test-agent | Read, Write, Edit, Grep, Glob | Bash, Task |
 | **Full dev** | bk-ios-developer, bk-android-developer, bk-flutter-developer | Read, Write, Edit, Bash, Grep, Glob | Task |
@@ -34,6 +36,16 @@ FORBIDDEN TOOLS: Edit, Bash, Task
 If you need to modify code, report the need in your output — do not modify directly.
 ```
 
+### Read-only + Harness (bk-gemini-reviewer)
+
+This agent runs an external review CLI, so it needs `Bash` — but only to drive that
+harness. It MUST include:
+```
+FORBIDDEN TOOLS: Edit, Task — never modify project code.
+Bash is allowed ONLY to invoke the Gemini review harness (`gemini`, `gemini-review.mjs`)
+and read-only inspection commands. Any other command is a violation.
+```
+
 ### In Dispatch Prompts
 
 When dispatching read-only agents:
@@ -42,8 +54,21 @@ TOOL RESTRICTION: You are a READ-ONLY agent. Do NOT use Edit, Bash, or Task tool
 Write your report to the output file using the Write tool only.
 ```
 
+For bk-gemini-reviewer, substitute the harness variant — do NOT copy the line above onto
+it, or it cannot run its own review:
+```
+TOOL RESTRICTION: You are READ-ONLY for project code. Do NOT use Edit or Task.
+Use Bash strictly to invoke the Gemini review harness.
+```
+
 ### Hook Enforcement
 
 `verify-output.cjs` enforces tool restrictions:
 1. Scans agent output for Edit/Bash patterns for read-only agents → `[TOOL-RESTRICT]` error
-2. Second layer on top of `permissionMode: plan` in agent frontmatter
+2. For **Read-only+Harness**, scans for `Edit`, plus any Bash command outside the harness
+   allowlist (gemini CLI / `gemini-review.mjs` / read-only inspection) → `[TOOL-RESTRICT]` error
+3. Second layer on top of `permissionMode: plan` in agent frontmatter
+
+**Scope of the hook:** it is a best-effort scan of the agent's returned transcript after
+the fact, not a sandbox. It catches and reports violations; it cannot prevent one
+mid-flight. Treat the agent frontmatter (`disallowedTools`) as the primary boundary.

@@ -1,6 +1,6 @@
 # beer-kit v2 — Mobile Dev Toolkit
 
-> 18 agents | 37 skills | 58 hooks | 3 MCP servers
+> 19 agents | 38 skills | 58 hooks | 3 MCP servers
 
 ## Principles
 
@@ -17,7 +17,7 @@ You are a **conductor** — you orchestrate, you do not implement.
 
 **DOES:** Parse commands, load skills, orchestration decisions, read agent output, aggregate results, dispatch reactive helpers, user interaction, write workflow state files only.
 
-**DOES NOT (delegate via Task()):** Write plans (→ bk-planner), write code (→ bk-{platform}-developer), write docs (→ bk-docs-writer), write tests (→ bk-unit-test-agent), code review (→ bk-code-reviewer), git ops (→ bk-git-manager), research (→ bk-researcher).
+**DOES NOT (delegate via Task()):** Write plans (→ bk-planner), write code (→ bk-{platform}-developer), write docs (→ bk-docs-writer), write tests (→ bk-unit-test-agent), code review (→ bk-gemini-reviewer / bk-code-reviewer), git ops (→ bk-git-manager), research (→ bk-researcher).
 
 **Self-Check:** End of every workflow → count Task() calls → lookup minimum in `conductor-role.md §2B` → if count < minimum → INCOMPLETE → dispatch missing agents.
 
@@ -46,7 +46,7 @@ Context: `.claude/platform-context.json`. Platform skills auto-loaded by dev age
 |----------|-------|--------|
 | Planning (bk-planner, bk-brainstormer) | opus | high |
 | Development (bk-{platform}-developer) | opus | high |
-| Review (bk-code-reviewer, bk-security-auditor, bk-performance-analyzer, bk-code-simplifier) | sonnet | high/medium |
+| Review (bk-gemini-reviewer, bk-code-reviewer, bk-security-auditor, bk-performance-analyzer, bk-code-simplifier) | sonnet | high/medium |
 | Support (bk-docs-writer, bk-researcher, bk-unit-test-agent, bk-device-test-agent) | haiku | medium/low |
 | Operations (bk-git-manager, bk-project-manager) | haiku | low |
 
@@ -116,12 +116,13 @@ Full routing: `rules/core-rules.md §2`. Approval gates: `rules/approval-rules.m
 | /bk-debug | bk-debugger + bk-{platform}-developer |
 | /bk-plan | bk-planner |
 | /bk-test | bk-test-architect + bk-unit-test-agent |
-| /bk-review | bk-code-reviewer |
+| /bk-review | bk-gemini-reviewer (default) / bk-code-reviewer |
+| /bk-gemini-review | bk-gemini-reviewer |
 | /bk-commit | bk-git-manager |
 
 ## Skills
 
-37 skills. Workflow: `bk-code`, `bk-debug`, `bk-refactor`, `bk-plan`, `bk-test`, `bk-review`, `bk-commit`, `bk-docs`, `bk-analyze`. Knowledge skills loaded by agents on demand.
+38 skills. Workflow: `bk-code`, `bk-debug`, `bk-refactor`, `bk-plan`, `bk-test`, `bk-review`, `bk-commit`, `bk-docs`, `bk-analyze`. Knowledge skills loaded by agents on demand.
 
 ## Hooks
 

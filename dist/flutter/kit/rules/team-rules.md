@@ -29,6 +29,7 @@ Agent A WRITES file → Conductor READS file → Conductor dispatches Agent B wi
 | bk-docs-writer (project docs) | bk/docs/*.md |
 | bk-{platform}-developer | Source code files + {plan-dir}/reports/impl-result.json |
 | bk-code-reviewer | bk/dev/shared/reports/code-review-{feature}.md |
+| bk-gemini-reviewer | bk/dev/shared/reports/code-review-gemini-{feature}.md |
 | bk-unit-test-agent | bk/dev/shared/reports/unit-test-{platform}-{feature}.md |
 | bk-debugger | bk/dev/shared/reports/debug-analysis-{feature}.json |
 | bk-git-manager | Git commit (no file output) |

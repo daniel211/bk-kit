@@ -15,6 +15,45 @@ try {
     'bk-performance-analyzer', 'bk-test-architect'
   ]);
 
+  // Agents that must not modify project code but DO need Bash to drive an external
+  // review harness. Bash is bounded by an allowlist rather than forbidden outright.
+  const CODE_IMMUTABLE_AGENTS = new Set([
+    'bk-gemini-reviewer'
+  ]);
+
+  // The harness itself, plus read-only inspection an agent may reasonably reach for
+  // while assembling scope. Anything else is a violation.
+  const HARNESS_BASH_ALLOWLIST = [
+    /(?:^|[/\s;&|])gemini(?:\s|$)/,        // gemini CLI
+    /gemini-review\.mjs(?:\s|$)/,          // the runner script
+    /^\s*(?:which|command\s+-v|type)\s/,   // availability probes
+    /^\s*git\s+(?:diff|status|log|show|ls-files|rev-parse|branch)\b/,
+    /^\s*(?:ls|cat|head|tail|wc|find|grep|rg|pwd|echo)\b/
+  ];
+
+  /**
+   * Best-effort extraction of Bash commands from an agent's returned transcript.
+   * The transcript shape is not guaranteed, so a miss is possible — this reports
+   * violations after the fact, it does not sandbox the agent.
+   */
+  function offAllowlistBashCommands(resultText) {
+    const found = [];
+    const cmdPattern = /"command"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+    let m;
+    while ((m = cmdPattern.exec(resultText)) !== null) {
+      let cmd;
+      try {
+        cmd = JSON.parse(`"${m[1]}"`);
+      } catch (_) {
+        cmd = m[1];
+      }
+      if (!HARNESS_BASH_ALLOWLIST.some(pat => pat.test(cmd))) {
+        found.push(cmd.length > 120 ? `${cmd.slice(0, 117)}...` : cmd);
+      }
+    }
+    return found;
+  }
+
   async function main() {
     const timer = createHookTimer('verify-output');
     try {
@@ -74,6 +113,24 @@ try {
 
         if (/"tool_name"\s*:\s*"(Edit|Bash)"/.test(resultText)) {
           errors.push(`[TOOL-RESTRICT] Read-only agent "${agentType}" used forbidden tool (Edit or Bash)`);
+        }
+
+        if (/"action"\s*:\s*"(modified|created|deleted)"/.test(resultText)) {
+          warnings.push(`[TOOL-RESTRICT] Read-only agent "${agentType}" reports file modifications`);
+        }
+      } else if (CODE_IMMUTABLE_AGENTS.has(agentType)) {
+        const resultText = typeof toolResponse === 'string'
+          ? toolResponse
+          : JSON.stringify(toolResponse);
+
+        if (/"tool_name"\s*:\s*"Edit"/.test(resultText)) {
+          errors.push(`[TOOL-RESTRICT] Read-only agent "${agentType}" used forbidden tool (Edit)`);
+        }
+
+        // Bash is granted for the review harness only — flag anything else.
+        const strayCommands = offAllowlistBashCommands(resultText);
+        for (const cmd of strayCommands) {
+          errors.push(`[TOOL-RESTRICT] Agent "${agentType}" ran a Bash command outside the harness allowlist: ${cmd}`);
         }
 
         if (/"action"\s*:\s*"(modified|created|deleted)"/.test(resultText)) {

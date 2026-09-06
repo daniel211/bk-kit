@@ -6,6 +6,37 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { execSync } from 'node:child_process';
+
+/**
+ * Check whether an executable is on PATH, on any host OS.
+ *
+ * `which` is neither present on Windows nor guaranteed by POSIX; `where` is the
+ * Windows equivalent and `command -v` is the portable shell builtin elsewhere.
+ *
+ * @param {string} bin
+ * @returns {boolean}
+ */
+function hasCommand(bin) {
+  const probe = process.platform === 'win32' ? `where ${bin}` : `command -v ${bin}`;
+  try {
+    execSync(probe, { stdio: 'ignore' });
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+/**
+ * Install hint for the Gemini CLI, matching the host's package manager.
+ * @returns {string}
+ */
+function geminiInstallHint() {
+  const npm = '"npm install -g @google/gemini-cli"';
+  return process.platform === 'darwin'
+    ? `"brew install gemini-cli" or ${npm}`
+    : npm;
+}
 
 /**
  * Run doctor checks on an installed kit.
@@ -124,6 +155,13 @@ export function runDoctor(targetDir, platform) {
       return false;
     });
   }
+
+  // 7. Optional tool check: Gemini CLI for cross-model reviewer
+  check('gemini CLI available (bk-gemini-reviewer)', () => {
+    if (hasCommand('gemini')) return true;
+    console.log(`    Optional: "gemini" CLI not found. Install via ${geminiInstallHint()} to enable bk-gemini-reviewer.`);
+    return 'warn';
+  });
 
   return { passed, warnings, errors };
 }

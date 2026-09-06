@@ -91,7 +91,7 @@ Show user a clear summary of what will be committed:
 
 Read from:
 - `git diff --stat HEAD` for file summary
-- `bk/dev/shared/reports/code-review-{feature}.json` (if exists)
+- `bk/dev/shared/reports/code-review-{feature}.json` and/or `code-review-gemini-{feature}.json` (if exists; ignore a report whose verdict is `error` — the harness failed, it is not a review result)
 - `bk/dev/shared/reports/unit-test-{platform}-{feature}.json` (if exists)
 
 ### Step 5: Commit Approval Gate (Required)

@@ -1,6 +1,6 @@
 ---
 name: bk-review
-description: "Hook-guarded review workflow — dispatch bk-code-reviewer background, optional bk-security-auditor for security-sensitive changes. Output: review report."
+description: "Hook-guarded review workflow — dispatch bk-gemini-reviewer (default) or bk-code-reviewer in background, optional bk-security-auditor for security-sensitive changes. Output: review report."
 user-invocable: true
 argument-hint: "[feature or files to review]"
 ---
@@ -49,27 +49,47 @@ Detect if changes are security-sensitive:
 
 ### Step 2: Dispatch Review Agents
 
-Dispatch all review agents in ONE message (background, sonnet):
+**Review Engine Selection (Default: Gemini Reviewer)**:
+- **Default (Gemini)**: Dispatch `bk-gemini-reviewer` (using Gemini Pro). Always prioritized when `gemini` CLI is configured (free or paid/licensed account).
+- **Fallback (Claude)**: If `which gemini` returns not found or `--engine claude` is requested, dispatch `bk-code-reviewer` (sonnet).
+- **Dual Mode (`--engine dual`)**: Dispatch BOTH `bk-gemini-reviewer` and `bk-code-reviewer` in parallel for multi-model consensus. They write to distinct report paths (`code-review-gemini-{feature}.md` vs `code-review-{feature}.md`) — never point both at the same file, or the slower agent silently overwrites the other.
 
-**Always:**
+**Tool boundaries differ per engine** — `bk-gemini-reviewer` needs `Bash` to invoke the Gemini CLI harness; `bk-code-reviewer` does not. Use the exact TOOL RESTRICTION line shown in each dispatch block below; do not copy one engine's restriction onto the other.
+
+Dispatch review agent(s) in ONE message (background):
+
+**Primary Reviewer (Default: bk-gemini-reviewer):**
+```
+Task(subagent_type: "bk-gemini-reviewer", model: "sonnet", run_in_background: true, prompt: "
+  Task: Code review for feature {feature_name}
+  Platform: {platform}
+  Files: {file_list or impl-result path}
+  TOOL RESTRICTION: You are a READ-ONLY agent for project code. Do NOT use Edit tool. Use Bash strictly to invoke gemini review harness.
+  Architecture rules: .claude/rules/{platform}-rules.md
+  Model: gemini-2.5-pro
+  Output: bk/dev/shared/reports/code-review-gemini-{feature}.md (+ .json)
+")
+```
+
+*(Fallback if Gemini CLI is not available, or when `--engine claude` is requested)*:
 ```
 Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true, prompt: "
-  TOOL RESTRICTION: You are a READ-ONLY agent. Do NOT use Edit, Bash, or Task tools.
-  Feature: {feature_name}
+  Task: Code review for feature {feature_name}
   Platform: {platform}
-  Files to review: {file_list or impl-result path}
+  Files: {file_list or impl-result path}
+  TOOL RESTRICTION: You are a READ-ONLY agent. Do NOT use Edit, Bash, or Task tools.
   Architecture rules: .claude/rules/{platform}-rules.md
-  Output: bk/dev/shared/reports/code-review-{feature}.json
+  Output: bk/dev/shared/reports/code-review-{feature}.md (+ .json)
 ")
 ```
 
 **Optional — security-sensitive changes:**
 ```
 Task(subagent_type: "bk-security-auditor", model: "sonnet", run_in_background: true, prompt: "
-  TOOL RESTRICTION: You are a READ-ONLY agent. Do NOT use Edit, Bash, or Task tools.
-  Feature: {feature_name}
+  Task: Security audit for feature {feature_name}
   Platform: {platform}
-  Files to review: {file_list or impl-result path}
+  Files: {file_list or impl-result path}
+  TOOL RESTRICTION: You are a READ-ONLY agent. Do NOT use Edit, Bash, or Task tools.
   Output: bk/dev/shared/reports/security-{feature}.json
 ")
 ```
@@ -89,13 +109,21 @@ If critical/major findings: suggest `/bk-debug` or resuming `/bk-code` fix loop.
 
 ## Output
 
-- `bk/dev/shared/reports/code-review-{feature}.json`
-- `bk/dev/shared/reports/security-{feature}.json` (optional)
+- `bk/dev/shared/reports/code-review-{feature}.md` + `.json` (bk-code-reviewer)
+- `bk/dev/shared/reports/code-review-gemini-{feature}.md` + `.json` (bk-gemini-reviewer)
+- `bk/dev/shared/reports/security-{feature}.md` + `.json` (optional)
+
+A `verdict: "error"` report means the review harness failed (CLI not authenticated,
+network down, unparseable response) — it is NOT a code finding. Do not treat it as a
+pass or a fail; fix the tooling and re-run.
 
 ## Constraints
 
 - Auto-approve — no user gate required
-- Both agents are READ-ONLY — MUST NOT use Edit, Bash, or Task tools
+- No reviewer modifies code — Edit and Task are forbidden for ALL review agents
+- `bk-code-reviewer` / `bk-security-auditor` are strictly read-only: also NO Bash
+- `bk-gemini-reviewer` MAY use Bash, solely to invoke the Gemini review harness
+  (`gemini` CLI / `gemini-review.mjs`) — never to modify project files
 - Single-message batching: dispatch ALL review agents in ONE message
 - Agents write reports only (Write tool) — no code modifications
 

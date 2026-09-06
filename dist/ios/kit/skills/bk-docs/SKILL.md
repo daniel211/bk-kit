@@ -83,7 +83,7 @@ Detect platform from project files. Load platform context from `config/platform-
 
 Gather context for bk-docs-writer:
 - `bk/dev/shared/{platform}/{feature}-impl-result.json` — what was implemented
-- `bk/dev/shared/reports/code-review-{feature}.json` — review findings (if exists)
+- `bk/dev/shared/reports/code-review-{feature}.json` and/or `code-review-gemini-{feature}.json` — review findings (if exists)
 - Current `bk/docs/` structure: `codebase-summary.md`, `system-architecture.md`, `code-standards.md`
 
 ### Step 2: Dispatch bk-docs-writer

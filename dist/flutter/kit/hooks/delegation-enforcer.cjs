@@ -14,7 +14,7 @@ try {
   // Known valid agent types for beer-kit v2 (bk- prefixed)
   const KNOWN_AGENTS = new Set([
     'bk-ios-developer', 'bk-android-developer', 'bk-flutter-developer',
-    'bk-code-reviewer', 'bk-security-auditor', 'bk-performance-analyzer',
+    'bk-code-reviewer', 'bk-gemini-reviewer', 'bk-security-auditor', 'bk-performance-analyzer',
     'bk-unit-test-agent', 'bk-device-test-agent', 'bk-test-architect',
     'bk-debugger', 'bk-researcher',
     'design-validator', 'design-spec-writer', 'design-asset-exporter',
@@ -129,13 +129,15 @@ try {
       // C. Output path injection for reporting agents
       const OUTPUT_AGENTS = new Set([
         'bk-unit-test-agent', 'bk-device-test-agent', 'bk-code-reviewer',
-        'bk-security-auditor', 'bk-performance-analyzer', 'bk-test-architect'
+        'bk-gemini-reviewer', 'bk-security-auditor', 'bk-performance-analyzer', 'bk-test-architect'
       ]);
       if (OUTPUT_AGENTS.has(agentType) && feature) {
         const outputMap = {
           'bk-unit-test-agent': `unit-test-${platform || 'unknown'}-${feature}.md`,
           'bk-device-test-agent': `device-test-${platform || 'unknown'}-${feature}.md`,
           'bk-code-reviewer': `code-review-${feature}.md`,
+          // Distinct path so dual-engine review keeps both models' reports.
+          'bk-gemini-reviewer': `code-review-gemini-${feature}.md`,
           'bk-security-auditor': `security-${feature}.md`,
           'bk-performance-analyzer': `performance-${feature}.md`,
           'bk-test-architect': `test-strategy-${feature}.md`

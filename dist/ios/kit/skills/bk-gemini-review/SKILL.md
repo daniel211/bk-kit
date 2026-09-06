@@ -1,0 +1,89 @@
+---
+name: bk-gemini-review
+description: "Cross-model AI code review powered by Gemini CLI. Inspects architecture compliance, concurrency safety, security, and error handling."
+user-invocable: true
+argument-hint: "[feature or files] [--model gemini-2.5-pro] [--fast]"
+---
+
+# Gemini Review: $ARGUMENTS
+
+Automated, independent code review using Google's **Gemini CLI** (`@google/gemini-cli`). Provides cross-model verification (Claude writes code, Gemini reviews it) with 1M+ token context and deep reasoning on architecture, concurrency, and security.
+
+<Use_When>
+- User wants an independent, cross-model review of changes before committing
+- User invokes `/bk-gemini-review [feature or files]`
+- Prioritizing Gemini Pro for deep architecture & concurrency verification
+- During `/bk-review` when Gemini is selected as the review engine
+</Use_When>
+
+<Do_Not_Use_When>
+- Tests execution only — use `/bk-test`
+- Debugging a specific error trace — use `/bk-debug`
+- When `gemini` CLI is not installed and network is offline
+</Do_Not_Use_When>
+
+## Approval Gates
+
+Per `.claude/rules/approval-rules.md`: review is No-risk — auto-approve, no gate needed.
+
+---
+
+## Execution
+
+### Step 1: Validate Prerequisites
+
+Check that `gemini` CLI is available in the environment:
+
+```bash
+which gemini
+```
+
+If `gemini` is not found:
+- Guide user to install: `brew install gemini-cli` or `npm install -g @google/gemini-cli`
+- Authenticate via `gemini` or set `export GEMINI_API_KEY="..."`
+
+### Step 2: Execute Gemini Review Script
+
+Run the review runner script with target parameters:
+
+```bash
+node {skill_dir}/scripts/gemini-review.mjs \
+  --feature "{feature_name}" \
+  --platform "{platform}" \
+  $ARGUMENTS
+```
+
+Options:
+- `--model <name>`: Default to `gemini-2.5-pro` (or latest Pro model via `GEMINI_MODEL`).
+- `--fast`: Fast scan using `gemini-2.5-flash`.
+- `--files <file1,file2>`: Specify exact files instead of git diff.
+
+### Step 3: Present Findings
+
+The script generates:
+- JSON Report: `bk/dev/shared/reports/code-review-gemini-{feature}.json`
+- Markdown Report: `bk/dev/shared/reports/code-review-gemini-{feature}.md`
+
+Read the report and summarize:
+- **Verdict**: `APPROVE`, `REQUEST_CHANGES`, or `ERROR`
+- Summary table of critical / major / minor / info findings
+- Concrete suggestions for any blocker or major architecture violations.
+
+**If verdict is `ERROR`** (script exits non-zero): the harness failed — the CLI is not
+authenticated, the network is down, or Gemini returned an unparseable response. This is
+NOT a review result. Report the tooling failure to the user with the remediation from the
+report's `### Harness Error` section; do NOT present it as findings, and do NOT let it
+pass as an approval. The raw response is saved to `code-review-gemini-{feature}.raw.txt`
+when parsing was the cause.
+
+## Constraints
+
+- Read-only inspection — does NOT modify source code.
+- Calibrated severities: Blocker/Critical = crashes, leaks, security. Major = clean architecture violations.
+- Output compliance: Markdown reports MUST have `## ` header and `<!-- metadata: ... -->` footer.
+
+## References
+
+- Prompt template: `references/review-prompt-template.md`
+- Output schema: `references/output-schema.json`
+- Runner script: `scripts/gemini-review.mjs`

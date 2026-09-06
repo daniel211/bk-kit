@@ -1,0 +1,62 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "GeminiCodeReviewResult",
+  "type": "object",
+  "required": ["verdict", "summary", "findings"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "description": "\"error\" means the review harness itself failed (CLI unauthenticated, network down, unparseable response). It is not a statement about the code — findings will be empty and the runner exits non-zero.",
+      "enum": ["approve", "request_changes", "error"]
+    },
+    "error": {
+      "type": "object",
+      "description": "Present only when verdict is \"error\".",
+      "required": ["message", "remediation"],
+      "properties": {
+        "message": { "type": "string" },
+        "remediation": { "type": "string" }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["critical", "major", "minor", "info"],
+      "properties": {
+        "critical": { "type": "integer", "minimum": 0 },
+        "major": { "type": "integer", "minimum": 0 },
+        "minor": { "type": "integer", "minimum": 0 },
+        "info": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["severity", "file", "line", "rule", "message", "suggestion"],
+        "properties": {
+          "severity": {
+            "type": "string",
+            "enum": ["critical", "major", "minor", "info"]
+          },
+          "file": { "type": "string" },
+          "line": { "type": "integer" },
+          "rule": {
+            "type": "string",
+            "enum": [
+              "clean-arch",
+              "security",
+              "concurrency",
+              "error-handling",
+              "memory-leak",
+              "file-size",
+              "naming",
+              "platform-idiom"
+            ]
+          },
+          "message": { "type": "string" },
+          "suggestion": { "type": "string" }
+        }
+      }
+    }
+  }
+}

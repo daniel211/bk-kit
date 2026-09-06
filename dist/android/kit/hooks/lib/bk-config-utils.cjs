@@ -282,6 +282,9 @@ function getOutputPath(agentType, feature, platform) {
   const pfx = platform || 'unknown';
   const map = {
     'code-reviewer': `code-review-${feature}.md`,
+    // Distinct from code-reviewer so `/bk-review --engine dual` can run both in
+    // parallel without one clobbering the other's report.
+    'gemini-reviewer': `code-review-gemini-${feature}.md`,
     'security-auditor': `security-${feature}.md`,
     'performance-analyzer': `performance-${feature}.md`,
     'unit-test-agent': `unit-test-${pfx}-${feature}.md`,
