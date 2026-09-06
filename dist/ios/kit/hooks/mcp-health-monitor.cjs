@@ -13,7 +13,7 @@ try {
    * Trigger: PreToolCall
    * Purpose: Detect MCP availability issues and inject fallback guidance
    *
-   * Monitors: serena, xcode-mcp, xcode-build, figma MCP tools
+   * Monitors: serena, xcode-mcp, xcode-build, figma MCP tools (figma is legacy — see below)
    * On timeout/error: inject fallback instructions via stdout
    */
 
@@ -30,9 +30,14 @@ try {
       fallback: 'xcodebuild CLI via Bash',
       message: '[MCP-FALLBACK] xcode-build MCP unavailable. Use Bash(xcodebuild ...) directly.',
     },
+    // Kept for projects whose config still registers a Figma MCP. Since v0.3.0 the design
+    // pipeline does not use one — it reads the REST API — so the fallback is the CLI, not a
+    // request for the user to export JSON by hand.
     'figma': {
-      fallback: 'AskUserQuestion for manual JSON export',
-      message: '[MCP-FALLBACK] Figma MCP unavailable. Use AskUserQuestion to ask user to export design JSON manually.',
+      fallback: 'scripts/figma-cli.mjs (Figma REST API)',
+      message: '[MCP-FALLBACK] Figma MCP unavailable, and not needed. Use '
+        + '"node .claude/scripts/figma-cli.mjs <command>", which reads Figma over its REST '
+        + 'API with FIGMA_API_KEY. See skills/bk-design/references/figma-data-guide.md.',
     },
   };
 

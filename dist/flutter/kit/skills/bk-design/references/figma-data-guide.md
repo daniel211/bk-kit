@@ -53,6 +53,27 @@ alone lists no assets at all. A node cut off by the limit carries `childrenTrunc
 rather than passing for a leaf; when a section needs what was cut, fetch that branch with
 `figma-cli nodes --ids {childId}`.
 
+## Caching and rate limits
+
+Responses are cached on disk under the Figma file's own `version`, at
+`~/.cache/beer-kit/figma/{fileKey}/` (`XDG_CACHE_HOME` is honoured). Every command starts
+with one `GET /files/{key}?depth=1` to read that version; edit the file in Figma and the
+version moves, so nothing written under the old one can be served. Re-running a flow over an
+unchanged file therefore costs that one small call instead of refetching every screen.
+
+- Force a fresh read: `--no-cache`, or `BK_FIGMA_NO_CACHE=1` (the env var also covers the
+  `agy` engine, which has no flags).
+- Rendered image URLs are **never** cached — Figma expires them, so a cached link would be
+  dead on arrival. `export` skips the version probe entirely.
+- Entries older than 7 days are swept automatically.
+- If the version probe fails, the cache is silently disabled and everything is fetched. A
+  design is never served stale to save a request.
+
+`429` and `5xx` are retried three times with exponential backoff, honouring `Retry-After`
+when Figma sends it (capped at 30s per wait). `401`/`403`/`404` fail immediately — they
+answer the same way however often they are asked, so retrying one only delays the error you
+need to read.
+
 ## Two limits worth knowing before you start
 
 **Variables need Enterprise.** `figma-cli variables` returns 403 without the
@@ -226,6 +247,6 @@ call, with better coverage of the parts that matter.
 
 | Endpoint | Why skip |
 |----------|----------|
-| `GET /files/:key` (whole file) | Enormous; the nodes endpoint is targeted |
+| `GET /files/:key` (whole file) | Enormous; the nodes endpoint is targeted. Only `?depth=1` is used, to read the file version for the cache |
 | Comments API | Dev annotations, not design data |
 | Any write endpoint | Spec extraction is read-only |

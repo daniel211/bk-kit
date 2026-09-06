@@ -32,6 +32,62 @@ export const IMAGE_FORMATS = ['png', 'jpg', 'svg', 'pdf'];
  */
 export const MAX_IDS_PER_REQUEST = 50;
 
+/**
+ * How deep a serialised node tree goes when the caller does not say.
+ *
+ * Six levels keeps a real screen around 60–100 KB; unlimited depth produced 3.1 MB for one
+ * OmniWork screen — accurate, and unusable. It lives here rather than in either extractor
+ * because both of them write `node.json`, and the two defaults had already drifted apart.
+ */
+export const DEFAULT_NODE_DEPTH = 6;
+
+/**
+ * Statuses worth trying again. 429 is Figma's rate limit — nineteen screens at six requests
+ * each reaches it — and the 5xx family is the gateway having a bad second, not the request
+ * being wrong. Everything else (401, 403, 404) will fail identically however many times it
+ * is sent, so retrying one only delays the error.
+ */
+export const RETRY_STATUSES = new Set([429, 500, 502, 503, 504]);
+
+/** Attempts after the first, and the base of the exponential backoff between them. */
+export const DEFAULT_MAX_RETRIES = 3;
+export const RETRY_BASE_MS = 500;
+
+/** However long a Retry-After asks for, never sleep longer than this in one wait. */
+export const MAX_RETRY_WAIT_MS = 30_000;
+
+/**
+ * Read a Retry-After header. Figma sends seconds; the HTTP spec also allows a date, and a
+ * client that understands only one of the two waits zero when it is handed the other.
+ *
+ * @param {string|null|undefined} value
+ * @param {number} [now] epoch ms, injectable so the date branch is testable
+ * @returns {number|null} milliseconds to wait, or null when there is nothing to read
+ */
+export function parseRetryAfter(value, now = Date.now()) {
+  if (value === null || value === undefined || value === '') return null;
+  const seconds = Number(String(value).trim());
+  if (Number.isFinite(seconds)) return Math.max(0, Math.round(seconds * 1000));
+  const at = Date.parse(String(value));
+  if (Number.isNaN(at)) return null;
+  return Math.max(0, at - now);
+}
+
+/**
+ * How long to wait before attempt `attempt` (0-based), honouring the server when it says.
+ *
+ * @param {object|null} response
+ * @param {number} attempt
+ * @param {number} [baseMs]
+ * @returns {number}
+ */
+export function retryDelayMs(response, attempt, baseMs = RETRY_BASE_MS) {
+  const header = response?.headers?.get?.('retry-after');
+  const asked = parseRetryAfter(header);
+  const backoff = baseMs * (2 ** attempt);
+  return Math.min(MAX_RETRY_WAIT_MS, asked ?? backoff);
+}
+
 /** Token names this codebase has used, newest first. */
 const TOKEN_NAMES = ['FIGMA_API_KEY', 'FIGMA_ACCESS_TOKEN', 'FIGMA_TOKEN'];
 
@@ -141,10 +197,11 @@ export function chunk(items, size = MAX_IDS_PER_REQUEST) {
 }
 
 /**
- * A thin Figma REST client.
+ * A thin Figma REST client, with retries and an optional version-scoped response cache.
  *
- * `fetchImpl` is injectable so the tests never touch the network — and so a caller can add
- * retries without this class growing a retry policy it cannot tune.
+ * `fetchImpl` and `sleepImpl` are injectable so the tests never touch the network and never
+ * actually wait; `cache` is injectable so the client itself holds no opinion about where a
+ * cache lives or when it is valid.
  */
 export class FigmaRest {
   /**
@@ -154,8 +211,16 @@ export class FigmaRest {
    * @param {number} [opts.timeoutMs]
    * @param {object} [opts.env]        injectable, so a test does not read the real machine
    * @param {string[]} [opts.tokenFiles] injectable for the same reason
+   * @param {number} [opts.maxRetries] attempts after the first
+   * @param {(ms: number) => Promise<void>} [opts.sleepImpl] injectable, so tests do not wait
+   * @param {{get: Function, set: Function}} [opts.cache] a FigmaCache, or nothing
    */
-  constructor({ token, fetchImpl = fetch, timeoutMs = 30_000, env, tokenFiles } = {}) {
+  constructor({
+    token, fetchImpl = fetch, timeoutMs = 30_000, env, tokenFiles,
+    maxRetries = DEFAULT_MAX_RETRIES,
+    sleepImpl = (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
+    cache = null
+  } = {}) {
     const resolved = token
       || readToken(env ?? process.env, tokenFiles ?? tokenFilePaths());
     if (!resolved) {
@@ -168,23 +233,85 @@ export class FigmaRest {
     this.token = resolved;
     this.fetchImpl = fetchImpl;
     this.timeoutMs = timeoutMs;
+    this.maxRetries = maxRetries;
+    this.sleepImpl = sleepImpl;
+    this.cache = cache;
   }
 
   /**
+   * Perform one GET, retrying the statuses that are worth retrying.
+   *
+   * A cached response short-circuits the whole thing. Only successes are ever cached — an
+   * error is a fact about this moment, not about the file.
+   *
    * @param {string} url
+   * @param {{cache?: boolean}} [opts] pass cache:false for a response that must be fresh
    * @returns {Promise<any>}
    */
-  async request(url) {
-    const response = await this.fetchImpl(url, {
-      headers: { 'X-Figma-Token': this.token },
-      signal: AbortSignal.timeout(this.timeoutMs)
-    });
-    if (!response.ok) {
-      const body = await response.text().catch(() => '');
-      // The URL is safe to echo; the token lives in a header and stays out of the message.
-      throw new Error(`Figma API ${response.status} ${response.statusText} for ${url}. ${body.slice(0, 300)}`);
+  async request(url, { cache = true } = {}) {
+    if (cache && this.cache) {
+      const hit = this.cache.get(url);
+      if (hit !== null && hit !== undefined) return hit;
     }
-    return response.json();
+
+    let lastError = null;
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      let response = null;
+      try {
+        response = await this.fetchImpl(url, {
+          headers: { 'X-Figma-Token': this.token },
+          signal: AbortSignal.timeout(this.timeoutMs)
+        });
+      } catch (err) {
+        // A timeout or a dropped socket. Retryable for the same reason a 503 is: nothing
+        // about the request was wrong.
+        lastError = err;
+      }
+
+      if (response?.ok) {
+        const data = await response.json();
+        if (cache && this.cache) this.cache.set(url, data);
+        return data;
+      }
+
+      if (response) {
+        const body = await response.text().catch(() => '');
+        // The URL is safe to echo; the token lives in a header and stays out of the message.
+        lastError = new Error(
+          `Figma API ${response.status} ${response.statusText} for ${url}. ${body.slice(0, 300)}`
+        );
+        lastError.status = response.status;
+        // A 403 or a 404 answers the same way however often it is asked — fail now, so the
+        // caller sees a missing scope in a second rather than after four rounds of backoff.
+        if (!RETRY_STATUSES.has(response.status)) throw lastError;
+      }
+
+      if (attempt === this.maxRetries) break;
+      await this.sleepImpl(retryDelayMs(response, attempt));
+    }
+    throw lastError;
+  }
+
+  /**
+   * File metadata, fetched as shallowly as the API allows.
+   *
+   * `version` is what makes the response cache safe: it changes on every edit, so an entry
+   * written under one version can never be served for another. depth=1 keeps this probe
+   * small — the whole point is that it costs less than what it saves.
+   *
+   * @param {string} fileKey
+   * @returns {Promise<{version: string|null, lastModified: string|null, name: string|null}>}
+   */
+  async getFileMeta(fileKey) {
+    const data = await this.request(
+      `${FIGMA_BASE_URL}/files/${encodeURIComponent(fileKey)}?depth=1`,
+      { cache: false }
+    );
+    return {
+      version: data.version ?? null,
+      lastModified: data.lastModified ?? null,
+      name: data.name ?? null
+    };
   }
 
   /**
@@ -226,7 +353,9 @@ export class FigmaRest {
       const scaleParam = scale && (format === 'png' || format === 'jpg') ? `&scale=${scale}` : '';
       const url = `${FIGMA_BASE_URL}/images/${encodeURIComponent(fileKey)}`
         + `?ids=${ids}&format=${format}${scaleParam}`;
-      const data = await this.request(url);
+      // Never cached: Figma's rendered-image URLs are short-lived, so a cache hit would
+      // hand the downloader a link that has already expired.
+      const data = await this.request(url, { cache: false });
       if (data.err) throw new Error(`Figma render failed: ${data.err}`);
       Object.assign(images, data.images || {});
     }

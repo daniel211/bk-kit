@@ -55,8 +55,9 @@ function kitRoot() {
 const ROOT = kitRoot();
 const { resolveModel } = await import(pathToFileURL(join(ROOT, 'scripts', 'agy-model-resolver.mjs')).href);
 const figma = await import(pathToFileURL(join(ROOT, 'scripts', 'figma-rest.mjs')).href);
+const { FigmaCache, sweepCache } = await import(pathToFileURL(join(ROOT, 'scripts', 'figma-cache.mjs')).href);
 const { FigmaRest, parseFigmaUrl, readToken, serializeNode, textNodes, searchInstances,
-        assetCandidates, frameChildren, slugify, duplicateNames } = figma;
+        assetCandidates, frameChildren, slugify, duplicateNames, DEFAULT_NODE_DEPTH } = figma;
 const { preflightAgyBinary, requiredAllowRules, allowRulesSnippet, classifyDenial, AGY_SETTINGS_PATH } =
   await import(pathToFileURL(join(ROOT, 'scripts', 'agy-preflight.mjs')).href);
 
@@ -106,14 +107,6 @@ if (opts.mode === 'screen' && !opts.fileKey && !opts.figmaUrl) {
 // this process's directory, so a relative flow path can land the output in another project
 // entirely — observed, not theorised.
 const FLOW = resolve(opts.flow.replace(/\/+$/, ''));
-
-/**
- * How deep the serialised node tree goes by default.
- *
- * Six levels keeps a real screen around 60–100 KB. Unlimited depth produced 3.1 MB for one
- * OmniWork screen — accurate, and unusable.
- */
-const DEFAULT_NODE_DEPTH = 6;
 
 // ---------------------------------------------------------------------------------------
 // Preflight — decide before spending a single token
@@ -178,6 +171,26 @@ const SKILL_MD = existsSync(join(SKILL_DIR, 'SKILL.md'))
 // ---------------------------------------------------------------------------------------
 
 const client = new FigmaRest();
+
+/**
+ * Serve this file's responses from the on-disk cache, scoped to the version it is at now.
+ *
+ * The agy path refetches every screen of a flow on every run, which is the same waste the
+ * CLI path had. One depth=1 metadata call decides whether the cached copies still describe
+ * the current design; a probe that fails simply means no cache, never a stale spec.
+ *
+ * @param {string} fileKey
+ * @returns {Promise<void>}
+ */
+async function attachCache(fileKey) {
+  if (process.env.BK_FIGMA_NO_CACHE) return;
+  try {
+    const { version } = await client.getFileMeta(fileKey);
+    if (!version) return;
+    client.cache = new FigmaCache({ fileKey, version });
+    sweepCache();
+  } catch (_) { /* no cache this run */ }
+}
 const rawDir = join(FLOW, opts.mode === 'discovery' ? 'raw' : `${opts.slug}/raw`);
 mkdirSync(rawDir, { recursive: true });
 
@@ -200,6 +213,7 @@ let schemaName;
 if (opts.mode === 'discovery') {
   const { fileKey, nodeId } = parseFigmaUrl(opts.figmaUrl);
   if (!fileKey || !nodeId) fail(1, `Could not parse a file key and node id from ${opts.figmaUrl}`);
+  await attachCache(fileKey);
 
   const fetched = await client.getNodes(fileKey, [nodeId], 2);
   const root = fetched[nodeId]?.document;
@@ -245,6 +259,7 @@ if (opts.mode === 'discovery') {
 
 const fileKey = opts.figmaUrl ? parseFigmaUrl(opts.figmaUrl).fileKey : opts.fileKey;
 if (!fileKey) fail(1, 'Screen extraction needs --file-key or --figma-url.');
+await attachCache(fileKey);
 
 const fetched = await client.getNodes(fileKey, [opts.nodeId]);
 const entry = fetched[opts.nodeId];

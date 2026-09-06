@@ -25,14 +25,19 @@
  *   variables --file <key> [--out <file>]        Design tokens with their modes.
  *   styles --file <key> [--out <file>]           Published paint/text/effect styles.
  *
- *   screen --file <key> --ids <nodeId> --out-dir <dir>
+ *   screen --file <key> --ids <nodeId> --out-dir <dir> [--depth N] [--raw]
  *       Everything one screen extraction needs, in one pass: the node subtree, its text,
- *       its components, plus file-level variables and styles. Written as separate JSON
- *       files so a model reads only what it needs.
+ *       its components, its asset candidates, plus file-level variables and styles. Written
+ *       as separate JSON files so a model reads only what it needs. node.json is depth
+ *       limited (default 6); the files beside it are walked in full.
  *
  *   export --file <key> --ids <a,b> --format png|svg|pdf [--scale N]
  *          --out-dir <dir> [--name <base>]
  *       Render nodes and write them to disk, byte-exact.
+ *
+ * Responses are cached on disk under the Figma file's own version, so re-running a flow
+ * over an unchanged file costs one small metadata request instead of refetching every
+ * screen. Pass --no-cache (or set BK_FIGMA_NO_CACHE) to force a fresh read.
  *
  * Exit codes: 0 ok · 1 usage or API error · 2 no token
  */
@@ -40,9 +45,11 @@
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
-  FigmaRest, parseFigmaUrl, readToken, downloadImage,
-  frameChildren, textNodes, components, searchInstances, slugify, duplicateNames, serializeNode
+  FigmaRest, parseFigmaUrl, readToken, downloadImage, DEFAULT_NODE_DEPTH,
+  frameChildren, textNodes, components, searchInstances, slugify, duplicateNames,
+  serializeNode, assetCandidates
 } from './figma-rest.mjs';
+import { FigmaCache, sweepCache } from './figma-cache.mjs';
 
 const [command, ...rest] = process.argv.slice(2);
 const flags = {};
@@ -75,23 +82,57 @@ if (!readToken()) {
        + '   Create one at https://www.figma.com/developers/api#access-tokens');
 }
 
-/** Resolve the file key and node id from either --url or --file/--ids. */
-function target() {
+const client = new FigmaRest();
+
+/**
+ * Point the client at the on-disk cache for this file, at the version it is at right now.
+ *
+ * One `depth=1` metadata call decides it. That call is the price of the cache and it is
+ * paid once per command; a nineteen-screen flow over an unchanged file otherwise refetches
+ * every node tree it already has.
+ *
+ * A probe that fails disables the cache rather than stopping anything: fetching afresh is
+ * always correct, and no design should go stale because a version could not be read.
+ *
+ * @param {string} fileKey
+ * @returns {Promise<void>}
+ */
+async function attachCache(fileKey) {
+  if (flags['no-cache'] || process.env.BK_FIGMA_NO_CACHE) return;
+  try {
+    const { version } = await client.getFileMeta(fileKey);
+    if (!version) return;
+    client.cache = new FigmaCache({ fileKey, version });
+    // Stale versions would otherwise accumulate one full copy per edit, and node trees are
+    // measured in megabytes.
+    sweepCache();
+    // stderr, so it never lands in the JSON a caller is parsing off stdout.
+    console.error(`ℹ️  cache: ${fileKey} @ version ${version}`);
+  } catch (_) { /* no cache this run */ }
+}
+
+/**
+ * Resolve the file key and node id from either --url or --file/--ids, and enable the cache.
+ *
+ * @param {{cache?: boolean}} [opts] cache:false for commands whose responses are not cacheable
+ * @returns {Promise<{fileKey: string, ids: string[]}>}
+ */
+async function target({ cache = true } = {}) {
   const fromUrl = flags.url ? parseFigmaUrl(flags.url) : { fileKey: null, nodeId: null };
   const fileKey = flags.file || fromUrl.fileKey;
   const ids = flags.ids ? String(flags.ids).split(',').map((s) => s.trim()).filter(Boolean)
                         : (fromUrl.nodeId ? [fromUrl.nodeId] : []);
   if (!fileKey) die(1, 'Could not determine the file key. Pass --url or --file.');
+  if (cache) await attachCache(fileKey);
   return { fileKey, ids };
 }
-
-const client = new FigmaRest();
 
 try {
   if (command === 'discover') {
     if (!flags.url) die(1, 'discover needs --url');
     const { fileKey, nodeId } = parseFigmaUrl(flags.url);
     if (!fileKey || !nodeId) die(1, `Could not parse a file key and node id from ${flags.url}`);
+    await attachCache(fileKey);
 
     // depth=2 is enough to classify the node and see its children; the per-screen fetch
     // pulls the full subtree later. Asking for everything here would download the file.
@@ -132,7 +173,7 @@ try {
     });
 
   } else if (command === 'nodes') {
-    const { fileKey, ids } = target();
+    const { fileKey, ids } = await target();
     if (ids.length === 0) die(1, 'nodes needs --ids or a --url containing node-id');
     // The API's own depth param truncates server-side; the serializer prunes fields. They
     // solve different halves of the size problem, so both are available.
@@ -148,28 +189,30 @@ try {
     }
 
   } else if (command === 'text') {
-    const { fileKey, ids } = target();
+    const { fileKey, ids } = await target();
     const nodes = await client.getNodes(fileKey, ids);
     output(ids.flatMap((id) => textNodes(nodes[id]?.document)));
 
   } else if (command === 'components') {
-    const { fileKey, ids } = target();
+    const { fileKey, ids } = await target();
     const nodes = await client.getNodes(fileKey, ids);
     output(ids.flatMap((id) => components(nodes[id]?.document)));
 
   } else if (command === 'variables') {
-    const { fileKey } = target();
+    const { fileKey } = await target();
     output(await client.getLocalVariables(fileKey));
 
   } else if (command === 'styles') {
-    const { fileKey } = target();
+    const { fileKey } = await target();
     output(await client.getStyles(fileKey));
 
   } else if (command === 'screen') {
-    // One command rather than five, because a per-screen extraction always needs the same
-    // five things, and five round trips per screen across nineteen screens is most of the
-    // wall-clock time.
-    const { fileKey, ids } = target();
+    // One command rather than several, because a per-screen extraction always needs the
+    // same handful of artefacts, and a round trip each across nineteen screens is most of
+    // the wall-clock time. Note the single fetch is deliberately NOT depth-limited
+    // server-side: text.json, components.json and asset-candidates.json are all walked at
+    // full depth, and only node.json is pruned.
+    const { fileKey, ids } = await target();
     if (ids.length === 0) die(1, 'screen needs --ids');
     if (!flags['out-dir']) die(1, 'screen needs --out-dir');
     const outDir = flags['out-dir'];
@@ -188,12 +231,17 @@ try {
       return { file: name, bytes: text.length };
     };
 
-    // Pruned by default: the raw subtree for one screen is 4.5 MB, which is not something a
-    // model can be handed. --raw keeps the original for debugging.
-    const depth = flags.depth ? Number(flags.depth) : undefined;
+    // Pruned AND depth-limited by default: the raw subtree for one screen is 4.5 MB and
+    // serialises to 3.1 MB at unlimited depth, neither of which a model can be handed.
+    // --raw keeps the original for debugging; --depth overrides the limit.
+    const depth = flags.depth ? Number(flags.depth) : DEFAULT_NODE_DEPTH;
     const written = [
-      write('node.json', flags.raw ? document : serializeNode(document, { depth: depth ?? Infinity })),
-      write('text.json', textNodes(document))
+      write('node.json', flags.raw ? document : serializeNode(document, { depth })),
+      write('text.json', textNodes(document)),
+      // Walked at full depth, unlike node.json: assets sit below the depth limit, so a spec
+      // written from node.json alone lists none. design-spec-writer and
+      // design-asset-exporter both read this file by name.
+      write('asset-candidates.json', assetCandidates(document))
     ];
 
     // The component inventory comes from the response's own maps, not from walking the
@@ -241,7 +289,9 @@ try {
     });
 
   } else if (command === 'export') {
-    const { fileKey, ids } = target();
+    // No cache probe: rendered-image URLs expire and are never cached, so the metadata call
+    // would buy nothing.
+    const { fileKey, ids } = await target({ cache: false });
     if (ids.length === 0) die(1, 'export needs --ids');
     if (!flags['out-dir']) die(1, 'export needs --out-dir');
     const format = flags.format || 'png';
