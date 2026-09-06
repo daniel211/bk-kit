@@ -7,7 +7,12 @@ argument-hint: "[feature or files] [--model gemini-3.1-pro-high] [--fast]"
 
 # Gemini Review: $ARGUMENTS
 
-Automated, independent code review using Google's **Gemini CLI** (`@google/gemini-cli`). Provides cross-model verification (Claude writes code, Gemini reviews it) with 1M+ token context and deep reasoning on architecture, concurrency, and security.
+Automated, independent code review running Gemini models through Google's **Antigravity CLI**
+(`agy`). Provides cross-model verification — Claude writes the code, Gemini reviews it — with
+deep reasoning on architecture, concurrency, and security.
+
+The skill keeps the `gemini` name because that is the model doing the reviewing; `agy` is the
+CLI that replaced the retired `gemini` CLI in kit 0.2.0.
 
 <Use_When>
 - User wants an independent, cross-model review of changes before committing
@@ -43,7 +48,7 @@ If `gemini` is not found:
   `brew install --cask antigravity-cli` (macOS) or
   `curl -fsSL https://antigravity.google/cli/install.sh | bash`, then run `agy` once to
   authenticate. The retired `gemini` CLI is no longer used.
-- Authenticate via `gemini` or set `export GEMINI_API_KEY="..."`
+- Authenticate by running `agy` once interactively
 
 ### Step 2: Execute Gemini Review Script
 

@@ -50,11 +50,14 @@ Detect if changes are security-sensitive:
 ### Step 2: Dispatch Review Agents
 
 **Review Engine Selection (Default: Gemini Reviewer)**:
-- **Default (Gemini)**: Dispatch `bk-gemini-reviewer` (using Gemini Pro). Always prioritized when `gemini` CLI is configured (free or paid/licensed account).
-- **Fallback (Claude)**: If `which gemini` returns not found or `--engine claude` is requested, dispatch `bk-code-reviewer` (sonnet).
+- **Default (Gemini)**: Dispatch `bk-gemini-reviewer`. Preferred whenever Antigravity CLI is
+  installed — probe with `command -v agy` (`where agy` on Windows). The reviewer is named
+  for the model it uses, not the CLI: `agy` replaced the retired `gemini` CLI in kit 0.2.0.
+- **Fallback (Claude)**: If `agy` is not found or `--engine claude` is requested, dispatch
+  `bk-code-reviewer` (sonnet). This path needs no external CLI.
 - **Dual Mode (`--engine dual`)**: Dispatch BOTH `bk-gemini-reviewer` and `bk-code-reviewer` in parallel for multi-model consensus. They write to distinct report paths (`code-review-gemini-{feature}.md` vs `code-review-{feature}.md`) — never point both at the same file, or the slower agent silently overwrites the other.
 
-**Tool boundaries differ per engine** — `bk-gemini-reviewer` needs `Bash` to invoke the Gemini CLI harness; `bk-code-reviewer` does not. Use the exact TOOL RESTRICTION line shown in each dispatch block below; do not copy one engine's restriction onto the other.
+**Tool boundaries differ per engine** — `bk-gemini-reviewer` needs `Bash` to invoke the review harness (`agy`); `bk-code-reviewer` does not. Use the exact TOOL RESTRICTION line shown in each dispatch block below; do not copy one engine's restriction onto the other.
 
 Dispatch review agent(s) in ONE message (background):
 
@@ -71,7 +74,7 @@ Task(subagent_type: "bk-gemini-reviewer", model: "sonnet", run_in_background: tr
 ")
 ```
 
-*(Fallback if Gemini CLI is not available, or when `--engine claude` is requested)*:
+*(Fallback if `agy` is not available, or when `--engine claude` is requested)*:
 ```
 Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true, prompt: "
   Task: Code review for feature {feature_name}

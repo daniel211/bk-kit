@@ -66,7 +66,7 @@ Use Bash strictly to invoke the Gemini review harness.
 `verify-output.cjs` enforces tool restrictions:
 1. Scans agent output for Edit/Bash patterns for read-only agents → `[TOOL-RESTRICT]` error
 2. For **Read-only+Harness**, scans for `Edit`, plus any Bash command outside the harness
-   allowlist (gemini CLI / `gemini-review.mjs` / read-only inspection) → `[TOOL-RESTRICT]` error
+   allowlist (`agy` / `gemini-review.mjs` / read-only inspection) → `[TOOL-RESTRICT]` error
 3. Second layer on top of `permissionMode: plan` in agent frontmatter
 
 **Scope of the hook:** it is a best-effort scan of the agent's returned transcript after

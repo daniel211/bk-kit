@@ -1,6 +1,6 @@
 {
   "name": "@beerkit/bk-ios",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "beer-kit iOS Development Kit for Claude Code — Swift/SwiftUI agents, skills, and hooks",
   "type": "module",
   "bin": {
