@@ -289,6 +289,110 @@ try {
   }
 
   /**
+   * Format a duration the way the `/status` Usage tab does: `3h36m`, `12m`.
+   *
+   * @param {number} ms
+   * @returns {string}
+   */
+  function formatDuration(ms) {
+    const mins = Math.round(ms / 60000);
+    if (mins < 60) return `${mins}m`;
+    const hours = Math.floor(mins / 60);
+    const rem = mins % 60;
+    return rem ? `${hours}h${rem}m` : `${hours}h`;
+  }
+
+  /**
+   * Money, at the precision the figure deserves: cents while small, whole
+   * dollars once the number is big enough that cents are noise.
+   *
+   * @param {number} usd
+   * @returns {string}
+   */
+  function formatUsd(usd) {
+    return usd >= 100 ? `$${Math.round(usd)}` : `$${usd.toFixed(2)}`;
+  }
+
+  /**
+   * Line 4 — what this has cost, at three scopes.
+   *
+   * Session cost comes straight from the payload (authoritative: it is the figure
+   * `/status → Usage` prints). Month-to-date and the seven-day window come from
+   * `~/.claude/.bk-usage-rollup.json`, computed from transcripts against
+   * `model-pricing.json` — approximate, and account-wide rather than per-project.
+   *
+   * A figure that is unknown renders as `—`, never `$0.00`: a zero reads as
+   * "you have spent nothing", which is a different and wrong claim.
+   *
+   * @param {object} cost — data.cost
+   * @param {object|null} totals — readUsageRollup() result
+   * @param {object} tmCfg — policy.token_monitoring
+   * @returns {string}
+   */
+  function renderUsageLine(cost, totals, tmCfg) {
+    try {
+      const parts = [];
+
+      const sessionUsd = cost && typeof cost.total_cost_usd === 'number' ? cost.total_cost_usd : null;
+      parts.push(`sess ${sessionUsd === null ? '—' : formatUsd(sessionUsd)}`);
+      if (cost && typeof cost.total_api_duration_ms === 'number' && cost.total_api_duration_ms > 0) {
+        parts.push(`${formatDuration(cost.total_api_duration_ms)} api`);
+      }
+
+      const budgeted = (usd, budget) => {
+        const text = formatUsd(usd);
+        if (typeof budget !== 'number' || budget <= 0) return text;
+        const ratio = usd / budget;
+        return ratio >= 1 ? _red(text) : ratio >= 0.8 ? _yellow(text) : text;
+      };
+
+      parts.push(totals && totals.mtdUsd !== null
+        ? `MTD ${budgeted(totals.mtdUsd, tmCfg.usage_month_budget_usd)}`
+        : 'MTD —');
+
+      // `7d~` marks a week total measured from the fallback Monday rather than
+      // from the reset Claude Code reported — approximate, and labelled as such.
+      const weekLabel = totals && totals.weekApprox ? '7d~' : '7d';
+      if (totals && totals.weekUsd !== null) {
+        let weekPart = `${weekLabel} ${budgeted(totals.weekUsd, tmCfg.usage_week_budget_usd)}`;
+        if (totals.resetsAtMs) {
+          const mins = Math.round((totals.resetsAtMs - Date.now()) / 60000);
+          if (mins > 0) weekPart += ` (${formatResetIn(mins)})`;
+        }
+        parts.push(weekPart);
+      } else {
+        parts.push(`${weekLabel} —`);
+      }
+
+      return `📊 ${parts.join(' · ')}`;
+    } catch { return ''; }
+  }
+
+  /**
+   * Kick off a rollup refresh when the numbers have gone stale — detached, so the
+   * statusline returns immediately and the scan finishes in its own process. The
+   * render path itself never scans transcripts.
+   *
+   * @param {object|null} totals — readUsageRollup() result
+   * @param {number} refreshMs
+   * @param {number|null} resetsAtSec
+   */
+  function maybeRefreshUsageRollup(totals, refreshMs, resetsAtSec) {
+    try {
+      if (process.env.BK_USAGE_ROLLUP_NO_REFRESH === '1') return;
+      const stale = !totals || totals.updated === null || totals.staleMs > refreshMs;
+      if (!stale) return;
+      const script = path.join(__dirname, 'lib', 'usage-rollup-refresh.cjs');
+      if (!fs.existsSync(script)) return;
+      const args = [script];
+      if (resetsAtSec) args.push(String(resetsAtSec));
+      require('child_process')
+        .spawn(process.execPath, args, { detached: true, stdio: 'ignore' })
+        .unref();
+    } catch { /* the line simply stays stale */ }
+  }
+
+  /**
    * Worktree indicator. A session can be editing a worktree while the developer believes
    * they are on their branch — that is exactly how a /bk-bootstrap run left seven
    * generated documents stranded on an unmerged branch.
@@ -711,10 +815,26 @@ try {
         harnessLine = renderHarnessLine(harnessSummary, policy);
       } catch { /* fail-open — harness line is optional */ }
 
+      // --- Line 4: usage totals (session / month-to-date / seven-day window) ---
+      let usageLine = '';
+      try {
+        const tmCfg = loadHarnessPolicy().token_monitoring || {};
+        if (tmCfg.statusline_show_usage_totals !== false) {
+          const { readUsageRollup } = require('./lib/usage-rollup.cjs');
+          const resetsAtSec = data.rate_limits?.seven_day?.resets_at || null;
+          const totals = readUsageRollup({ resetsAtSec });
+          usageLine = renderUsageLine(data.cost, totals, tmCfg);
+          maybeRefreshUsageRollup(totals, tmCfg.usage_rollup_refresh_ms || 300000, resetsAtSec);
+        }
+      } catch { /* fail-open — the usage line is optional */ }
+
       process.stdout.write(line1 + '\n');
       process.stdout.write(line2Parts.join('  ') + '\n');
       if (harnessLine) {
         process.stdout.write(harnessLine + '\n');
+      }
+      if (usageLine) {
+        process.stdout.write(usageLine + '\n');
       }
 
       timer.end({ status: 'ok', exit: 0 });

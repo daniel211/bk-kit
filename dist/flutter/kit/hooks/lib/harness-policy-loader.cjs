@@ -86,7 +86,11 @@ const DEFAULT_POLICY = {
     burn_window_file: '.bk-metrics/token-burn-window.jsonl',
     statusline_show_tokens: true,
     statusline_show_cost: true,
-    statusline_show_rate: true
+    statusline_show_rate: true,
+    statusline_show_usage_totals: true,
+    usage_rollup_refresh_ms: 300000,
+    usage_month_budget_usd: null,
+    usage_week_budget_usd: null
   },
   inferential_review: {
     enabled: true,

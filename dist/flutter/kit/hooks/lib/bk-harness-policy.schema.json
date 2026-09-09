@@ -258,6 +258,21 @@
         },
         "statusline_show_rate": {
           "type": "boolean"
+        },
+        "statusline_show_usage_totals": {
+          "type": "boolean"
+        },
+        "usage_rollup_refresh_ms": {
+          "type": "integer",
+          "minimum": 30000
+        },
+        "usage_month_budget_usd": {
+          "type": ["number", "null"],
+          "minimum": 0
+        },
+        "usage_week_budget_usd": {
+          "type": ["number", "null"],
+          "minimum": 0
         }
       }
     },

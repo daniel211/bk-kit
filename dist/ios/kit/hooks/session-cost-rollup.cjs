@@ -57,11 +57,39 @@ try {
       };
 
       appendEntry(entry);
+      refreshUsageTotals();
       timer.end({ status: 'ok', source: entry.source, exit: 0 });
       process.exit(0);
     } catch (err) {
       timer.end({ status: 'error', error: err.message, exit: 0 });
       process.exit(0);
+    }
+  }
+
+  /**
+   * Fold this session's turns into the account-wide usage rollup that the
+   * statusline's month-to-date and seven-day figures read.
+   *
+   * The statusline can refresh this itself, but only while someone is looking at
+   * it — end of turn is the moment the transcript is complete, and it costs ~10ms
+   * once the first scan is behind us. Skipped while the rollup is still fresh, so
+   * a burst of short turns does not re-scan repeatedly.
+   */
+  function refreshUsageTotals() {
+    try {
+      const { readUsageRollup, refreshUsageRollup } = require('./lib/usage-rollup.cjs');
+      const { loadHarnessPolicy } = require('./lib/harness-policy-loader.cjs');
+      const tmCfg = loadHarnessPolicy().token_monitoring || {};
+      if (tmCfg.statusline_show_usage_totals === false) return;
+
+      const totals = readUsageRollup();
+      const refreshMs = tmCfg.usage_rollup_refresh_ms || 300000;
+      if (totals.updated !== null && totals.staleMs < refreshMs) return;
+
+      refreshUsageRollup();
+    } catch (err) {
+      // Never let a spend figure hold up the end of a turn.
+      process.stderr.write(`[session-cost-rollup] usage rollup skipped: ${err.message}\n`);
     }
   }
 
