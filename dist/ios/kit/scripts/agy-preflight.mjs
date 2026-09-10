@@ -130,6 +130,45 @@ export function classifyDenial(stderr) {
 }
 
 /**
+ * The tools this kit's allow-rules actually grant — see `requiredAllowRules`.
+ *
+ * Anything outside this list is not an oversight in the snippet: the kit reads and writes
+ * one flow directory and needs nothing else, and it never passes
+ * --dangerously-skip-permissions.
+ */
+export const KIT_GRANTED_TOOLS = ['read_file', 'write_file'];
+
+/**
+ * `classifyDenial`, plus **which tool** agy was denied.
+ *
+ * A sibling rather than a wider return type, so `bk-visual-verify` and the existing tests
+ * keep working against the boolean-ish classifier they already use.
+ *
+ * The reason it exists: agy classifies a denied `command` (shell) call as 'allowable' — its
+ * message really does say "Add an allow-rule under permissions.allow" — so the design runner
+ * printed the standard snippet, `read_file(*)` and `write_file(<repo>/bk/**)`. On the machine
+ * where this happened both rules were already present, and neither has anything to do with a
+ * shell denial. The advice told the user to add what they already had. Naming the tool is
+ * what lets the caller tell those two situations apart.
+ *
+ * @param {string} stderr
+ * @returns {{kind: 'allowable'|'unallowable'|null, tool: string|null, granted: boolean}}
+ *   `tool` is null when agy reported the denial without naming one (its plural
+ *   "the tool(s) required approval" form). `granted` says whether the denied tool is one the
+ *   kit's own allow-rules cover — i.e. whether the snippet is worth printing at all.
+ */
+export function describeDenial(stderr) {
+  const text = String(stderr || '');
+  const kind = classifyDenial(text);
+  if (!kind) return { kind: null, tool: null, granted: false };
+  // The exact shape agy emits: `a tool required the "command" permission that headless mode
+  // cannot prompt for`.
+  const match = text.match(/a tool required the "([^"]+)" permission/i);
+  const tool = match ? match[1] : null;
+  return { kind, tool, granted: Boolean(tool) && KIT_GRANTED_TOOLS.includes(tool) };
+}
+
+/**
  * Resolve the engine for a design run, in priority order:
  *   explicit flag → BK_DESIGN_ENGINE env → platform-context designEngine → default.
  *

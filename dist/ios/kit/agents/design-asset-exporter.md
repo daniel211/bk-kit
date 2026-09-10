@@ -71,12 +71,16 @@ Export PNG @1x/@2x/@3x thay thế. **NEVER export @2x only.**
 > format and are handled earlier — see Node ID Validation.
 ```bash
 for scale in 1 2 3; do
+  suffix=""; [ "$scale" -gt 1 ] && suffix="@${scale}x"
   node .claude/scripts/figma-cli.mjs export \
     --file {fileKey} --ids {nodeId} --format png --scale $scale \
-    --out-dir {flow}/assets/{name}.imageset --name {name}
+    --out-dir {flow}/assets/{name}.imageset --name "{name}$suffix"
 done
 ```
-> `--scale 1` writes `{name}.png`; scales above 1 write `{name}@2x.png` and `{name}@3x.png`.
+> The `@2x`/`@3x` suffix is spelled into `--name` here on purpose. `--name` is honoured
+> **verbatim** — it never gains a scale suffix of its own, because the spec writer passes
+> `--name screenshot --scale 2` and every downstream check looks for `screenshot.png`.
+> Drop the `$suffix` and all three scales overwrite one `{name}.png`.
 Record trong report: `"format": "PNG", "scales": ["@1x", "@2x", "@3x"], "note": "PDF export failed — PNG fallback. {lý do}"`.
 
 **Images (PNG @1x/@2x/@3x):** same three-scale loop as the PDF fallback above.

@@ -27,6 +27,8 @@ import { spawn } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+// A contract failure has to reach the next attempt's prompt, or the retry learns nothing.
+import { recordViolations, clearViolations, retryFeedbackBlock } from './design-retry-feedback.mjs';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -58,8 +60,12 @@ const figma = await import(pathToFileURL(join(ROOT, 'scripts', 'figma-rest.mjs')
 const { FigmaCache, sweepCache } = await import(pathToFileURL(join(ROOT, 'scripts', 'figma-cache.mjs')).href);
 const { FigmaRest, parseFigmaUrl, readToken, serializeNode, textNodes, searchInstances,
         assetCandidates, frameChildren, slugify, duplicateNames, DEFAULT_NODE_DEPTH } = figma;
-const { preflightAgyDesign, requiredAllowRules, allowRulesSnippet, classifyDenial, AGY_SETTINGS_PATH } =
+const { preflightAgyDesign, requiredAllowRules, allowRulesSnippet, describeDenial, AGY_SETTINGS_PATH } =
   await import(pathToFileURL(join(ROOT, 'scripts', 'agy-preflight.mjs')).href);
+// agy's terminal event is nested (`{event:"result", result:{…}}`) and `--json-schema` can put
+// two objects back to back. agy-stream.mjs already carries the answers to both; a second
+// parser here would be a second place to get them wrong.
+const { extractResultEvent } = await import(pathToFileURL(join(ROOT, 'scripts', 'agy-stream.mjs')).href);
 
 // ---------------------------------------------------------------------------------------
 // Arguments
@@ -91,6 +97,22 @@ function fail(code, message, detail) {
   console.error(`\n❌ ${message}`);
   if (detail) console.error(detail);
   process.exit(code);
+}
+
+/**
+ * Fail on a broken output contract (exit 3) — and leave the reason where the retry finds it.
+ *
+ * The workflow re-runs this script verbatim after a 3. Printing the violations only to
+ * stderr told the person watching, not the model that has to fix them; `rawDir` is where the
+ * next attempt looks. Used for every contract check below, so no failure mode is silently
+ * left out of the feedback loop.
+ *
+ * @param {string} message
+ * @param {string} [detail]
+ */
+function failContract(message, detail) {
+  recordViolations(rawDir, [message, detail].filter(Boolean).join('\n'));
+  fail(3, message, detail);
 }
 
 // ---------------------------------------------------------------------------------------
@@ -345,7 +367,12 @@ neither is needed. The data is already here.
 
 `;
 
-prompt = `${TOOLS_PREAMBLE}You are writing a design spec for ONE screen from data already fetched from Figma.
+// Empty on a first attempt; on a retry it names the exact defects the last run was failed
+// for. Read before anything overwrites raw/, and cleared once this run passes.
+const RETRY_FEEDBACK = retryFeedbackBlock(rawDir);
+if (RETRY_FEEDBACK) console.log('  Retry: feeding the previous run\'s contract violations back into the prompt.');
+
+prompt = `${TOOLS_PREAMBLE}${RETRY_FEEDBACK}You are writing a design spec for ONE screen from data already fetched from Figma.
 
 Screen nodeId: ${opts.nodeId}
 Screen slug:   ${opts.slug}
@@ -430,7 +457,28 @@ const exitCode = await new Promise((res) => child.on('close', res));
 
 // A denial is the failure this runner exists to explain well. Headless agy cannot prompt,
 // so an un-approved tool is auto-denied and the run returns SUCCESS with nothing done.
-const denial = classifyDenial(stderrData);
+const { kind: denial, tool: deniedTool, granted: deniedToolIsGranted } = describeDenial(stderrData);
+
+// A denial agy calls fixable, for a tool the kit deliberately never grants. agy says
+// "Add an allow-rule under permissions.allow" for `command` (shell) too, so this branch used
+// to print the read_file/write_file snippet — rules the machine in question already had, and
+// neither of which addresses a shell denial. Naming the tool is the whole fix.
+if (denial === 'allowable' && deniedTool && !deniedToolIsGranted) {
+  console.error(`\n❌ agy reached for the "${deniedTool}" tool, which this kit does not grant.`);
+  console.error('   The kit grants read_file and write_file on the flow directory, and nothing');
+  console.error('   else — everything this extraction needs was already fetched to disk before');
+  console.error('   agy started. It also never passes --dangerously-skip-permissions. So there');
+  console.error('   is no allow-rule to add: no change to settings.json rescues this attempt.');
+  console.error('');
+  console.error('   Nothing is broken. Which tools agy reaches for is not deterministic, so a');
+  console.error('   re-run may well finish without one — and if it does not, the retry path in');
+  console.error('   design-workflow.md falls back to the claude engine. Exiting 3 so that runs.');
+  const shellNote = stderrData.split('\n').find((line) => /auto-denied/.test(line));
+  if (shellNote) console.error(`\n   agy said: ${shellNote.trim().slice(0, 300)}`);
+  console.error('');
+  process.exit(3);
+}
+
 if (denial === 'allowable') {
   console.error('\n❌ agy denied a tool it needed, because headless mode cannot ask.');
 
@@ -468,6 +516,54 @@ if (denial === 'unallowable') {
 }
 
 // ---------------------------------------------------------------------------------------
+// Iron Law 2, as a machine check
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Every raw hex colour in `markdown` that sits outside Section 4 (Design Tokens).
+ *
+ * Iron Law 2 of the bk-design SKILL.md — "NO RAW HEX OUTSIDE DESIGN TOKENS" — is a rule a
+ * machine can check, and until this function existed only a human ever did. A real agy run
+ * produced a design.md that satisfied the post-verify below (nine sections, well-shaped
+ * assets.json) while carrying four raw hex values: `fill=#ffffff` in the Section 2 Layout
+ * Tree, two more in the Component Breakdown table, and one in the Section 9 checklist. The
+ * spec looked finished and was wrong, which is the worst failure mode this runner has.
+ *
+ * Fenced code blocks are deliberately NOT exempt. The wireframe that broke the law was
+ * *inside* the ASCII fence in Section 2 — skipping fences to avoid "false positives" would
+ * skip the exact violation that motivated this check. Section 4 is the only exemption there
+ * is, because Section 4 is where hex values are supposed to live.
+ *
+ * Pure and dependency-free on purpose: it takes text and returns findings, so it can be
+ * lifted into scripts/ the day a second caller needs it.
+ *
+ * @param {string} markdown the design.md contents
+ * @returns {{line: number, text: string, hex: string[]}[]} one entry per offending line
+ */
+function rawHexOutsideTokens(markdown) {
+  // Longest form first, so `#ffffffff` is read as one 8-digit value rather than a 6-digit
+  // one with junk after it. The trailing \b then rejects 5- and 7-digit near-misses instead
+  // of silently matching their prefix.
+  const HEX = /#(?:[0-9a-fA-F]{8}|[0-9a-fA-F]{6}|[0-9a-fA-F]{4}|[0-9a-fA-F]{3})\b/g;
+
+  const violations = [];
+  let inTokens = false;
+
+  const lines = markdown.split('\n');
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    // Section 4 runs from its own `## 4.` heading to the next `## ` heading of any number.
+    if (/^##\s+4\./.test(line)) { inTokens = true; continue; }
+    else if (inTokens && /^##\s/.test(line)) inTokens = false;
+    if (inTokens) continue;
+
+    const hex = line.match(HEX);
+    if (hex) violations.push({ line: i + 1, text: line.trim(), hex });
+  }
+  return violations;
+}
+
+// ---------------------------------------------------------------------------------------
 // Verify what actually landed on disk
 // ---------------------------------------------------------------------------------------
 //
@@ -487,7 +583,7 @@ const expected = [
 
 const missing = expected.filter((f) => !existsSync(f));
 if (missing.length > 0) {
-  fail(3, exitCode === 0
+  failContract(exitCode === 0
         ? 'agy reported success but did not write the expected files.'
         : `agy exited with code ${exitCode} and did not write the expected files.`,
     [...missing.map((f) => `   missing: ${f}`),
@@ -500,11 +596,11 @@ if (missing.length > 0) {
 try {
   const assets = JSON.parse(readFileSync(join(FLOW, opts.slug, 'assets.json'), 'utf8'));
   if (Array.isArray(assets) || !Array.isArray(assets?.assets)) {
-    fail(3, 'assets.json must be an object with an `assets` array.',
+    failContract('assets.json must be an object with an `assets` array.',
       `   Got: ${JSON.stringify(assets).slice(0, 120)}`);
   }
 } catch (err) {
-  if (err.name === 'SyntaxError') fail(3, `assets.json is not valid JSON: ${err.message}`);
+  if (err.name === 'SyntaxError') failContract(`assets.json is not valid JSON: ${err.message}`);
   throw err;
 }
 
@@ -512,8 +608,24 @@ try {
 const designMd = readFileSync(join(FLOW, opts.slug, 'design.md'), 'utf8');
 const sections = (designMd.match(/^##\s+\d\./gm) || []).length;
 if (sections < 9) {
-  fail(3, `design.md has ${sections} of the 9 required sections.`,
+  failContract(`design.md has ${sections} of the 9 required sections.`,
     '   Re-run, then fall back to the claude engine.');
+}
+
+// Iron Law 2. Exit 3 like every other contract failure, so the retry-then-fall-back path in
+// design-workflow.md handles it with no change: the run produced files, they are just wrong.
+// Every violation is listed rather than the first, because a re-run that fixes one line and
+// trips over the next has cost a whole extraction to learn one fact.
+const hexViolations = rawHexOutsideTokens(designMd);
+if (hexViolations.length > 0) {
+  failContract(`design.md breaks Iron Law 2: ${hexViolations.length} raw hex value`
+        + `${hexViolations.length === 1 ? '' : 's'} outside Section 4 (Design Tokens).`,
+    [...hexViolations.map(({ line, text, hex }) =>
+       `   line ${line}: ${hex.join(', ')}  in  ${text.slice(0, 120)}`),
+     '',
+     '   Hex belongs only in Section 4. Everywhere else — Layout Tree, Component Breakdown,',
+     '   the Section 9 checklist — use the $token that Section 4 defines for that colour.'
+    ].join('\n'));
 }
 
 if (exitCode !== 0) {
@@ -521,4 +633,26 @@ if (exitCode !== 0) {
     + 'Keeping it.');
 }
 
+// Every contract check passed, so the last failure is answered. Leaving the file behind
+// would feed a solved problem into the next unrelated run over this screen.
+clearViolations(rawDir);
+
 console.log(`\n✅ DONE: ${opts.mode} via agy → ${expected.map((f) => f.replace(`${FLOW}/`, '')).join(', ')}`);
+
+// What the run cost. The engine plan justifies agy on cost, and until this line the runner
+// parsed the result event and threw the usage away — so the one number the decision rests on
+// was the one number nobody could see.
+//
+// Everything here is optional by design: a missing or differently-shaped usage object prints
+// nothing at all. A run that produced a correct spec must never be spoiled by a telemetry
+// field agy renamed, so no value is invented and no access is unguarded.
+const usage = extractResultEvent(stdoutData)?.usage;
+if (usage) {
+  const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v.toLocaleString('en-US') : null);
+  const parts = [
+    num(usage.input_tokens) && `in ${num(usage.input_tokens)}`,
+    num(usage.output_tokens) && `out ${num(usage.output_tokens)}`,
+    num(usage.total_tokens) && `total ${num(usage.total_tokens)}`
+  ].filter(Boolean);
+  if (parts.length) console.log(`  Tokens: ${parts.join(' · ')}`);
+}

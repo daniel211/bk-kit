@@ -33,7 +33,9 @@
  *
  *   export --file <key> --ids <a,b> --format png|svg|pdf [--scale N]
  *          --out-dir <dir> [--name <base>]
- *       Render nodes and write them to disk, byte-exact.
+ *       Render nodes and write them to disk, byte-exact. `--name foo` writes exactly
+ *       `foo.<format>` at any scale; without it the filename is the node id, and only then
+ *       does a scale above 1 add an `@Nx` suffix. See exportFileName in figma-rest.mjs.
  *
  * Responses are cached on disk under the Figma file's own version, so re-running a flow
  * over an unchanged file costs one small metadata request instead of refetching every
@@ -47,7 +49,7 @@ import { dirname, join } from 'node:path';
 import {
   FigmaRest, parseFigmaUrl, readToken, downloadImage, DEFAULT_NODE_DEPTH,
   frameChildren, textNodes, components, searchInstances, slugify, duplicateNames,
-  serializeNode, assetCandidates
+  serializeNode, assetCandidates, exportFileName
 } from './figma-rest.mjs';
 import { FigmaCache, sweepCache } from './figma-cache.mjs';
 
@@ -306,9 +308,8 @@ try {
         written.push({ nodeId, skipped: 'figma returned no image for this node' });
         continue;
       }
-      const base = flags.name || nodeId.replace(/[:;]/g, '-');
-      const suffix = scale && scale !== 1 ? `@${scale}x` : '';
-      const path = join(flags['out-dir'], `${base}${suffix}.${format}`);
+      // `--name` wins outright — see exportFileName for the run this rule comes from.
+      const path = join(flags['out-dir'], exportFileName({ nodeId, name: flags.name, scale, format }));
       const bytes = await downloadImage(url, path);
       written.push({ nodeId, path, bytes });
     }

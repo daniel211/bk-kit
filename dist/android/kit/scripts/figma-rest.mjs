@@ -409,6 +409,36 @@ export async function downloadImage(url, outPath, fetchImpl = fetch) {
   return bytes.length;
 }
 
+/**
+ * The filename `figma-cli export` writes for one rendered node.
+ *
+ * The rule is: **an explicit `--name` is the filename**. It is passed by a caller that has
+ * already decided what the file must be called, and appending anything to it breaks that
+ * caller's contract. The design-spec-writer asks for `--scale 2 --name screenshot` and every
+ * downstream check — the bk-design Output Contract, its Self-Check Glob, the filesystem
+ * post-verify in design-workflow.md — looks for `screenshot.png`. This function used to
+ * append the scale, so those runs wrote `screenshot@2x.png` and then failed the post-verify
+ * for a screenshot that had rendered perfectly. Every screen on the claude engine failed
+ * that way; the agy runner downloads straight to `screenshot.png` and never saw it.
+ *
+ * The `@Nx` suffix survives only for the node-id fallback, where there is no caller-chosen
+ * name and the scale is the only thing separating three renders of one node. A caller that
+ * wants both a name and a scale suffix spells the suffix into the name — which is what the
+ * three-scale loop in design-asset-exporter.md now does.
+ *
+ * @param {object} opts
+ * @param {string} opts.nodeId    the Figma node id, used when no name is given
+ * @param {string} [opts.name]    the caller's explicit `--name`, honoured verbatim
+ * @param {number} [opts.scale]   render scale; only ever reaches the filename via fallback
+ * @param {string} opts.format    png | jpg | svg | pdf
+ * @returns {string} the basename to write, extension included
+ */
+export function exportFileName({ nodeId, name, scale, format }) {
+  if (name) return `${name}.${format}`;
+  const suffix = scale && scale !== 1 ? `@${scale}x` : '';
+  return `${String(nodeId).replace(/[:;]/g, '-')}${suffix}.${format}`;
+}
+
 // ---------------------------------------------------------------------------------------
 // Derivations — what the missing MCP server computed, done here from the same node tree
 // ---------------------------------------------------------------------------------------
