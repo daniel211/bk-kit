@@ -9,6 +9,7 @@ import { join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
+import { reportHookPerf } from '../lib/hook-perf-measure.mjs';
 
 /**
  * Check whether an executable is on PATH, on any host OS.
@@ -334,8 +335,20 @@ export function registerDoctor(program, platform) {
     .description('Validate .claude/ kit installation')
     .option('--target <dir>', 'Target project directory', '.')
     .option('--design-engine', 'Only report which design engine "auto" would pick here')
+    .option('--hook-perf', 'Only measure what this kit\'s hooks cost per tool call')
+    .option('--runs <n>', 'Runs per hook for --hook-perf (median is reported)', '3')
     .action(async (opts) => {
       const targetDir = resolve(opts.target);
+
+      // --hook-perf measures; it never judges. Like --design-engine it runs standalone and never
+      // exits non-zero — a slow kit is a fact about the machine, not a broken install, and
+      // failing the exit code would break any script that graphs the number over time.
+      if (opts.hookPerf) {
+        const runs = Math.max(1, Number.parseInt(opts.runs, 10) || 3);
+        console.log(`Hook cost for the kit in ${targetDir} (${runs} run(s) per hook):\n`);
+        reportHookPerf(targetDir, { runs });
+        return;
+      }
 
       // --design-engine answers a machine question, not an installation question, so it runs
       // on its own and never fails the exit code: a machine that will simply use the claude

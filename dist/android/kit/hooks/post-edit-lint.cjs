@@ -1,8 +1,15 @@
 #!/usr/bin/env node
-// post-edit-lint.cjs - PostToolUse hook: run platform linter on edited file
-// Template variables: android, ./gradlew ktlintCheck detekt
+// post-edit-lint.cjs - PostToolUse hook: RECORD the edited file for end-of-turn lint
+// Template variables: android
 // Trigger: PostToolUse (Write|Edit)
-// Purpose: Surface lint errors as warnings — always fail-open
+// Purpose: Append the edited path to this session's lint queue and get out of the way.
+//          The linter itself runs once per turn in stop-lint-flush.cjs (Stop event).
+//
+// This hook used to run the linter inline on every edit — 0.57–1.61s of blocking
+// wall time per Write/Edit in a real Flutter project, more than the other 19 hooks
+// of an Edit combined. It now does filesystem work only.
+//
+// Fail-open: never blocks, never exits non-zero.
 
 'use strict';
 
@@ -10,20 +17,12 @@
 try {
   const { createHookTimer } = require('./lib/hook-logger.cjs');
   const path = require('path');
-  const { execSync } = require('child_process');
   const { isHookEnabled } = require('./lib/bk-config-utils.cjs');
   const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');
+  const { isLintable, resolveQueueFile, enqueueFile } = require('./lib/lint-queue.cjs');
 
   // Template-injected values
   const PLATFORM = 'android';
-  const LINT_COMMAND = './gradlew ktlintCheck detekt';
-
-  // Default lint commands per platform (fallback if template var not set)
-  const DEFAULT_LINT = {
-    ios:     (file) => `swiftlint lint --path "${file}"`,
-    android: ()     => './gradlew ktlintCheck',
-    flutter: (file) => `dart analyze "${file}"`
-  };
 
   async function main() {
     const timer = createHookTimer('post-edit-lint');
@@ -45,39 +44,21 @@ try {
       }
 
       const platform = PLATFORM || 'unknown';
-      const lintFn = DEFAULT_LINT[platform];
-      if (!lintFn) {
-        // Unknown platform — skip lint
+
+      // Only queue files this platform's linter can actually read. Queueing a
+      // .md or .json edit would just hand `dart analyze` noise.
+      if (!isLintable(platform, filePath)) {
         timer.end({ status: 'ok', exit: 0 });
         process.exit(0);
       }
 
-      // Resolve lint command: use template-injected value or default
-      const absFile = path.isAbsolute(filePath)
-        ? filePath
-        : path.join(resolveProjectRoot(), filePath);
+      const projectRoot = resolveProjectRoot(data);
+      const absFile = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
 
-      const cmd = (LINT_COMMAND && LINT_COMMAND !== './gradlew ktlintCheck detekt')
-        ? LINT_COMMAND.replace('{file}', absFile)
-        : lintFn(absFile);
+      const queueFile = resolveQueueFile(projectRoot, data.session_id || data.sessionId || '');
+      const queued = enqueueFile(queueFile, absFile);
 
-      try {
-        execSync(cmd, {
-          encoding: 'utf8',
-          timeout: 30000,
-          stdio: ['pipe', 'pipe', 'pipe'],
-          cwd: resolveProjectRoot()
-        });
-        timer.end({ status: 'ok', exit: 0 });
-      } catch (lintErr) {
-        // Lint failed — warn only, never block
-        const output = (lintErr.stdout || '') + (lintErr.stderr || '');
-        process.stderr.write(`[LINT] ${platform} lint warnings for ${path.basename(filePath)}:\n`);
-        if (output) process.stderr.write(output.slice(0, 2000) + '\n');
-        process.stderr.write(`[LINT] Continuing — fix lint issues before committing.\n`);
-        timer.end({ status: 'warn', file: path.basename(filePath), exit: 0 });
-      }
-
+      timer.end({ status: queued ? 'ok' : 'warn', exit: 0 });
       process.exit(0);
     } catch (err) {
       timer.end({ status: 'error', error: err.message, exit: 0 });

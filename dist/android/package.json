@@ -1,6 +1,6 @@
 {
   "name": "@beerkit/bk-android",
-  "version": "0.6.0",
+  "version": "0.7.0",
   "description": "beer-kit Android Development Kit for Claude Code — Kotlin/Compose agents, skills, and hooks",
   "type": "module",
   "bin": {

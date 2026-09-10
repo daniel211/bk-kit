@@ -80,7 +80,9 @@ const DEFAULT_CONFIG = {
     'ui-snapshot-compare': true,
     'mutation-testing-sensor': true,
     'property-based-test-suggester': true,
-    'subagent-live-tracker': true
+    'subagent-live-tracker': true,
+    'post-edit-lint': true,
+    'stop-lint-flush': true
   },
   platform: 'auto'
 };

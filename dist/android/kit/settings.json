@@ -7,21 +7,21 @@
     "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/statusline.cjs"
   },
   "mcpServers": {
-  "context7": {
-    "command": "npx",
-    "args": [
-      "-y",
-      "@upstash/context7-mcp"
-    ]
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ]
+    },
+    "android-emulator": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@androidmcp/server"
+      ]
+    }
   },
-  "android-emulator": {
-    "command": "npx",
-    "args": [
-      "-y",
-      "@androidmcp/server"
-    ]
-  }
-},
   "hooks": {
     "UserPromptSubmit": [
       {
@@ -29,11 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/prompt-context-inject.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/context-monitor.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs prompt-context-inject.cjs context-monitor.cjs"
           }
         ]
       }
@@ -44,11 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/session-init.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/project-profile.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs session-init.cjs project-profile.cjs"
           }
         ]
       },
@@ -68,11 +60,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/global-kill-switch.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/tool-repetition-detector.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs global-kill-switch.cjs tool-repetition-detector.cjs"
           }
         ]
       },
@@ -81,19 +69,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/agent-memory-path-guard.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/fsm-guard.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/anti-self-implementation.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/descriptive-name.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs agent-memory-path-guard.cjs fsm-guard.cjs anti-self-implementation.cjs descriptive-name.cjs"
           }
         ]
       },
@@ -102,11 +78,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/privacy-block.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/security-check.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs privacy-block.cjs security-check.cjs"
           }
         ]
       },
@@ -124,31 +96,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/subagent-live-tracker.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/context-safety.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/parallel-safety.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/delegation-enforcer.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/traceability-check.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/budget-guard.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/subagent-iteration-cap.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs subagent-live-tracker.cjs context-safety.cjs parallel-safety.cjs delegation-enforcer.cjs traceability-check.cjs budget-guard.cjs subagent-iteration-cap.cjs"
           }
         ]
       },
@@ -168,19 +116,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/checkpoint-save.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/pattern-extractor.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/completion-notify.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/session-cost-rollup.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs checkpoint-save.cjs pattern-extractor.cjs completion-notify.cjs session-cost-rollup.cjs stop-lint-flush.cjs"
           }
         ]
       }
@@ -191,11 +127,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/checkpoint-save.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/handoff-writer.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs checkpoint-save.cjs handoff-writer.cjs"
           }
         ]
       }
@@ -206,11 +138,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/subagent-init.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/team-context-inject.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs subagent-init.cjs team-context-inject.cjs"
           }
         ]
       }
@@ -243,11 +171,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/plan-complete-reminder.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/complexity-detector.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs plan-complete-reminder.cjs complexity-detector.cjs"
           }
         ]
       },
@@ -256,23 +180,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/subagent-live-tracker.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/workflow-metrics.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/skill-chain-suggest.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/subagent-cost-capture.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/decision-tracker.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs subagent-live-tracker.cjs workflow-metrics.cjs skill-chain-suggest.cjs subagent-cost-capture.cjs decision-tracker.cjs"
           }
         ]
       }
@@ -283,52 +191,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/no-progress-detector.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/arch-fitness-android.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/arch-fitness-android-native.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/inferential-review.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/test-generation-hook.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/ui-snapshot-compare.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/mutation-testing-sensor.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/property-based-test-suggester.cjs"
-          }
-        ]
-      },
-      {
-        "matcher": "Write|Edit",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/post-edit-lint.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bootstrap-quality-gate.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/post-edit-simplify.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs no-progress-detector.cjs arch-fitness-android.cjs arch-fitness-android-native.cjs inferential-review.cjs test-generation-hook.cjs ui-snapshot-compare.cjs mutation-testing-sensor.cjs property-based-test-suggester.cjs post-edit-lint.cjs bootstrap-quality-gate.cjs post-edit-simplify.cjs"
           }
         ]
       },
@@ -337,11 +200,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/verify-output.cjs"
-          },
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/agent-signal-detector.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs verify-output.cjs agent-signal-detector.cjs"
           }
         ]
       },

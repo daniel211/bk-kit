@@ -1,0 +1,205 @@
+/**
+ * lint-queue.cjs — Session-scoped, append-only queue of edited files awaiting lint.
+ *
+ * Why: linting inside PostToolUse cost 0.57–1.61s of blocking wall time on every
+ * Write/Edit in a real Flutter project. The lint now happens once per turn at Stop.
+ * post-edit-lint.cjs only records a path here; stop-lint-flush.cjs drains and lints.
+ *
+ * Queue file: <project_root>/.bk-metrics/lint-queue/<session_id>.jsonl
+ *   - one JSON object per line: { ts, file }
+ *   - append-only (never read-modify-write), so concurrent PostToolUse hooks
+ *     from the same turn cannot clobber each other. A single appendFileSync of a
+ *     short line is atomic on POSIX for a file opened with O_APPEND.
+ *   - keyed by session id, so two Claude sessions in one repo never see each
+ *     other's files.
+ *
+ * Draining uses rename-then-read (takeQueue): the file is renamed out of the way
+ * first, so an edit that lands mid-flush starts a fresh queue instead of being
+ * silently truncated away.
+ *
+ * Every function fails open — errors are swallowed (or reported via a boolean),
+ * never thrown, because no lint bookkeeping may block a tool call.
+ *
+ * Exports:
+ *   LINTABLE_EXTENSIONS      — map of platform → extensions the linter can read
+ *   isLintable(platform, f)  — should this file be queued at all?
+ *   sanitizeSessionId(id)    — filesystem-safe session key
+ *   resolveQueueFile(root, sessionId)
+ *   enqueueFile(queueFile, absFile)
+ *   readQueuedFiles(queueFile)   — deduped, order-preserving (does not clear)
+ *   takeQueue(queueFile)         — deduped list + clears the queue atomically
+ *   clearQueue(queueFile)
+ */
+
+'use strict';
+
+const fs = require('fs');
+const path = require('path');
+
+/** Extensions each platform's linter can actually parse. */
+const LINTABLE_EXTENSIONS = {
+  ios:     ['.swift'],
+  android: ['.kt', '.kts', '.java'],
+  flutter: ['.dart']
+};
+
+/**
+ * Is this a file the platform linter can read?
+ * Keeps .md/.json/.yaml edits out of the batch — they only produce noise.
+ * @param {string} platform
+ * @param {string} filePath
+ * @returns {boolean}
+ */
+function isLintable(platform, filePath) {
+  if (!filePath || typeof filePath !== 'string') return false;
+  const exts = LINTABLE_EXTENSIONS[platform];
+  if (!exts) return false;
+  return exts.includes(path.extname(filePath).toLowerCase());
+}
+
+/**
+ * Reduce a session id to a filesystem-safe key. Guards against a session id
+ * carrying path separators or traversal segments into the queue path.
+ * @param {string} sessionId
+ * @returns {string}
+ */
+function sanitizeSessionId(sessionId) {
+  const raw = (sessionId === undefined || sessionId === null) ? '' : String(sessionId);
+  const safe = raw.replace(/[^A-Za-z0-9_-]/g, '-').replace(/^-+/, '').slice(0, 96);
+  return safe || 'no-session';
+}
+
+/**
+ * Absolute path of the queue file for one session.
+ * @param {string} projectRoot
+ * @param {string} sessionId
+ * @returns {string}
+ */
+function resolveQueueFile(projectRoot, sessionId) {
+  return path.join(projectRoot, '.bk-metrics', 'lint-queue', `${sanitizeSessionId(sessionId)}.jsonl`);
+}
+
+/** Create the parent directory of a file path. Fails open. */
+function ensureDir(filePath) {
+  try {
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Append one edited file to the queue. Append-only: safe under concurrent writers.
+ * @param {string} queueFile
+ * @param {string} absFile
+ * @returns {boolean} true when the line was written
+ */
+function enqueueFile(queueFile, absFile) {
+  if (!queueFile || !absFile) return false;
+  try {
+    ensureDir(queueFile);
+    fs.appendFileSync(queueFile, JSON.stringify({ ts: Date.now(), file: absFile }) + '\n', 'utf8');
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Parse a queue file's contents into a deduped, order-preserving path list.
+ * Malformed lines are skipped rather than failing the flush.
+ * @param {string} raw
+ * @returns {string[]}
+ */
+function parseQueueContent(raw) {
+  const seen = new Set();
+  const files = [];
+  for (const line of String(raw || '').split('\n')) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    let entry;
+    try {
+      entry = JSON.parse(trimmed);
+    } catch {
+      continue;
+    }
+    const file = entry && typeof entry.file === 'string' ? entry.file : '';
+    if (!file || seen.has(file)) continue;
+    seen.add(file);
+    files.push(file);
+  }
+  return files;
+}
+
+/**
+ * Read the queue without clearing it. Deduped: a file edited eight times in a
+ * turn appears once.
+ * @param {string} queueFile
+ * @returns {string[]}
+ */
+function readQueuedFiles(queueFile) {
+  if (!queueFile) return [];
+  try {
+    if (!fs.existsSync(queueFile)) return [];
+    return parseQueueContent(fs.readFileSync(queueFile, 'utf8'));
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Atomically claim the queue: rename it aside, read it, delete the copy.
+ * Anything appended after the rename lands in a brand-new queue file and is
+ * picked up by the next flush instead of being lost.
+ * @param {string} queueFile
+ * @returns {string[]} deduped file paths
+ */
+function takeQueue(queueFile) {
+  if (!queueFile) return [];
+  const claim = `${queueFile}.flushing-${process.pid}`;
+  try {
+    if (!fs.existsSync(queueFile)) return [];
+    fs.renameSync(queueFile, claim);
+  } catch {
+    // Another flusher won the race, or the file vanished — nothing to do.
+    return [];
+  }
+  let files = [];
+  try {
+    files = parseQueueContent(fs.readFileSync(claim, 'utf8'));
+  } catch {
+    files = [];
+  }
+  try {
+    fs.unlinkSync(claim);
+  } catch { /* fail-open */ }
+  return files;
+}
+
+/**
+ * Remove a session's queue file.
+ * @param {string} queueFile
+ * @returns {boolean}
+ */
+function clearQueue(queueFile) {
+  if (!queueFile) return false;
+  try {
+    if (fs.existsSync(queueFile)) fs.unlinkSync(queueFile);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+module.exports = {
+  LINTABLE_EXTENSIONS,
+  isLintable,
+  sanitizeSessionId,
+  resolveQueueFile,
+  enqueueFile,
+  readQueuedFiles,
+  takeQueue,
+  clearQueue
+};
