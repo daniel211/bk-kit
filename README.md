@@ -61,9 +61,17 @@ Bản gốc là `docs/antigravity-cli-guide.md` trong repo nguồn `beer-kit`, c
 động mỗi lần release để người cài từ repo này đọc được mà không cần quyền vào repo nguồn.
 **Đừng sửa trực tiếp ở đây** — sửa bản gốc, lần release sau sẽ ghi đè.
 
-> **agy là TÙY CHỌN.** Không cài agy thì toàn bộ kit vẫn chạy đầy đủ bằng engine `claude` mặc
-> định. agy chỉ thêm lựa chọn cho ba việc bên dưới. Đọc §1 để biết có cần hay không trước khi
-> mất công cài.
+Hướng dẫn cho thành viên trong team. Áp dụng từ **kit v0.3.0**; engine `auto` (§3) có từ
+**v0.5.0**.
+
+Viết bằng tiếng Việt vì đây là tài liệu thao tác cho team; các tài liệu kiến trúc khác trong
+`docs/` vẫn giữ tiếng Anh.
+
+> **agy vẫn là TÙY CHỌN — nhưng không còn phải gõ flag.** Không cài agy thì toàn bộ kit chạy
+> đầy đủ bằng engine `claude`, y hệt trước đây. Cài agy và thêm **một** allow-rule cho project
+> (§2.3) thì kit tự nhận ra và tự dùng agy cho design extraction: mặc định từ v0.5.0 là
+> `auto` — dùng agy khi máy này chạy được, dùng claude khi không, và không kêu ca gì cả.
+> Đọc §1 để biết có cần hay không trước khi mất công cài.
 
 ---
 
@@ -72,7 +80,7 @@ Bản gốc là `docs/antigravity-cli-guide.md` trong repo nguồn `beer-kit`, c
 | Tính năng | Không có agy | Có agy |
 |---|---|---|
 | `/bk-review` | `bk-code-reviewer` (Claude) | thêm `--engine gemini` — model khác review code Claude viết, và `--engine dual` chạy cả hai |
-| `/bk-spec --design` | trio `design-validator` + `design-spec-writer` + `design-asset-exporter` | thêm `--engine agy` — Gemini viết spec, và `--engine dual` để đối chiếu hai bản |
+| `/bk-spec --design` | trio `design-validator` + `design-spec-writer` + `design-asset-exporter` | mặc định `auto` **tự dùng agy** khi máy đủ điều kiện — Gemini viết spec; `--engine dual` để đối chiếu hai bản |
 | `/bk-visual-verify` | cần `GEMINI_API_KEY` | tự dùng agy, không cần API key riêng |
 
 Giá trị chính là **cross-model**: một model khác kiểm lại thứ Claude làm ra. Nếu bạn không cần
@@ -130,10 +138,16 @@ Thêm vào `~/.gemini/antigravity-cli/settings.json`:
   "permissions": {
     "allow": [
       "read_file(*)",
-      "write_file(/duong/dan/tuyet/doi/toi/project/bk/dev/**)"
+      "write_file(/duong/dan/tuyet/doi/toi/project/bk/**)"
     ]
   }
 }
+```
+
+Không phải tự gõ đường dẫn — lệnh này in ra đúng snippet cho project bạn đang đứng:
+
+```bash
+bk-<platform> doctor --design-engine
 ```
 
 Ba điều quan trọng:
@@ -142,8 +156,15 @@ Ba điều quan trọng:
 và nó resolve đường dẫn tương đối theo **workspace của chính nó**, không theo thư mục bạn đang
 đứng. Một rule tương đối sẽ không khớp gì cả, và không báo lỗi gì.
 
-**Mỗi project một rule.** Rule trỏ vào `bk/dev/**` của project nào thì chỉ có tác dụng ở đó.
-Runner sẽ in ra chính xác dòng cần thêm khi bị chặn — copy nguyên văn, đừng viết lại.
+**Mỗi project một rule** — không phải mỗi feature. Trước đây rule trỏ thẳng vào thư mục flow
+(`bk/dev/<feature>/design/**`), nghĩa là mỗi feature mới lại phải mở file settings ra thêm một
+dòng. Một rule mà cứ mỗi feature phải thêm lại là một rule không ai bật — mà không ai bật thì
+mặc định `auto` chẳng có nghĩa lý gì, vì không máy nào qua được cổng kiểm tra. Nên scope nâng
+lên cả cây `bk/` của repo: thêm **một lần**, dùng cho mọi feature về sau. Vẫn hẹp — đúng thư
+mục output của kit, không bao giờ có `command(*)`.
+
+Rule kiểu cũ (per-flow) **vẫn được chấp nhận**: máy nào đã cấu hình theo hướng dẫn trước không
+phải sửa gì. Windows cũng khớp bình thường (`C:\repo\bk\**` hay `C:/repo/bk/**` đều được).
 
 **Kit không bao giờ tự sửa file này**, và không bao giờ dùng `--dangerously-skip-permissions`.
 Cờ đó auto-approve *mọi* tool kể cả shell command trên repo của bạn. Nếu không cấp được quyền
@@ -158,22 +179,38 @@ thì kit tự rơi về engine `claude` chứ không nới quyền.
 /bk-review --engine gemini
 /bk-review --engine dual          # cả Gemini và Claude, hai report riêng
 
-# Design extraction
-/bk-spec --design --engine agy
+# Design extraction: không cần flag, mặc định auto tự chọn engine
+/bk-spec --design
+/bk-spec --design --engine agy    # cố ý đòi agy: không chạy được thì nói rõ vì sao
+/bk-spec --design --engine claude # ép claude, không đụng tới agy
 /bk-spec --design --engine dual   # hai bản spec + báo cáo khác biệt
 
 # Visual verify: tự dùng agy nếu có, không cần flag
 /bk-visual-verify design.png screenshot.png
 ```
 
-Chọn engine mặc định cho design, theo thứ tự ưu tiên:
+Chọn engine cho design, theo thứ tự ưu tiên:
 
 ```
---engine flag  →  BK_DESIGN_ENGINE env  →  platform-context.json:designEngine  →  claude
+--engine flag  →  BK_DESIGN_ENGINE env  →  platform-context.json:designEngine  →  auto
 ```
 
-Mặc định của kit v0.3.0 là **`claude`**. Muốn cả team dùng agy thì đặt
-`"designEngine": "agy"` trong `.claude/platform-context.json` của project.
+Bốn giá trị:
+
+| Giá trị | Nghĩa |
+|---|---|
+| `auto` (mặc định) | Preflight một lần cho cả flow. Đạt → chạy agy. Không đạt → chạy claude, **im lặng**, chỉ một dòng info |
+| `claude` | Ép claude, không đụng tới agy |
+| `agy` | Cố ý đòi agy. Không đạt → vẫn tự rơi về claude, nhưng **in đủ** lý do + cách sửa + snippet allow-rule |
+| `dual` | claude là bản chính + agy soát chéo, xem bên dưới |
+
+`auto` và `agy` chạy **giống hệt nhau**; khác duy nhất ở âm lượng khi preflight không đạt.
+
+**Chốt cho cả team:** đặt `"designEngine"` trong `.claude/platform-context.json` của project —
+file này giờ ship sẵn `"auto"`. Đổi thành `"claude"` nếu team muốn mọi máy chạy như nhau bất kể
+ai đã cài agy.
+
+**Ép claude cho một lần chạy:** `--engine claude`, hoặc `BK_DESIGN_ENGINE=claude` cho cả phiên.
 
 ### `--engine dual` làm gì
 
@@ -192,15 +229,16 @@ Dual tốn gấp đôi thời gian và quota. Chỉ dùng khi cần đối chi�
 ## 4. Cài mới
 
 ```bash
-gh release download v0.3.0 --repo daniel211/bk-kit --pattern 'beerkit-bk-flutter-*.tgz'
-npm install -g ./beerkit-bk-flutter-0.3.0.tgz
+gh release download v0.5.0 --repo daniel211/bk-kit --pattern 'beerkit-bk-flutter-*.tgz'
+npm install -g ./beerkit-bk-flutter-0.5.0.tgz
 cd <project> && bk-flutter init
 bk-flutter doctor
 ```
 
 Đổi `flutter` thành `ios` hoặc `android` tuỳ nền tảng. Sau đó làm §2 nếu cần agy.
 
-`doctor` phải báo `✓ Figma token available` — nếu là `⚠` thì quay lại §2.1.
+`doctor` phải báo `✓ Figma token available` — nếu là `⚠` thì quay lại §2.1. Muốn biết engine
+design sẽ chạy là engine nào thì `bk-flutter doctor --design-engine` (§6).
 
 ---
 
@@ -264,19 +302,71 @@ node .claude/cli/bk-health/index.cjs --reset-counts --force
 
 ## 6. Kiểm tra
 
+### Engine design sẽ chạy là engine nào
+
+```bash
+bk-<platform> doctor --design-engine
+```
+
+Allow-rule nằm ngoài repo, thuộc về máy, và không ai nhớ mình đã thêm hay chưa — đây là lệnh
+nói thẳng ra. Chạy được **không cần** `.claude/` hợp lệ, và **luôn exit 0**: máy sẽ dùng claude
+là máy đang chạy tốt, không phải máy hỏng.
+
+Máy thiếu allow-rule:
+
+```
+Design engine readiness in <project>:
+
+  ✓ agy binary on PATH — /Users/you/.local/bin/agy
+  ✗ allow-rules cover <project>/bk — not covered
+  ~ agy sign-in — likely
+  Design engine "auto" would use: claude — ~/.gemini/antigravity-cli/settings.json has no allow-rule covering <project>/bk. Headless agy cannot ask for approval, so every write would be auto-denied.
+  Add these rules to ~/.gemini/antigravity-cli/settings.json (the kit does not edit that file for you — it is shared with every other agy session on this machine).
+    {
+      "permissions": {
+        "allow": [
+          "read_file(*)",
+          "write_file(<project>/bk/**)"
+        ]
+      }
+    }
+  Nothing is broken: the claude engine produces the same output from the same data.
+
+Note: this is information, not a broken install.
+```
+
+Copy nguyên khối JSON đó vào `~/.gemini/antigravity-cli/settings.json` rồi chạy lại:
+
+```
+  ✓ agy binary on PATH — /Users/you/.local/bin/agy
+  ✓ allow-rules cover <project>/bk — 2 rule(s) in ~/.gemini/antigravity-cli/settings.json
+  ~ agy sign-in — unknown
+  Design engine "auto" would use: agy.
+```
+
+`✓` là cổng cứng đã đạt, `✗` là cổng cứng chưa đạt, `~` là tín hiệu mềm — dòng `agy sign-in`
+**không bao giờ chặn** (xem §8).
+
+### Sức khoẻ cài đặt nói chung
+
 ```bash
 bk-<platform> doctor
 ```
 
-Hai dòng liên quan tới tài liệu này:
+Ba dòng liên quan tới tài liệu này:
 
 ```
-✓ agy CLI available (bk-gemini-reviewer, optional)
+✓ agy CLI available (code review, optional)
 ✓ Figma token available (design extraction, optional)
+✓ design engine readiness (agy vs claude)
 ```
 
 `⚠` ở dòng nào thì đọc gợi ý ngay dưới nó. `doctor` chỉ báo token **có hay không**, không bao
 giờ đọc hay in ra giá trị.
+
+Hai dòng cuối là `⚠` khi chưa có token Figma / chưa thêm allow-rule. Cả hai đều **không phải
+lỗi cài đặt**: dự án không dùng Figma thì bỏ qua dòng giữa, và máy chưa cấp quyền cho agy thì
+vẫn chạy trọn vẹn bằng engine `claude`.
 
 Thử nhanh đường Figma mà không cần chạy cả workflow:
 
@@ -290,8 +380,9 @@ node .claude/scripts/figma-cli.mjs discover --url "<figma-url>"
 
 | Triệu chứng | Nguyên nhân | Xử lý |
 |---|---|---|
+| Đã cài agy, đã đăng nhập, nhưng kit vẫn chạy engine `claude` | Thiếu allow-rule — `auto` im lặng rơi về claude đúng như thiết kế | `bk-<platform> doctor --design-engine` (§6): nó chỉ đúng cổng nào trượt và in sẵn snippet |
 | agy chạy xong, response rỗng, không có file | Tool bị auto-deny | Thêm allow-rule §2.3. Runner in sẵn dòng cần thêm |
-| Đã thêm allow-rule vẫn bị deny | Rule dùng đường dẫn tương đối | Đổi sang đường dẫn tuyệt đối |
+| Đã thêm allow-rule vẫn bị deny | Rule dùng đường dẫn tương đối, hoặc trỏ vào thư mục flow của feature cũ | Dùng scope repo `write_file(<repo>/bk/**)` với đường dẫn tuyệt đối — lấy nguyên văn từ `doctor --design-engine` |
 | `variables.json` bị skip, 403 | Figma Variables API cần scope `file_variables:read` **và gói Enterprise** | Bình thường, không phải bug. Design token lấy từ style name + giá trị thô. Ghi rõ điều này trong spec thay vì bịa tên token |
 | `No Figma token` | Chưa làm §2.1 | Tạo `~/.config/beer-kit/figma.env` |
 | Slug màn hình dạng `11-desktop-373-40736` | Cố ý | Nhiều frame trùng tên nên node id được gắn kèm. Đổi tên frame trong Figma là cách sửa gốc |
@@ -304,8 +395,14 @@ node .claude/scripts/figma-cli.mjs discover --url "<figma-url>"
 
 - **Variables API cần Figma Enterprise.** Không có thì không lấy được design token dạng
   variable với mode Light/Dark.
-- **Asset export luôn chạy bằng engine `claude`**, kể cả khi chọn `--engine agy`. Export ra
-  binary (PDF/SVG/PNG) nên không verify được bằng cách đọc text; sẽ mở cho agy ở phase sau.
+- **Asset export luôn chạy bằng engine `claude`**, kể cả khi chọn `--engine agy` hay khi `auto`
+  đã chọn agy. Export ra binary (PDF/SVG/PNG) nên không verify được bằng cách đọc text; sẽ mở
+  cho agy ở phase sau.
+- **Dòng `agy sign-in` chỉ là tín hiệu mềm.** Nó suy ra từ sự tồn tại của file credential trong
+  `~/.gemini/` — layout nội bộ của agy, có thể đổi bất cứ lúc nào. Nên nó **không bao giờ chặn**
+  gì cả, và có thể hiện `unknown` trên một máy đang đăng nhập bình thường. Sai theo hướng đó rẻ
+  hơn: một false negative mà chặn thật sẽ từ chối một máy đang chạy tốt. Nếu đăng nhập hỏng thật
+  thì fallback lúc chạy bắt được ngay ở màn đầu tiên.
 - **`node.json` bị giới hạn độ sâu 6 tầng.** Một màn thật serialize đầy đủ là 3.1 MB, không
   model nào đọc nổi. Asset nằm dưới ngưỡng đó nên có file riêng `asset-candidates.json` quét
   toàn cây. Cần sâu hơn ở một nhánh thì

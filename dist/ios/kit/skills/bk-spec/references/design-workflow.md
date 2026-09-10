@@ -38,19 +38,29 @@ Do NOT create per-screen sub-tasks. Step 2 remains a single task throughout. Per
 
 ## Engine Selection
 
-Design extraction runs on one of two engines that produce **identical output**. Resolve once,
-before Step 1, and record the answer in `.spec-state.json` as `design_engine`.
+Design extraction runs on engines that produce **identical output**. Resolve **once, before
+Step 1**, and record the answer in `.spec-state.json` as `design_engine_requested` (what was
+asked for) plus `design_engine_effective` (what will actually run).
 
 Priority: `--engine` flag → `BK_DESIGN_ENGINE` env → `platform-context.json:designEngine` →
-default. **The shipped default is `claude`.**
+default. **The shipped default is `auto`.**
 
 | Engine | Step 1 | Step 2 | Step 3 |
 |--------|--------|--------|--------|
+| `auto` (**default**) | preflight passes → exactly as `agy`; fails → exactly as `claude` | same | design-asset-exporter |
 | `claude` | design-validator | design-spec-writer × N | design-asset-exporter |
 | `agy` | design-agy-extractor (`--mode discovery`) | design-agy-extractor × N (`--mode screen`) | design-asset-exporter |
 | `dual` | design-validator | both engines → `design-spec-diff.mjs` | design-asset-exporter |
 
+`auto` is not a fifth behaviour: once the preflight has answered, it dispatches byte-for-byte
+like `agy` or like `claude`. The only thing it changes is how much is said about the choice.
+
 Asset export stays on the claude engine in every case — see Step 3.
+
+**Resolve the engine once and never again.** Steps 2–5 read `design_engine_effective` from
+`.spec-state.json`; they do not re-run the preflight. A 19-screen flow that re-resolved per
+screen could change engine halfway through — and a flow that mixed engines for a reason
+nobody recorded is a flow nobody can reason about afterwards.
 
 ### Preflight
 
@@ -65,16 +75,46 @@ Exit 2 means no token. Stop and tell the user to set `FIGMA_API_KEY` or write
 `~/.config/beer-kit/figma.env`; no engine can proceed without it, so there is nothing to
 fall back to.
 
-**Only when the resolved engine is `agy` or `dual`**, additionally check that agy can run:
+**Only when the requested engine is `auto`, `agy` or `dual`**, additionally check that agy can
+actually run — **once for the whole flow**, not once per screen:
 
 ```bash
-node -e "import('.claude/scripts/agy-preflight.mjs').then(m=>console.log(JSON.stringify(m.preflightAgyBinary())))"
+node .claude/skills/bk-design/scripts/design-extract-agy.mjs \
+  --preflight-only --flow bk/dev/{feature-slug}/design/
 ```
+
+It prints the preflight JSON (`ok`, `binary`, `auth`, `reason`, `remedy`, `snippet`, `checks`)
+and exits 0 when agy is usable, 2 when it is not. It checks the binary AND the allow-rules
+that headless agy needs, so a missing rule is found by reading one JSON file instead of by 38
+auto-denied model invocations.
 
 | Result | Action |
 |--------|--------|
-| `ok: true` | Proceed on agy. Record `design_engine` in `.spec-state.json`. |
-| `ok: false` | **Fall back to `claude` for the whole flow.** Print `reason` and `remedy` verbatim, record `design_engine: "claude"` and `design_engine_fallback: "<reason>"`. Do NOT stop and do NOT ask — the claude engine produces the same output from the same data. |
+| exit 0 (`ok: true`) | Proceed on agy. Record `design_engine_effective: "agy"`. |
+| exit 2 (`ok: false`) | **Fall back to `claude` for the whole flow**, then report per the volume rule below. Record `design_engine_effective: "claude"` and `design_engine_reason: "<reason>"`. Do NOT stop and do NOT ask — the claude engine produces the same output from the same data. |
+
+**How loud the fallback is depends on what the user asked for.** This is the whole point of
+having `auto` at all:
+
+| Requested | Preflight fails → say |
+|---|---|
+| `auto` | **one informational line**, no remedy: `Design engine: claude (agy not available on this machine).` The user never asked for agy; a machine without it is not misconfigured, and printing a fix for a problem nobody has turns a sensible default into an irritation on every flow. |
+| `agy` (or `dual`) | the runner's `reason`, `remedy` and allow-rule `snippet`, **verbatim**. This user did ask, and can act on all three. |
+
+Never reword the snippet — a reworded permission rule is a rule that does not match, and it
+fails silently (see the warning under §Runtime fallback).
+
+State written at this point:
+
+```json
+{
+  "design_engine_requested": "auto",
+  "design_engine_effective": "claude",
+  "design_engine_reason": "Antigravity CLI (\"agy\") is not on PATH."
+}
+```
+
+`design_engine_reason` is `null` when the requested engine ran as asked.
 
 There is no Figma MCP check any more. Neither engine uses one.
 
@@ -118,7 +158,8 @@ Task(
 )
 ```
 
-**On engine `agy`**, dispatch this instead — same output files, so the verify below is unchanged:
+**When `design_engine_effective` is `agy`**, dispatch this instead — same output files, so the
+verify below is unchanged:
 
 ```
 Task(
@@ -242,7 +283,7 @@ Task(
 // ... repeat for each screen in the SAME message (or per wave if M > 15)
 ```
 
-**On engine `agy`**, the per-screen dispatch is:
+**When `design_engine_effective` is `agy`**, the per-screen dispatch is:
 
 ```
 Task(
@@ -406,9 +447,12 @@ Task(
     7. If 01-overview.md exists: verify screen IDs cross-reference SRS use cases
     8. Screens with 0 assets are valid (popups, modals) — do NOT flag
     9. Design.md files up to 900 lines are acceptable — do NOT flag
-    10. Read `.spec-state.json`: if `engine_fallbacks` is non-empty, name those screens and
-        the reason in the report — a flow that mixed engines must say so. If
-        `engine_diff_unresolved` is set (dual mode), list those screens as open items.
+    10. Read `.spec-state.json`: name `design_engine_effective` in the report — always, even
+        when it equals `design_engine_requested`, because "which engine produced this" is not
+        recoverable from the output files. If they differ, give `design_engine_reason` too.
+        If `engine_fallbacks` is non-empty, name those screens and their reasons — a flow that
+        mixed engines must say so. If `engine_diff_unresolved` is set (dual mode), list those
+        screens as open items.
     TOOL RESTRICTION: READ-ONLY agent. Do NOT use Edit, Bash, or Task tools.
     Output: bk/dev/shared/reports/design-review-{feature-slug}.md
     Verdict: OKAY or REVISE with specific issues

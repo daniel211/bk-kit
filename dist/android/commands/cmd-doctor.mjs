@@ -6,6 +6,7 @@
 
 import { existsSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 
@@ -43,13 +44,89 @@ function agyInstallHint() {
 }
 
 /**
+ * Report which engine design extraction would pick on this machine right now, and — when the
+ * answer is "claude" — exactly what is missing.
+ *
+ * The design engine defaults to `auto`, which silently uses agy when the machine can run it.
+ * That silence is the point of `auto`, but it leaves the readiness state invisible: the
+ * allow-rules live in `~/.gemini/antigravity-cli/settings.json`, outside the repo, and nobody
+ * remembers whether they added them. This is the one place that says so out loud, so it can
+ * be run at the start of a session instead of discovered from a 19-screen flow.
+ *
+ * It prints one line per gate rather than a single verdict, because "not ready" has three
+ * different fixes and collapsing them leaves the user to reverse-engineer which one applies.
+ * `~` marks the sign-in signal, which is inferred from another tool's credential files and
+ * therefore never decides anything — see agyAuthSignal.
+ *
+ * The flow directory is `<targetDir>/bk/`: the CLI runs before any feature exists, and the
+ * allow-rule is scoped to the repo's whole `bk/` tree anyway.
+ *
+ * @param {string} targetDir — project root containing .claude/
+ * @param {object} [opts]
+ * @param {string} [opts.indent] — prefix for every printed line
+ * @returns {Promise<{status: 'ok'|'warn'|'missing', engine: string|null}>}
+ */
+export async function reportDesignEngine(targetDir, { indent = '    ' } = {}) {
+  const say = (line) => console.log(`${indent}${line}`);
+
+  // The preflight ships with the kit, so it is read from the target dir the same way every
+  // other kit file here is. A machine with no kit installed is not an error worth throwing
+  // over — this command is meant to be usable before anything is set up.
+  const preflightPath = join(targetDir, '.claude', 'scripts', 'agy-preflight.mjs');
+  if (!existsSync(preflightPath)) {
+    say(`No kit found at ${targetDir}/.claude/scripts/agy-preflight.mjs.`);
+    say('Run "init" in this directory first; the design engine check needs the installed kit.');
+    return { status: 'missing', engine: null };
+  }
+
+  let preflight;
+  try {
+    preflight = await import(pathToFileURL(preflightPath).href);
+  } catch (err) {
+    say(`Could not load ${preflightPath}: ${err.message}`);
+    return { status: 'missing', engine: null };
+  }
+
+  const flowDir = join(targetDir, 'bk');
+  const report = preflight.preflightAgyDesign({ flowDir });
+
+  for (const item of report.checks) {
+    const mark = item.ok === true ? '✓' : item.ok === false ? '✗' : '~';
+    say(`${mark} ${item.name} — ${item.detail}`);
+  }
+
+  if (report.ok) {
+    say('Design engine "auto" would use: agy.');
+    return { status: 'ok', engine: 'agy' };
+  }
+
+  say(`Design engine "auto" would use: claude — ${report.reason}`);
+  if (!report.binary) {
+    say(`Install agy with ${agyInstallHint()}, then run "agy" once to authenticate.`);
+  }
+  if (report.remedy) say(report.remedy);
+  if (report.snippet) {
+    // The remedy already names the file when there is one; repeating it here would only make
+    // the wall of text longer.
+    if (!report.remedy) say(`Add to ${preflight.AGY_SETTINGS_PATH}:`);
+    const snippet = preflight.allowRulesSnippet(preflight.requiredAllowRules(flowDir));
+    for (const line of snippet.split('\n')) say(`  ${line}`);
+  }
+  say('Nothing is broken: the claude engine produces the same output from the same data.');
+  return { status: 'warn', engine: 'claude' };
+}
+
+/**
  * Run doctor checks on an installed kit.
+ *
+ * Async because the design-engine check imports the installed kit's preflight module, which
+ * only exists in the target directory and therefore has to be loaded dynamically.
  *
  * @param {string} targetDir — project root containing .claude/
  * @param {string} platform
- * @returns {{ passed: number, warnings: number, errors: number }}
+ * @returns {Promise<{ passed: number, warnings: number, errors: number }>}
  */
-export function runDoctor(targetDir, platform) {
+export async function runDoctor(targetDir, platform) {
   const claudeDir = join(targetDir, '.claude');
   const versionPath = join(targetDir, '.bk-version.json');
   let passed = 0;
@@ -59,6 +136,26 @@ export function runDoctor(targetDir, platform) {
   function check(label, fn) {
     try {
       const result = fn();
+      if (result === true) {
+        console.log(`  ✓ ${label}`);
+        passed++;
+      } else if (result === 'warn') {
+        console.log(`  ⚠ ${label}`);
+        warnings++;
+      } else {
+        console.log(`  ✗ ${label}`);
+        errors++;
+      }
+    } catch (err) {
+      console.log(`  ✗ ${label}: ${err.message}`);
+      errors++;
+    }
+  }
+
+  // Same tallying as `check`, for a check whose work cannot be done synchronously.
+  async function checkAsync(label, fn) {
+    try {
+      const result = await fn();
       if (result === true) {
         console.log(`  ✓ ${label}`);
         passed++;
@@ -163,7 +260,10 @@ export function runDoctor(targetDir, platform) {
   // 7. Optional tool check: Antigravity CLI, which backs bk-gemini-reviewer since 0.2.0.
   //    Optional by design — /bk-review --engine claude needs no external CLI — so a missing
   //    binary is a warning with a way forward, not an error.
-  check('agy CLI available (bk-gemini-reviewer, optional)', () => {
+  //    Scoped to code review in the label: check 9 below asks a different and larger question
+  //    about the same binary, and two checks that read as duplicates teach the user to skip
+  //    both.
+  check('agy CLI available (code review, optional)', () => {
     if (hasCommand('agy')) return true;
     console.log('    Optional: Antigravity CLI ("agy") not found, so bk-gemini-reviewer cannot run.');
     console.log(`    Install it with ${agyInstallHint()}, then run "agy" once to authenticate.`);
@@ -211,6 +311,15 @@ export function runDoctor(targetDir, platform) {
     return 'warn';
   });
 
+  // 9. Design engine readiness. Sits next to the Figma token check because they answer two
+  //    halves of the same question — the token says whether Figma can be read at all, this
+  //    says which engine will read it. Never an error: a machine without agy runs the claude
+  //    engine and produces the same files.
+  await checkAsync('design engine readiness (agy vs claude)', async () => {
+    const result = await reportDesignEngine(targetDir);
+    return result.status === 'ok' ? true : 'warn';
+  });
+
   return { passed, warnings, errors };
 }
 
@@ -224,11 +333,25 @@ export function registerDoctor(program, platform) {
     .command('doctor')
     .description('Validate .claude/ kit installation')
     .option('--target <dir>', 'Target project directory', '.')
-    .action((opts) => {
+    .option('--design-engine', 'Only report which design engine "auto" would pick here')
+    .action(async (opts) => {
       const targetDir = resolve(opts.target);
+
+      // --design-engine answers a machine question, not an installation question, so it runs
+      // on its own and never fails the exit code: a machine that will simply use the claude
+      // engine is a working machine, and exiting 1 on it would be a lie that breaks scripts.
+      if (opts.designEngine) {
+        console.log(`Design engine readiness in ${targetDir}:\n`);
+        const result = await reportDesignEngine(targetDir, { indent: '  ' });
+        if (result.status !== 'ok') {
+          console.log('\nNote: this is information, not a broken install.');
+        }
+        return;
+      }
+
       console.log(`Checking ${platform} kit in ${targetDir}...\n`);
 
-      const result = runDoctor(targetDir, platform);
+      const result = await runDoctor(targetDir, platform);
 
       console.log(`\n${result.passed} passed, ${result.warnings} warnings, ${result.errors} errors`);
       if (result.errors > 0) process.exit(1);

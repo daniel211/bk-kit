@@ -346,9 +346,13 @@ try {
         return ratio >= 1 ? _red(text) : ratio >= 0.8 ? _yellow(text) : text;
       };
 
+      // Name the month the total covers: "MTD" alone is a term of art, and on the
+      // 1st or 2nd of a month a bare figure looks broken rather than young.
+      const now = new Date();
+      const monthLabel = `${now.getMonth() + 1}/${now.getFullYear()}`;
       parts.push(totals && totals.mtdUsd !== null
-        ? `MTD ${budgeted(totals.mtdUsd, tmCfg.usage_month_budget_usd)}`
-        : 'MTD —');
+        ? `MTD ${budgeted(totals.mtdUsd, tmCfg.usage_month_budget_usd)} (${monthLabel})`
+        : `MTD — (${monthLabel})`);
 
       // `7d~` marks a week total measured from the fallback Monday rather than
       // from the reset Claude Code reported — approximate, and labelled as such.

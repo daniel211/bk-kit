@@ -58,7 +58,7 @@ const figma = await import(pathToFileURL(join(ROOT, 'scripts', 'figma-rest.mjs')
 const { FigmaCache, sweepCache } = await import(pathToFileURL(join(ROOT, 'scripts', 'figma-cache.mjs')).href);
 const { FigmaRest, parseFigmaUrl, readToken, serializeNode, textNodes, searchInstances,
         assetCandidates, frameChildren, slugify, duplicateNames, DEFAULT_NODE_DEPTH } = figma;
-const { preflightAgyBinary, requiredAllowRules, allowRulesSnippet, classifyDenial, AGY_SETTINGS_PATH } =
+const { preflightAgyDesign, requiredAllowRules, allowRulesSnippet, classifyDenial, AGY_SETTINGS_PATH } =
   await import(pathToFileURL(join(ROOT, 'scripts', 'agy-preflight.mjs')).href);
 
 // ---------------------------------------------------------------------------------------
@@ -67,7 +67,8 @@ const { preflightAgyBinary, requiredAllowRules, allowRulesSnippet, classifyDenia
 
 const args = process.argv.slice(2);
 const opts = { mode: null, figmaUrl: null, fileKey: null, nodeId: null, slug: null, flow: null,
-               techStack: null, model: null, fast: false, timeout: '15m', depth: null };
+               techStack: null, model: null, fast: false, timeout: '15m', depth: null,
+               preflightOnly: false };
 
 for (let i = 0; i < args.length; i++) {
   const arg = args[i];
@@ -83,12 +84,29 @@ for (let i = 0; i < args.length; i++) {
   else if (arg === '--fast') opts.fast = true;
   else if (arg === '--depth') opts.depth = next();
   else if (arg === '--timeout') opts.timeout = next();
+  else if (arg === '--preflight-only') opts.preflightOnly = true;
 }
 
 function fail(code, message, detail) {
   console.error(`\n❌ ${message}`);
   if (detail) console.error(detail);
   process.exit(code);
+}
+
+// ---------------------------------------------------------------------------------------
+// --preflight-only — answer "could agy do this flow" once, for the whole flow
+// ---------------------------------------------------------------------------------------
+//
+// Handled before the argument validation below because it deliberately answers a smaller
+// question: it needs only --flow, never --mode, and it reaches nothing outside the local
+// filesystem. The conductor calls it once at the top of a flow instead of rediscovering the
+// same answer on every screen — and it must be cheap enough that calling it is never a
+// reason to skip it.
+if (opts.preflightOnly) {
+  if (!opts.flow) fail(1, 'Pass --flow <design flow directory>.');
+  const report = preflightAgyDesign({ flowDir: resolve(opts.flow.replace(/\/+$/, '')) });
+  console.log(JSON.stringify(report, null, 2));
+  process.exit(report.ok ? 0 : 2);
 }
 
 if (!['discovery', 'screen'].includes(opts.mode)) {
@@ -111,14 +129,12 @@ const FLOW = resolve(opts.flow.replace(/\/+$/, ''));
 // ---------------------------------------------------------------------------------------
 // Preflight — decide before spending a single token
 // ---------------------------------------------------------------------------------------
-
-const pre = preflightAgyBinary();
-if (!pre.ok) {
-  console.error(`\n⚠️  agy cannot run this extraction: ${pre.reason}`);
-  if (pre.remedy) console.error(`   ${pre.remedy}`);
-  console.error('   Falling back to the claude engine is the correct outcome here.\n');
-  process.exit(2);
-}
+//
+// The order here is deliberate. The Figma token is checked now, because both modes read
+// Figma and neither can do anything without it. The agy preflight is NOT checked now: it
+// waits until the screen-mode branch, because discovery is pure REST plus Node and exits
+// before agy is ever invoked. Demanding the binary up front refused work that would have
+// succeeded — a machine without agy could not even list the screens in a flow.
 
 if (!readToken()) {
   console.error('\n⚠️  No Figma token, so there is nothing for either engine to read.');
@@ -256,6 +272,20 @@ if (opts.mode === 'discovery') {
 }
 
 // --- screen mode -------------------------------------------------------------------------
+
+// This is the first line of this run that actually needs agy, so it is the first line that
+// asks for it. The full design preflight is used rather than the binary probe alone: a
+// missing allow-rule is just as fatal as a missing binary, and finding it here costs one
+// file read, while finding it later costs a whole run that is auto-denied after the model
+// has already been paid for.
+const pre = preflightAgyDesign({ flowDir: FLOW });
+if (!pre.ok) {
+  console.error(`\n⚠️  agy cannot run this extraction: ${pre.reason}`);
+  if (pre.remedy) console.error(`   ${pre.remedy}`);
+  if (pre.snippet) console.error(`\n${pre.snippet}\n`);
+  console.error('   Falling back to the claude engine is the correct outcome here.\n');
+  process.exit(2);
+}
 
 const fileKey = opts.figmaUrl ? parseFigmaUrl(opts.figmaUrl).fileKey : opts.fileKey;
 if (!fileKey) fail(1, 'Screen extraction needs --file-key or --figma-url.');

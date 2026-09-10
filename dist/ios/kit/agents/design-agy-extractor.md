@@ -18,8 +18,8 @@ Thin harness around `design-extract-agy.mjs`. Dispatches one extraction to the A
 CLI, then verifies what landed on disk. Produces exactly the files `design-validator` and
 `design-spec-writer` produce — downstream consumers cannot tell which engine ran.
 
-This agent declares **no MCP servers**: it never talks to Figma itself. `agy` holds that
-connection, using the Figma MCP registered in the user's own CLI.
+No MCP server is involved on either side. The runner reads Figma over its REST API, from
+Node, before agy is invoked at all; the model is handed local JSON files.
 
 ## Input
 
@@ -43,7 +43,7 @@ From the dispatch prompt:
    | Exit | Meaning | What to do |
    |------|---------|-----------|
    | 0 | Files written and verified | Report DONE |
-   | 2 | agy cannot run here (no CLI, wrong Figma MCP, unallowable denial) | Report FALLBACK — the conductor re-dispatches this unit to the claude engine |
+   | 2 | agy cannot run here (no CLI, no allow-rule covering the flow, unallowable denial) | Report FALLBACK — the conductor re-dispatches this unit to the claude engine |
    | 3 | agy ran but output failed the contract | Report RETRY once, then FALLBACK |
 
 3. Do **not** paraphrase the script's stderr. When it prints allow-rules the user must add,

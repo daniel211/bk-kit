@@ -4,6 +4,7 @@
   "languageVersion": "5.9+",
   "fileNaming": "PascalCase",
   "fileExtension": ".swift",
+  "designEngine": "auto",
   "commands": {
     "build": "xcodebuild -scheme App -sdk iphonesimulator build",
     "buildNote": "Prefer Xcode MCP 'build' tool when available; xcodebuild is fallback",

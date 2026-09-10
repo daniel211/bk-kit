@@ -4,6 +4,7 @@
   "languageVersion": "3.0+",
   "fileNaming": "snake_case",
   "fileExtension": ".dart",
+  "designEngine": "auto",
   "commands": {
     "build": "flutter build apk --debug",
     "test": "flutter test --coverage",

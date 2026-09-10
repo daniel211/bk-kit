@@ -2,7 +2,7 @@
 name: bk-spec
 description: "Collect and validate feature inputs (URD, API docs, Figma) into a standardized spec package. Use when starting a new feature, preparing for /bk-plan, or when user says 'spec', 'prepare feature', 'collect requirements'."
 user-invocable: true
-argument-hint: "[--srs|--design|--validate] [feature-name] [urd-path] [figma-url]"
+argument-hint: "[--srs|--design|--validate] [--engine claude|agy|dual|auto] [feature-name] [urd-path] [figma-url]"
 ---
 
 # Spec: $ARGUMENTS
@@ -52,6 +52,7 @@ Detect feature + operation từ `$ARGUMENTS` và existing spec state. Interview 
 | Feature name matches existing incomplete spec | `resume` | Continue last phase từ `.spec-state.json` |
 | 2+ inputs (URD + Figma + API combos) | `full` | Run Phase 1 → 2 → 3 → 4 |
 | No inputs OR no feature OR ambiguous signals | `interview` | AskUserQuestion fallback (default) |
+| `--engine claude\|agy\|dual\|auto` | *(modifier)* | Design extraction engine, Phase 2 only. Default `auto`: agy when this machine can run it, claude otherwise. See `references/design-workflow.md` §Engine Selection |
 
 **Foundation precondition:** `bk/docs/foundation/overview.md` must exist. Missing → abort, ask user to run `/bk-bootstrap`.
 

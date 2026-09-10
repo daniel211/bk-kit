@@ -1,6 +1,6 @@
 {
   "name": "@beerkit/bk-flutter",
-  "version": "0.4.1",
+  "version": "0.5.0",
   "description": "beer-kit Flutter Development Kit for Claude Code — Dart/BLoC agents, skills, and hooks",
   "type": "module",
   "bin": {

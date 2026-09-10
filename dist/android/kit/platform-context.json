@@ -4,6 +4,7 @@
   "languageVersion": "1.9+",
   "fileNaming": "PascalCase",
   "fileExtension": ".kt",
+  "designEngine": "auto",
   "commands": {
     "build": "./gradlew assembleDebug",
     "test": "./gradlew test",

@@ -19,7 +19,7 @@ const program = new Command();
 program
   .name(`bk-${PLATFORM}`)
   .description(`beer-kit ${PLATFORM} Development Kit for Claude Code`)
-  .version('0.4.1');
+  .version('0.5.0');
 
 registerInit(program, PLATFORM);
 registerDoctor(program, PLATFORM);
@@ -27,4 +27,8 @@ registerUpdate(program, PLATFORM);
 registerDocs(program, PLATFORM);
 registerMetrics(program);
 
-program.parse();
+// parseAsync, not parse: the init and doctor actions are async (doctor dynamically imports
+// the installed kit's preflight module). With the sync parse() the returned promise is
+// dropped, so a rejection inside an action would surface as an unhandled rejection instead of
+// an error message.
+program.parseAsync();

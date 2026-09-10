@@ -23,7 +23,9 @@ export function registerInit(program, platform) {
     .description(`Initialize .claude/ with ${platform} development kit`)
     .option('--target <dir>', 'Target project directory', '.')
     .option('--force', 'Overwrite existing .claude/ directory')
-    .action((opts) => {
+    // Async because runDoctor is: its design-engine check dynamically imports the kit that
+    // was just written into the target directory.
+    .action(async (opts) => {
       const targetDir = resolve(opts.target);
       const claudeDir = join(targetDir, '.claude');
 
@@ -154,7 +156,7 @@ export function registerInit(program, platform) {
 
       // Run doctor
       console.log('Running doctor check...');
-      const doctorResult = runDoctor(targetDir, platform);
+      const doctorResult = await runDoctor(targetDir, platform);
 
       if (doctorResult.errors === 0) {
         console.log('\n✓ Kit initialized successfully!');

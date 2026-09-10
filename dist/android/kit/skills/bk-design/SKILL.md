@@ -60,11 +60,19 @@ so nothing downstream is told which one ran.
 
 | Engine | Discovery + per-screen spec | Asset export |
 |--------|------------------------------|--------------|
-| `claude` (**default**) | design-validator, design-spec-writer | design-asset-exporter |
-| `agy` (opt-in) | design-agy-extractor → `scripts/design-extract-agy.mjs` | design-asset-exporter |
+| `auto` (**default**) | agy when the preflight passes, claude when it does not | design-asset-exporter |
+| `claude` | design-validator, design-spec-writer | design-asset-exporter |
+| `agy` | design-agy-extractor → `scripts/design-extract-agy.mjs` | design-asset-exporter |
 | `dual` | both, to separate paths, then `scripts/design-spec-diff.mjs` | design-asset-exporter (claude) |
 
 Select with `--engine`, `BK_DESIGN_ENGINE`, or `designEngine` in platform-context.json.
+
+`auto` runs the preflight below **once per flow** and then behaves exactly like `agy` or
+exactly like `claude` — it is a choice about which of the two to use, not a third behaviour.
+It differs from typing `--engine agy` only in volume: on a machine that cannot run agy, `auto`
+says one line and moves on, because that user never asked for agy and has nothing to fix,
+while `--engine agy` prints the reason, the remedy and the allow-rule snippet. Check a machine
+ahead of time with `bk-{platform} doctor --design-engine`.
 
 **The Iron Laws and this Self-Check apply identically to both engines.** The agy runner is
 handed this file and the references verbatim rather than a restatement of them, and it
@@ -81,8 +89,11 @@ engine needs. What it does need:
    cannot prompt for tool approval and auto-denies anything unapproved:
    ```json
    { "permissions": { "allow": [
-       "read_file(*)", "write_file(/absolute/path/to/bk/dev/**)" ] } }
+       "read_file(*)", "write_file(/absolute/path/to/repo/bk/**)" ] } }
    ```
+   The write rule is scoped to the repo's whole `bk/` tree, not to one flow: a rule that has
+   to be re-added for every feature is a rule nobody keeps, which would make `auto` pick
+   claude forever.
    The write rule must be an **absolute** path: agy checks permissions against the absolute
    path it resolved, and it resolves relative paths against its own workspace rather than the
    calling shell's directory. The runner prints the exact rule to add.
