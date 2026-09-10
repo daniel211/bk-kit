@@ -52,20 +52,20 @@ depends_on_all: [1]   # phases that must complete before any parallel group star
 
 ## File Ownership Matrix
 
-Add to `plan.md` after the phases table:
+Add to `plan.md` after the sub-tasks table:
 
 ```markdown
 ## File Ownership Matrix
 
-| Phase | Owns (glob patterns) |
-|-------|---------------------|
-| phase-01-login | `Login/**`, `Auth/AuthService.*` |
-| phase-02-dashboard | `Dashboard/**` |
-| phase-03-settings | `Settings/**` |
-| phase-04-tests | `**/Tests/**`, `**/Specs/**` |
+| Sub-Task | Owns (glob patterns) |
+|----------|---------------------|
+| sub-task-01-login | `Login/**`, `Auth/AuthService.*` |
+| sub-task-02-dashboard | `Dashboard/**` |
+| sub-task-03-settings | `Settings/**` |
+| sub-task-04-tests | `**/Tests/**`, `**/Specs/**` |
 
-**Shared file rule:** Each file appears in exactly ONE phase's `owns:`.
-Files owned by a phase may be READ by other phases but NEVER modified.
+**Shared file rule:** Each file appears in exactly ONE sub-task's `owns:`.
+Files owned by a sub-task may be READ by other sub-tasks but NEVER modified.
 ```
 
 ## Dependency Graph Output
@@ -105,15 +105,15 @@ For each phase that depends on group:
   TaskCreate(phase, addBlockedBy=[phase_ids_in_group])
 
 For sequential-before phases:
-  TaskCreate(phase, addBlockedBy=[prior_phase_id])
+  TaskCreate(sub_task, addBlockedBy=[prior_sub_task_id])
 ```
 
 Example (login→{dashboard,settings}→tests):
 ```
-phase-01: addBlockedBy=[]
-phase-02: addBlockedBy=[]          # parallel with 03
-phase-03: addBlockedBy=[]          # parallel with 02
-phase-04: addBlockedBy=[01, 02, 03]
+sub-task-01: addBlockedBy=[]
+sub-task-02: addBlockedBy=[]          # parallel with 03
+sub-task-03: addBlockedBy=[]          # parallel with 02
+sub-task-04: addBlockedBy=[01, 02, 03]
 ```
 
 ## Anti-patterns to Avoid

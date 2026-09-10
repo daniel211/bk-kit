@@ -18,7 +18,7 @@ Chains bk-plan → user approval → bk-code automatically.
 
 <Do_Not_Use_When>
 - Bug fix needed — use /bk-debug
-- Code review only — use /bk-code-review
+- Code review only — use /bk-review
 - Plan already exists and user wants to resume — use /bk-code directly
 - User wants manual control over planning — use /bk-plan
 </Do_Not_Use_When>
@@ -52,7 +52,7 @@ Example: `/bk-autopilot "login screen" --deep --parallel`
   - AskUserQuestion: "Foundation docs missing. Run /bk-bootstrap first?"
   - If yes → invoke `/bk-bootstrap`, then continue
   - If no → warn "Code quality may be reduced", continue
-- IF BRD/design specs detected in project (files matching `*brd*`, `*brief*`, `*requirements*` in root or `docs/`) AND no `bk/dev/{feature}/srs-overview.md`:
+- IF BRD/design specs detected in project (files matching `*brd*`, `*brief*`, `*requirements*` in root or `docs/`) AND no `bk/dev/{feature}/srs/01-overview.md`:
   - Suggest: "BRD detected. Consider /bk-spec first for structured requirements."
 
 ### Step 1: Parse Arguments
@@ -82,12 +82,17 @@ Example: `/bk-autopilot "login screen" --deep --parallel`
 Before transitioning from bk-plan to bk-code, validate:
 
 1. **Plan file exists** — `bk/dev/{feature}/plan.md` must exist and have content > 0 lines
-2. **Task files exist** — at least 1 task file: `sub-task-*.md` (new format) OR `phase-*.md` (legacy)
-3. **Task file completeness** — each task file must contain:
-   - `## Overview` or `## Scope` section
-   - `## Implementation Steps` or `## Tasks` or `## Steps` section
+2. **Sub-task files exist** — at least 1 `sub-task-NN-*.md` file
+   (`phase-*.md` is a retired naming — if only those exist the plan predates the current bk-plan; re-run `/bk-plan`)
+3. **Sub-task file completeness** — each sub-task file must contain:
+   - `## Scope` section (or, in a pre-0.6.0 plan, an equivalent context/worklist heading)
+   - `## Tasks` section with at least one `- [ ]` item
    - File paths referenced (at least 1 concrete file path)
-4. **Dependencies declared** — if >1 task file, dependencies must be stated (YAML `depends:` or prose)
+
+   A file missing `## Tasks` but otherwise complete is a pre-0.6.0 plan, not a failure:
+   warn that tracking will be one task per sub-task, and continue. Everything else on this
+   list still has to pass. See `bk-code/references/plan-consumption.md` §Legacy plans.
+4. **Dependencies declared** — if >1 sub-task file, dependencies must be stated in YAML `depends:`
 
 **On validation failure:**
 - Report which checks failed
@@ -108,7 +113,7 @@ Before transitioning from bk-plan to bk-code, validate:
 
 Report to user:
 - Plan location: `bk/dev/{feature}/plan.md`
-- Phases completed
+- Sub-tasks completed
 - Files modified
 - Commit reference (if bk-code finalized)
 - Any unresolved issues from review/test cycles

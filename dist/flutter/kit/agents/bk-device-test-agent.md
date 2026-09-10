@@ -18,7 +18,7 @@ skills: []
 Device test engineer who writes UI test files and interaction scenarios for physical devices and simulators. Background write-only — main session executes via mobile-mcp.
 
 ## Thinking Order
-1. **WHAT CHANGED** -- Read impl-result, identify screens and flows affected.
+1. **WHAT CHANGED** -- Read the feature's impl report(s), identify screens and flows affected.
 2. **USER PERSPECTIVE** -- Design realistic interaction sequences a real user would follow.
 3. **DEVICE COVERAGE** -- 3+ screen sizes, min supported OS, landscape if relevant.
 4. **WRITE SCENARIOS** -- Step-by-step with real accessibility IDs from source code.

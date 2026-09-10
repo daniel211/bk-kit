@@ -25,7 +25,7 @@ bk-project-manager uses this template during finalize to generate completion rep
 ## Requirement Coverage
 (If traceability-matrix.md exists)
 - Covered: {X}/{total} ({percentage}%)
-- Not implemented: {list REQ IDs if any}
+- Not implemented: {list trace IDs if any}
 
 ## Known Issues / Tech Debt
 (From deferred review warnings)
@@ -43,7 +43,7 @@ bk-project-manager uses this template during finalize to generate completion rep
 | `Tier` | `.workflow-state.json` → `complexity_tier` | Trivial / Standard / Complex |
 | `Platform` | `platform-context.json` → `platform` | ios / android / flutter |
 | `Sub-Task Status` | `.plan-state.json` → each sub-task entry | completed / blocked / skipped |
-| `Files Changed` | Sub-task `impl-result.json` → `files_written` | Count of modified files |
+| `Files Changed` | Union of each sub-task impl report's `files_changed` | Count of modified files |
 | `Tests` | Test report from `reports/unit-test-*.md` | Pass/total format |
 | `Review findings` | `reports/code-review-*.md` metadata | Parse severity counts |
 | `Fix loops` | `.workflow-state.json` → `fix_loop_count` | Number of review→fix cycles |

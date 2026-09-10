@@ -13,7 +13,7 @@ status: pending
 effort: {Xh}
 platform: {ios|android|flutter}
 owns: ["{glob patterns for files this sub-task creates/modifies}"]
-reqs: [{REQ-IDs this sub-task fulfills}]
+reqs: [{trace IDs this sub-task fulfills — UC-NNN / NFR-CAT-NNN / REQ-NNN, verbatim}]
 figma-frame: "{Figma frame name or URL}"
 ---
 
@@ -145,9 +145,21 @@ class {Screen}Screen extends StatelessWidget {
 
 _Include only platforms targeted by this sub-task._
 
+## Tasks
+
+_The ONLY checkbox section. bk-code hydrates Claude Tasks from here and dev agents
+tick these as they go. One line = one unit of work, ordered._
+
+- [ ] {create view/screen file — layout per Design Specs}
+- [ ] {create/extend ViewModel — state + bindings}
+- [ ] {add Strings entries from the Strings table}
+- [ ] {wire navigation / entry point}
+- [ ] {handle edge cases listed below (empty, loading, error states)}
+- [ ] Build + lint pass
+
 ## Edge Cases & Risks
-- [ ] {edge case 1 — e.g., empty state, no data}
-- [ ] {edge case 2 — e.g., long text overflow, RTL layout}
+- {edge case 1 — e.g., empty state, no data}
+- {edge case 2 — e.g., long text overflow, RTL layout}
 
 ## Success Criteria
 - Screen visually matches Figma {frame_name}
@@ -168,18 +180,18 @@ _Include only platforms targeted by this sub-task._
 _Test sub-tasks aggregate these. Snapshot tests compare against Figma frame._
 
 ## Review Checklist
-- [ ] UI matches Figma frame `{figma-frame}` (layout, spacing, colors, typography)?
-- [ ] Accessibility: labels, contrast ratios, touch targets (44pt min)?
-- [ ] Localization: all text from Strings table, no hardcoded strings?
-- [ ] Follows architecture pattern from Foundation References?
-- [ ] Naming conventions match code-guidelines.md?
-- [ ] Error handling complete (all error states shown to user)?
-- [ ] No hardcoded values (URLs, colors, magic numbers)?
-- [ ] File ownership: no overlap with other sub-tasks' `owns`?
-- [ ] {sub-task specific check}
+- UI matches Figma frame `{figma-frame}` (layout, spacing, colors, typography)?
+- Accessibility: labels, contrast ratios, touch targets (44pt min)?
+- Localization: all text from Strings table, no hardcoded strings?
+- Follows architecture pattern from Foundation References?
+- Naming conventions match code-guidelines.md?
+- Error handling complete (all error states shown to user)?
+- No hardcoded values (URLs, colors, magic numbers)?
+- File ownership: no overlap with other sub-tasks' `owns`?
+- {sub-task specific check}
 
 ## Refs
-- {REQ-ID}: {brief text}
+- {trace ID}: {brief text}
 - Screen: {frame_name} from Figma
 - Endpoint: {method} {path} (if screen calls API)
 - Pattern: {existing file}:{line}
@@ -187,6 +199,9 @@ _Test sub-tasks aggregate these. Snapshot tests compare against Figma frame._
 
 ## Guidelines
 
+- `## Tasks` is the ONLY checkbox section — bk-code hydrates Claude Tasks from it and
+  dev agents tick it. Keep `## Edge Cases & Risks` and `## Review Checklist` as plain
+  bullets so they are never mistaken for progress.
 - Target 30-80 LOC expected output per sub-task; split if >100 LOC
 - Strings table MUST include all user-visible text including error messages
 - Expected Code MUST use `String(localized:)` (iOS) or `stringResource()` (Android) or `AppLocalizations` (Flutter)

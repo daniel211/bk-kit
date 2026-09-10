@@ -21,7 +21,7 @@ Output goes to `bk/docs/` directory. No code changes — docs only.
 </Use_When>
 
 <Do_Not_Use_When>
-- Code review needed — use /bk-code-review
+- Code review needed — use /bk-review
 - Implementation needed first — use /bk-code
 </Do_Not_Use_When>
 
@@ -82,7 +82,8 @@ Parse `$ARGUMENTS` for feature name or documentation scope.
 Detect platform from project files. Load platform context from `config/platform-context.{platform}.json`.
 
 Gather context for bk-docs-writer:
-- `bk/dev/shared/{platform}/{feature}-impl-result.json` — what was implemented
+- The feature's impl reports — what was implemented, one markdown file per dispatch:
+  `bk/dev/{feature}/research/impl-sub-task-*.md`, `bk/dev/shared/reports/impl-{feature}-*.md`
 - `bk/dev/shared/reports/code-review-{feature}.json` and/or `code-review-gemini-{feature}.json` — review findings (if exists)
 - Current `bk/docs/` structure: `codebase-summary.md`, `system-architecture.md`, `code-standards.md`
 
@@ -93,7 +94,7 @@ Dispatch bk-docs-writer background (sonnet):
 Task(subagent_type: "bk-docs-writer", model: "sonnet", run_in_background: true, prompt: "
   Feature: {feature_name}
   Platform: {platform}
-  impl-result: bk/dev/shared/{platform}/{feature}-impl-result.json
+  Impl reports: {resolved report paths — read `files_changed` + `## Summary` from each}
   Existing docs to update:
     - bk/docs/codebase-summary.md
     - bk/docs/system-architecture.md  (if architecture changed)

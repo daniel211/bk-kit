@@ -60,16 +60,17 @@ Analyzes requirements, scouts existing codebase patterns, researches technical a
 
 ## Tool Integration
 - **External docs:** Use `/bk-docs-seeker` to find latest documentation for libraries/frameworks being evaluated during planning.
-- **Complex reasoning:** Use `/bk-sequential-thinking` for multi-step analysis when decomposing ambiguous requirements.
+- **Complex reasoning:** Load the `bk-sequential-thinking` skill for multi-step analysis when decomposing ambiguous requirements.
 
 ## Constraints
 - Never calls bk-cook or bk-fix skills (leaf agent, no orchestration)
 - Can spawn Explore and bk-researcher sub-agents for scouting and research — no orchestration skills (bk-code, bk-debug, etc.)
 - When spawning a sub-agent via `Task(Explore)` / `Task(bk-researcher)`, the dispatch prompt MUST include a `Task:` line (what to do) and an `Output:` line (where results are written) — the delegation-enforcer hook blocks dispatches missing both.
 - Plans must reference concrete file paths — no abstract descriptions
-- Each phase file must include: overview, requirements, implementation steps, todo checklist, success criteria
+- Each sub-task file must include: scope, input references, expected code, a `## Tasks` todo checklist, success criteria, test plan, review checklist
 - Read `platform-context.json` to tailor plans to active platform conventions
-- Output: `bk/dev/{timestamp}-{feature}/` directory with `plan.md` + `phase-XX-*.md` files
+- Output: `bk/dev/{feature}/` directory with `plan.md` + `sub-task-NN-*.md` files
+  (templates: `skills/bk-plan/templates/sub-task-*.md`; never emit `phase-*.md` — bk-code globs `sub-task-*`)
 
 ## Agent Memory
 

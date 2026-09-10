@@ -92,12 +92,13 @@ Task(subagent_type: "bk-{platform}-developer", model: "opus", prompt: "
   Affected files: {file_list_with_line_ranges}
   Constraint: preserve ALL existing behavior — all tests must pass after refactor
   Constraint: minimal blast radius — change only what is needed
-  Output: bk/dev/shared/{platform}/{feature}-impl-result.json
+  Output: bk/dev/shared/reports/impl-{feature}-refactor.md
+    (impl report — markdown + YAML frontmatter, schema in bk-agent-contract §3)
 ")
 ```
 
 After agent returns:
-- Verify `impl-result.json` exists with `files_changed` (min 1)
+- Verify `bk/dev/shared/reports/impl-{feature}-refactor.md` exists with `files_changed` (min 1)
 - Verify no orphaned references remain (renamed symbol still called by old name)
 - Write `dev_agent_id` to `.workflow-state.json`
 
@@ -109,7 +110,7 @@ Dispatch bk-unit-test-agent background (sonnet) to verify no regressions:
 ```
 Task(subagent_type: "bk-unit-test-agent", model: "sonnet", run_in_background: true, prompt: "
   Run existing tests — verify no regressions introduced by refactor
-  impl-result: bk/dev/shared/{platform}/{feature}-impl-result.json
+  Impl report: bk/dev/shared/reports/impl-{feature}-refactor.md
   Output: bk/dev/shared/reports/unit-test-{platform}-{feature}.json
   IMPORTANT: Do NOT write new tests — only run existing suite
 ")
@@ -195,11 +196,17 @@ All 3 mandatory when refactor is part of a planned workflow.
 
 File: `bk/dev/shared/.workflow-state.json`
 
+`workflow_type` (alias `command`) is what `fsm-guard.cjs` matches against the transition
+table in `rules/state-machine.md`. Omit it and every transition passes unvalidated.
+`phase_history[]` / `phase_recurrence_count{}` are appended by the guard — read, don't write.
+
 ```json
 {
+  "workflow_type": "bk-refactor",
   "command": "bk-refactor",
   "current_phase": "analyze|refactor|test|commit",
-  "phase_history": [{"from": "", "to": "", "timestamp": ""}],
+  "phase_history": [{"phase": "", "from_phase": "", "ts": 0, "entered_by": ""}],
+  "phase_recurrence_count": {},
   "refactor_fix_count": 0,
   "refactor_type": "rename|extract|move|restructure|modernize",
   "complexity_tier": "Trivial|Standard|Complex",
@@ -214,7 +221,7 @@ File: `bk/dev/shared/.workflow-state.json`
 1. Read `current_phase` from `.workflow-state.json`
 2. Resume from `current_phase` — do not re-execute completed phases
 3. Check `refactor_fix_count` before test→refactor transitions
-4. If `current_phase: "refactor"` — check if `impl-result.json` exists (dev agent may have finished)
+4. If `current_phase: "refactor"` — check if `bk/dev/shared/reports/impl-{feature}-refactor.md` exists (dev agent may have finished)
 
 ## Constraints
 

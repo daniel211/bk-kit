@@ -142,11 +142,11 @@ npx tsx src/scripts/cli.ts combine \
 
 | P3 Data | → Plan Section |
 |---------|----------------|
-| `design.screens[]` | phase-ui: `## Input (from Figma)` — components, layout, interactions |
-| `design.tokens` | phase-ui: `## Strings` — colors referenced; `## Expected Code` — design token usage |
-| `api.models[]` | phase-coding: `## Expected Code` — model structs/classes |
-| `api.endpoints[]` | phase-coding: `## Expected Code` — service methods |
-| `requirements[]` | plan.md: requirements table; phase YAML: `reqs` field |
+| `design.screens[]` | sub-task-ui: `## Input (from Figma)` — components, layout, interactions |
+| `design.tokens` | sub-task-ui: `## Strings` — colors referenced; `## Expected Code` — design token usage |
+| `api.models[]` | sub-task-coding: `## Expected Code` — model structs/classes |
+| `api.endpoints[]` | sub-task-coding: `## Expected Code` — service methods |
+| `requirements[]` | plan.md: requirements table; sub-task YAML: `reqs` field |
 | `requirements[].relatedScreens` | Links screens → requirements for traceability |
 | `requirements[].relatedEndpoints` | Links endpoints → requirements for traceability |
 

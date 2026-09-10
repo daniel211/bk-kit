@@ -16,13 +16,9 @@ from pathlib import Path
 SCRIPT_DIR = Path(__file__).parent
 CLAUDE_DIR = SCRIPT_DIR.parent
 
-# Skills that have a workflow/FSM role vs. pure knowledge/reference role.
-# Determined by user-invocable: true in frontmatter.
-WORKFLOW_SKILL_NAMES = {
-    "bk-code", "bk-debug", "bk-refactor",
-    "bk-plan", "bk-test", "bk-review",
-    "bk-commit", "bk-docs", "bk-analyze",
-}
+# Workflow vs. knowledge skill is decided by `user-invocable` in each SKILL.md
+# frontmatter (see parse_frontmatter / the `invocable` key below). A hardcoded name
+# list used to sit here and had gone stale; do not reintroduce one.
 
 
 def parse_frontmatter(text: str) -> dict:

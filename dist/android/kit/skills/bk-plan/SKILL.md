@@ -8,14 +8,14 @@ argument-hint: "[feature] [--fast|--deep] [--parallel|--sequential] [--figma URL
 # Plan: $ARGUMENTS
 
 Research, triage, analyze codebase, process inputs, dispatch agents,
-produce phase-based plan with expected code for user review.
+produce a sub-task-based plan with expected code for user review.
 
 ## Archive Mode
 
 When `--archive PLAN_DIR` is passed, skip normal workflow and:
 
 1. Verify `PLAN_DIR` exists and contains `plan.md`
-2. Read `plan.md` frontmatter — confirm all phase statuses are complete (or force with `--force`)
+2. Read `plan.md` frontmatter — confirm all sub-task statuses are complete (or force with `--force`)
 3. Update frontmatter `status: archived` in `plan.md`
 4. Move entire plan directory to `bk/dev/archive/{dir-name}/`
 5. Report: "Archived {feature} → bk/dev/archive/{dir-name}/"
@@ -233,13 +233,19 @@ Update: `TaskUpdate(taskId, status: "in_progress")` before dispatch, `TaskUpdate
             test specifications, architecture constraints,
             acceptance criteria, dependency notes
 
+         ID rule: if the source document already numbers its requirements, keep that ID
+         verbatim. Only mint `REQ-{NNN}` / `TC-{NNN}` for items the document leaves
+         unnumbered, and never reuse an ID that a /bk-spec SRS already assigned
+         (UC-/NFR-). See rules/traceability.md.
+
          Output — write to: {plan-dir}/inputs/requirements.json
          Format:
          {
            "source_docs": ["path1.md", "path2.md"],
            "requirements": [
              {"id": "REQ-001", "type": "functional|nonfunctional",
-              "description": "...", "source": "path", "priority": "P0|P1|P2"}
+              "description": "...", "source": "path", "source_id": "original ID if the doc had one",
+              "priority": "P0|P1|P2"}
            ],
            "test_specs": [
              {"id": "TC-001", "description": "...", "type": "unit|integration|e2e",
@@ -254,7 +260,7 @@ Update: `TaskUpdate(taskId, status: "in_progress")` before dispatch, `TaskUpdate
      )
 
    Feed enterprise data into plan synthesis:
-     - requirements.json → sub-task `reqs:` fields for traceability
+     - requirements.json → sub-task `reqs:` fields for traceability (IDs verbatim)
      - test_specs → sub-task Test Plan sections (pre-populated test cases)
      - architecture_constraints → plan.md ## Constraints + sub-task review checklists
      - acceptance_criteria → sub-task Success Criteria sections
@@ -306,7 +312,7 @@ Update: `TaskUpdate(taskId, status: "in_progress")` before dispatch, `TaskUpdate
    # DO NOT use built-in Plan() agent — it lacks serena MCP, sub-agents, architecture skill
    Task(subagent_type: "bk-planner", model: "opus",
      description: "Create implementation plan for {feature}", prompt: "
-     Task: Create phased implementation plan
+     Task: Create sub-task-based implementation plan
      Feature: {feature_description}
      Platform: {platform}
      Context:
@@ -335,10 +341,12 @@ Update: `TaskUpdate(taskId, status: "in_progress")` before dispatch, `TaskUpdate
 
 
 8b. **Plan Quality Self-Check** — validate plan completeness before critic
-    - Every phase has ≥3 concrete file paths in `## Implementation Steps`
-    - Every phase has `## Expected Code` section with actual code preview
-    - Every phase has `## Success Criteria` with testable conditions
-    - No phase exceeds 120 lines
+    - Files are named `sub-task-NN-{slug}.md` — never `phase-*.md` (bk-code globs `sub-task-*`)
+    - Every sub-task has ≥3 concrete file paths in `## Scope`
+    - Every sub-task has `## Expected Code` section with actual code preview
+    - Every sub-task has a `## Tasks` checkbox list (bk-code's only hydration source)
+    - Every sub-task has `## Success Criteria` with testable conditions
+    - No sub-task file exceeds 120 lines
     - plan.md references foundation docs where relevant
     - IF any check fails → fix before proceeding to critic
 
@@ -362,7 +370,7 @@ Update: `TaskUpdate(taskId, status: "in_progress")` before dispatch, `TaskUpdate
 11. **Hydrate Tasks** — Checkboxes → TaskCreate with dependency chain
     Load: `references/task-hydration.md`
     State: `references/handoff-protocol.md`
-    Skip if: < 3 phases
+    Skip if: < 3 sub-tasks
     If parallel mode: parallel group tasks have no `addBlockedBy` between them; sequential deps use `addBlockedBy` as normal
 
 12. **Present** — Show plan, register context, output bk-code command
@@ -377,17 +385,17 @@ Update: `TaskUpdate(taskId, status: "in_progress")` before dispatch, `TaskUpdate
 bk/dev/{feature}/
 ├── .plan-state.json           # Workflow state (step progress, gap decisions)
 ├── srs.md                     # Feature SRS (Step 3 output)
-├── plan.md                    # Summary: inputs, code impact, phases, gaps
-├── phase-00-extract-inputs.md # P3 input extraction (if inputs provided)
-├── phase-01-*.md              # Implementation phases with expected code
-├── phase-XX-tests.md          # Test cases (description only, no test code)
+├── plan.md                    # Summary: inputs, code impact, sub-tasks, gaps
+├── sub-task-00-extract-inputs.md # P3 input extraction (if inputs provided)
+├── sub-task-01-*.md           # Implementation sub-tasks with expected code
+├── sub-task-XX-tests.md       # Test cases (description only, no test code)
 ├── research/                  # Agent outputs (file-based handoffs)
 │   ├── code-analysis-summary.md  # Step 3 output
 │   ├── researcher-1-domain.md    # Step 6 output
 │   ├── researcher-2-platform.md  # Step 6 output
 │   ├── enterprise-docs-summary.md # Step 4b output (if enterprise docs found)
 │   └── critic-review.md          # Step 7 output
-└── inputs/                    # P3 extracted data (phase-00 output)
+└── inputs/                    # P3 extracted data (sub-task-00 output)
     ├── generation-input.json  # GenerationInput (combined, for bk-code)
     ├── design.json            # DesignOutput
     ├── api.json               # ApiOutput
@@ -398,19 +406,23 @@ Load: `references/handoff-to-dev.md` for bk-code contract.
 Load: `references/handoff-protocol.md` for state tracking + agent communication.
 
 ### Requirement Tracing
-Each sub-task SHOULD include traces in YAML frontmatter:
+Each sub-task SHOULD carry the IDs it fulfils in YAML frontmatter, in the `reqs:` field
+(`traces:` is the pre-0.6.0 spelling — read-only, never emit it):
 ---
-traces: [REQ-payment-001, REQ-payment-003]
+reqs: [UC-001, NFR-SEC-001]
 ---
-If SRS exists with REQ IDs, bk-planner maps requirements to sub-tasks.
-If no SRS, traces field is omitted.
+IDs are copied verbatim from their source and never renumbered: `UC-`/`NFR-` from a
+`/bk-spec` SRS, `REQ-`/`TC-` from enterprise docs extracted in Step 4b, `REQ-` derived in
+Step 3 when there is no formal source. bk-planner maps them to sub-tasks.
+If no requirement source exists, `reqs: []` — and the sub-task's `## Scope` says why.
+Protocol: `rules/traceability.md`.
 
 ## Constraints
 
 - DO NOT implement code — plan only
-- Expected code in phases = preview for user review, not final
+- Expected code in sub-tasks = preview for user review, not final
 - Always show plan to user before approve
-- Phase files under 120 lines
+- Sub-task files under 120 lines
 - plan.md under 60 lines
 - Use localized string keys in UI expected code, never hardcoded text
 - Agents write to pre-agreed file paths, not prompt-based output

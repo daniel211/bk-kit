@@ -87,8 +87,8 @@ Write to `bk/dev/{feature}/srs.md`:
 
 ## Consumed By
 
-- bk-plan synthesis → phase files reference `srs.md` requirements via `reqs` YAML field
-- bk-plan test phase → acceptance criteria from `srs.md`
+- bk-plan synthesis → sub-task files reference `srs.md` requirements via `reqs` YAML field
+- bk-plan test sub-tasks → acceptance criteria from `srs.md`
 - bk-code → requirements traceability (code-reviewer checks `reqs` coverage)
 
 ## Skip Conditions

@@ -26,7 +26,7 @@ Cross-feature coordinator reading plans, reports, and artifacts to synthesize pr
 ## Quality Bar
 | Dimension | Good | Bad |
 |-----------|------|-----|
-| Status accuracy | Phase marked complete only when artifact exists | "Implementation finished" without checking `impl-result.json` |
+| Status accuracy | Sub-task marked complete only when its impl report exists | "Implementation finished" without checking the impl report |
 | Actionability | "Phase 3 blocked: bk-unit-test-agent failed — needs fix before Phase 4" | "Some issues remain" |
 | Completeness | All phases covered, blocked items listed with reason | Only reporting happy-path progress |
 
@@ -102,16 +102,28 @@ When operating as teammate:
 
 ## Traceability Matrix Generation (Finalize Phase)
 
-When invoked during finalize:
-1. Check if bk/dev/{feature}/srs-*.md files exist with REQ- IDs
-2. If yes, generate traceability matrix:
-   a. Read all REQ- IDs from SRS files
-   b. Read sub-task files → extract `traces:` YAML fields
-   c. Read test files → grep for REQ- references
-   d. Write: bk/dev/{feature}/traceability-matrix.md
-   e. Calculate coverage: covered_reqs / total_reqs × 100%
+When invoked during finalize (protocol: `rules/traceability.md`):
+
+1. Collect the declared IDs from whichever requirement sources exist:
+   - `bk/dev/{feature}/srs/02-functional-requirements.md` → `UC-{NNN}`
+   - `bk/dev/{feature}/srs/03-nonfunctional-requirements.md` → `NFR-{CAT}-{NNN}`
+   - `bk/dev/{feature}/srs.md` → locally derived `REQ-{NNN}`
+   - `{plan-dir}/inputs/requirements.json` → enterprise `REQ-{NNN}` / `TC-{NNN}`
+   IDs are copied verbatim — never renumber or re-prefix them.
+2. Generate the matrix:
+   a. Read sub-task files → extract the YAML **`reqs:`** field. Pre-0.6.0 plans spell the
+      same field `traces:` — accept it when reading, never write it back. Sunset 0.8.0.
+   b. Read each sub-task's impl report → `requirements_satisfied` frontmatter
+   c. Read test files → grep for the IDs
+   d. Write: `bk/dev/{feature}/traceability-matrix.md`
+   e. Calculate coverage: covered / total × 100%, and emit a literal
+      `Coverage: {N}%` line — `traceability-check.cjs` parses that line and reports
+      nothing without it
    f. Report coverage in sync-back summary
-3. If no REQ IDs found → skip matrix generation (no error)
+3. If no requirement source exists AND no sub-task declares `reqs:` → skip the matrix
+   (no error; the feature is untraced by design)
+4. If sub-tasks DO declare `reqs:` → the matrix is mandatory even when coverage is low.
+   Skipping it turns the pre-commit coverage gate into a no-op, which reads as a pass.
 
 ## Feature Completion Report
 
@@ -151,9 +163,9 @@ Generate project status report. Read: (1) Discover active plan by scanning bk/de
 ### Phase Summary
 | Phase | Description | Status | Artifact | Blocker |
 |-------|-------------|--------|----------|---------|
-| Phase 1 | QR Scanner Screen | ✅ Completed | `impl-result.json` present, 3 files created | — |
-| Phase 2 | Confirmation + PIN | ✅ Completed | `impl-result.json` present, 2 files created | — |
-| Phase 3 | Payment Processing | ⚠️ In Progress | `impl-result.json` missing | bk-unit-test-agent failed — see blocker below |
+| Sub-task 01 | QR Scanner Screen | ✅ Completed | impl report present, 3 files created | — |
+| Sub-task 02 | Confirmation + PIN | ✅ Completed | impl report present, 2 files created | — |
+| Sub-task 03 | Payment Processing | ⚠️ In Progress | impl report missing | bk-unit-test-agent failed — see blocker below |
 | Phase 4 | Navigation Coordinator | ⏳ Not Started | — | Blocked by Phase 3 |
 | Phase 5 | Design Extraction | ✅ Completed | `payment-confirmation-specs.md` present | — |
 

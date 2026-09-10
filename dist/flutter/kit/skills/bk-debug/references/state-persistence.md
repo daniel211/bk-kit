@@ -4,11 +4,16 @@
 
 Path: `bk/dev/shared/.workflow-state.json`
 
+`workflow_type` (alias `command`) is what `fsm-guard.cjs` matches against the transition
+table in `rules/state-machine.md`. Omit it and every transition passes unvalidated.
+
 ```json
 {
+  "workflow_type": "bk-debug",
   "command": "bk-debug",
   "current_phase": "classify|analyze|brainstorm|code|test|review|commit",
-  "phase_history": [{"from": "", "to": "", "timestamp": ""}],
+  "phase_history": [{"phase": "", "from_phase": "", "ts": 0, "entered_by": ""}],
+  "phase_recurrence_count": {},
   "quality_fix_count": 0,
   "build_retry_count": 0,
   "test_fix_count": 0,
@@ -38,9 +43,10 @@ Path: `bk/dev/shared/.workflow-state.json`
 
 ## Phase History
 
-Append to `phase_history[]` on every transition:
+`phase_history[]` and `phase_recurrence_count{}` are appended by `fsm-guard.cjs` on every
+accepted transition — read them, do not hand-maintain them:
 ```json
-{"from": "classify", "to": "analyze", "timestamp": "2026-03-15T06:30:00Z"}
+{"phase": "analyze", "from_phase": "classify", "ts": 1773556200000, "entered_by": "{session}"}
 ```
 
 Provides audit trail and prevents re-execution of completed phases.
@@ -50,5 +56,5 @@ Provides audit trail and prevents re-execution of completed phases.
 1. Read current phase from file
 2. Check transition table in `rules/state-machine.md`
 3. Verify transition is valid for current command
-4. Verify required artifact exists (e.g., `impl-result.json` for code→test)
-5. Write new phase + append to `phase_history[]`
+4. Verify required artifact exists (e.g. the impl report `bk/dev/shared/reports/impl-{feature}-debug.md` for code→test)
+5. Write new phase (the guard appends to `phase_history[]`)

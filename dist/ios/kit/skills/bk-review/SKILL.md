@@ -1,6 +1,6 @@
 ---
 name: bk-review
-description: "Hook-guarded review workflow — dispatch bk-gemini-reviewer (default) or bk-code-reviewer in background, optional bk-security-auditor for security-sensitive changes. Output: review report."
+description: "Code review workflow — the review command for beer-kit (there is no /bk-code-review). Dispatches bk-gemini-reviewer (default) or bk-code-reviewer in background, plus bk-security-auditor for security-sensitive changes. Use when the user says review, code review, check my code, audit, inspect. Output: review report."
 user-invocable: true
 argument-hint: "[feature or files to review]"
 ---
@@ -19,8 +19,12 @@ Dispatches bk-code-reviewer (background, sonnet) to inspect code changes. Option
 <Do_Not_Use_When>
 - Tests needed — use /bk-test
 - Bug fix — use /bk-debug
-- Security audit only — use /bk-review with security flag
+- Reviewing a merge request / PR diff — use /bk-review-mr
 </Do_Not_Use_When>
+
+**Naming:** this skill is `/bk-review`. `/bk-code-review` does not exist — `bk-code-reviewer`
+is the *agent* it dispatches, and `bk-code-review-workflow` is the agent-side skill that agent
+loads. Do not invent a `/bk-code-review` command.
 
 ## Approval Gates
 
@@ -40,8 +44,17 @@ Before dispatching reviewers:
 1. Read `bk/docs/foundation/architecture.md`
 2. Pass architecture patterns to bk-code-reviewer dispatch prompt
 
-Check for `impl-result.json` at `bk/dev/shared/{platform}/{feature}-impl-result.json`.
-If not found, use `git diff` to identify changed files.
+Collect the feature's impl reports — markdown, one per implementation dispatch
+(schema: `bk-agent-contract` §3). There is no `impl-result.json`.
+
+```
+Glob bk/dev/{feature}/research/impl-sub-task-*.md      # from /bk-code
+Glob bk/dev/shared/reports/impl-{feature}-*.md         # from /bk-debug, /bk-refactor
+```
+
+Union their `files_changed` frontmatter → the review surface. If no report matches, fall
+back to `git diff --name-only` and say in the report that scope came from the diff, not
+from a dev agent's own account of its work.
 
 Detect if changes are security-sensitive:
 - Auth, login, token, password, encryption, storage, network layer → dispatch bk-security-auditor
@@ -66,7 +79,7 @@ Dispatch review agent(s) in ONE message (background):
 Task(subagent_type: "bk-gemini-reviewer", model: "sonnet", run_in_background: true, prompt: "
   Task: Code review for feature {feature_name}
   Platform: {platform}
-  Files: {file_list or impl-result path}
+  Files: {file_list from impl reports, or git diff}
   TOOL RESTRICTION: You are a READ-ONLY agent for project code. Do NOT use Edit tool. Use Bash strictly to invoke gemini review harness.
   Architecture rules: .claude/rules/{platform}-rules.md
   Model: gemini-3.1-pro-high
@@ -79,7 +92,7 @@ Task(subagent_type: "bk-gemini-reviewer", model: "sonnet", run_in_background: tr
 Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true, prompt: "
   Task: Code review for feature {feature_name}
   Platform: {platform}
-  Files: {file_list or impl-result path}
+  Files: {file_list from impl reports, or git diff}
   TOOL RESTRICTION: You are a READ-ONLY agent. Do NOT use Edit, Bash, or Task tools.
   Architecture rules: .claude/rules/{platform}-rules.md
   Output: bk/dev/shared/reports/code-review-{feature}.md (+ .json)
@@ -91,7 +104,7 @@ Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true
 Task(subagent_type: "bk-security-auditor", model: "sonnet", run_in_background: true, prompt: "
   Task: Security audit for feature {feature_name}
   Platform: {platform}
-  Files: {file_list or impl-result path}
+  Files: {file_list from impl reports, or git diff}
   TOOL RESTRICTION: You are a READ-ONLY agent. Do NOT use Edit, Bash, or Task tools.
   Output: bk/dev/shared/reports/security-{feature}.json
 ")

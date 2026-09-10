@@ -64,7 +64,7 @@ Task(subagent_type: "{agent}", model: "{model}", prompt: "
 | Explore | bk/docs/foundation/_raw/scan-report.md |
 | bk-researcher | {plan-dir}/research/researcher-{N}-{topic}.md |
 | bk-planner | {plan-dir}/plan.md + sub-task-*.md |
-| bk-{platform}-developer | Source files + {plan-dir}/reports/impl-result.json |
+| bk-{platform}-developer | Source files + {plan-dir}/research/impl-sub-task-{NN}.md |
 | bk-code-reviewer | bk/dev/shared/reports/code-review-{feature}.md |
 | bk-gemini-reviewer | bk/dev/shared/reports/code-review-gemini-{feature}.md |
 | bk-debugger | bk/dev/shared/reports/debug-analysis-{feature}.json |

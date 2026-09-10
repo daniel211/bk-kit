@@ -1,19 +1,22 @@
-# Phase Template: Input Extraction (Phase 0)
+# Sub-Task Template: Input Extraction (Sub-Task 00)
 
 Use for: P3 input processing — extracting structured data from Figma/OpenAPI/docs.
-Only include this phase when user provides input sources.
+Only include this sub-task when user provides input sources.
 
 ```markdown
 ---
-phase: 0
-title: Extract Inputs
+sub-task: 00
+title: "Extract Inputs"
 depends: []
+parallel-with: []
 status: pending
-platforms: [{platforms}]
+effort: {Xh}
+platform: {ios|android|flutter}
+owns: ["{plan-dir}/inputs/**"]
 reqs: []
 ---
 
-# Phase 0: Extract Inputs
+# Sub-Task 00: Extract Inputs
 
 Extract structured data from provided sources into `inputs/` directory.
 
@@ -71,7 +74,7 @@ npx tsx src/scripts/cli.ts combine \
 | `inputs/requirements.json` | {N} requirements ({N} must, {N} should, {N} could) |
 | `inputs/generation-input.json` | Platform: {platform}, combined {size} |
 
-## Done When
+## Success Criteria
 
 - All JSON files parse without errors
 - Model count matches OpenAPI spec schemas
@@ -81,8 +84,8 @@ npx tsx src/scripts/cli.ts combine \
 
 ## Guidelines
 
-- Always Phase 0 (first phase, no dependencies)
+- Always sub-task 00 (first sub-task, no dependencies)
 - Remove rows/tasks for sources not provided
 - Commands section = exact CLI invocations, copy-paste ready
 - Expected Output = verify extraction worked correctly
-- This phase runs before code analysis — code analysis uses these outputs
+- This sub-task runs before code analysis — code analysis uses these outputs

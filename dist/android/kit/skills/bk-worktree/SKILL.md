@@ -1,5 +1,6 @@
 ---
 name: bk-worktree
+user-invocable: true
 description: "Create isolated git worktree for parallel development in monorepos and mobile projects."
 argument-hint: "[feature-description] OR [project] [feature]"
 ---

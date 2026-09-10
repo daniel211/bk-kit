@@ -10,7 +10,11 @@ Before starting any sub-task execution, check if this is a resumed session:
 1. **Read sub-task files** — scan `bk/dev/{feature}/` for `plan.md` and `sub-task-*.md`
 2. **Check TaskList()** — if empty but sub-task files exist, this is a session resume
 3. **Hydrate Tasks:**
-   - For each unchecked `- [ ]` item in sub-task files → `TaskCreate` with description
+   - For each unchecked `- [ ]` item in the sub-task files' `## Tasks` section → `TaskCreate` with description
+     (hydrate from `## Tasks` only — `## Edge Cases & Risks`, `## Success Criteria` and
+     `## Review Checklist` checkboxes are not tasks)
+   - Sub-task with no `## Tasks` section → pre-0.6.0 plan: one `TaskCreate` for the whole
+     sub-task, no checkbox hydration (`references/plan-consumption.md` §Legacy plans)
    - Set `addBlockedBy` chains based on sub-task YAML `depends` field
    - Mark already-checked `- [x]` items as completed
 4. **Resume execution** from first uncompleted sub-task in current batch
@@ -38,7 +42,7 @@ Extract these sections for agent prompt:
 | Section | Required | What to Extract |
 |---------|----------|-----------------|
 | YAML `depends` | Yes | Verify all deps complete |
-| YAML `platforms` | Yes | Which platforms to generate for |
+| YAML `platform` | Yes | Which platform to generate for |
 | YAML `owns` | Yes | File ownership scope (3-5 files max) |
 | YAML `reqs` | Yes | Requirement IDs for traceability |
 | `## Scope` | Yes | Files to create/modify, LOC estimate |
@@ -96,7 +100,8 @@ Task(subagent_type: "bk-ios-developer", model: "opus", description: "Implement s
   - UI text: use localized string keys from Strings table only
   - Only create/modify files listed in ## Scope (owns enforcement)
   - Run lint + build after each file
-  - Update Tasks checkboxes [ ] → [x] as you complete each
+  - Update the `## Tasks` checkboxes [ ] → [x] as you complete each
+    (never tick `## Edge Cases & Risks` or `## Review Checklist` — those are not progress)
   - Report any deviations from Expected Code
   - Verify implementation covers all reqs listed in sub-task YAML
   - Before returning: verify all created/modified files exist and are non-empty
@@ -104,6 +109,12 @@ Task(subagent_type: "bk-ios-developer", model: "opus", description: "Implement s
   Expected completion: 15 minutes.
   If stuck: save partial progress to output file, report what's blocking.
   Output: {plan-dir}/research/impl-sub-task-{NN}.md
+    Impl report — markdown with YAML frontmatter. Required frontmatter: schema_type: impl-report,
+    agent, feature, sub_task, status, timestamp, build_verified, requirements_satisfied,
+    files_changed (min 1: {path, change, description}), skills_loaded.
+    Required sections: ## Summary, ## Deviations from Expected Code, ## Edge Cases Addressed,
+    ## Anti-Patterns Avoided, ## Notes for Reviewer. Schema: bk-agent-contract §3.
+    Write it even when blocked — status: needs_info + info_needed. There is no impl-result.json.
 ")
 ```
 
@@ -167,8 +178,10 @@ After agent completes:
 After each sub-task completes:
 
 1. **ClaudeTask**: TaskUpdate(completed) for each done task in sub-task
-2. **Checkboxes**: `- [ ]` → `- [x]` in sub-task file for completed items
-3. **Sub-task status**: when ALL checkboxes checked → update sub-task YAML `status: complete`
+2. **Checkboxes**: `- [ ]` → `- [x]` in the sub-task file's `## Tasks` section for completed items.
+   Legacy plan (no `## Tasks`): skip this step entirely — leave every checkbox untouched.
+3. **Sub-task status**: when ALL `## Tasks` checkboxes checked → update sub-task YAML `status: complete`.
+   Legacy plan: set `status: complete` when the sub-task's single task completes.
 4. **Plan table**: update plan.md Sub-Tasks table — set Status for this sub-task
 5. **.plan-state.json**: add sub-task to `completedSteps`, write `stepResults[NN]`
 

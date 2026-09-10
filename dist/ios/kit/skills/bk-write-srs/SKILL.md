@@ -1,5 +1,6 @@
 ---
 name: bk-write-srs
+user-invocable: true
 argument-hint: "[đường dẫn tài liệu nguồn hoặc thư mục bk/dev/<id>/requirements] [id tính năng nếu muốn chỉ định]"
 description: |
   Viết, cập nhật hoặc review SRS (đặc tả tính năng) cho mobile app, đầu vào

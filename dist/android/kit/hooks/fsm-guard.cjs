@@ -175,7 +175,9 @@ try {
       }
 
       const currentPhase = currentState.current_phase || null;
-      const workflowType = currentState.workflow_type || null;
+      // Accept either `workflow_type` (canonical) or `command` (schema documented in
+      // rules/state-machine.md and the bk-debug/bk-refactor state files).
+      const workflowType = currentState.workflow_type || currentState.command || null;
 
       // If phase not changing, pass through
       if (currentPhase === newPhase) {

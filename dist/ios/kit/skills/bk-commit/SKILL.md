@@ -150,7 +150,7 @@ After successful commit, **use `AskUserQuestion` tool**:
 
 If Yes:
 ```bash
-gh pr create --title "{feature title}" --body "{summary from impl-result or review}"
+gh pr create --title "{feature title}" --body "{summary from the impl reports' ## Summary sections, or the review report}"
 ```
 
 Return PR URL to user.

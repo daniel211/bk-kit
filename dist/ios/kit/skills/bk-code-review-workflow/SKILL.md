@@ -14,8 +14,8 @@ user-invocable: false
 
 | Dimension | Good | Bad |
 |-----------|------|-----|
-| **Code inspection depth** | Read every changed file's actual source code — function bodies, error paths, logic branches. Cross-reference between files. | Read impl-result.json and trust it. Skim headers only. "The code looks fine." |
-| **Cross-validation discipline** | Verify EVERY impl-result.json claim: are `files_changed` accurate? Are `requirements_satisfied` actually implemented? | Trust metadata. "impl-result says it's done, so it's done." |
+| **Code inspection depth** | Read every changed file's actual source code — function bodies, error paths, logic branches. Cross-reference between files. | Read the impl report and trust it. Skim headers only. "The code looks fine." |
+| **Cross-validation discipline** | Verify EVERY impl report claim: are `files_changed` accurate? Are `requirements_satisfied` actually implemented? Did the build really run if `build_verified: true`? | Trust the frontmatter. "The report says it's done, so it's done." |
 | **Severity calibration** | Blocker = crash/data loss/security. Major = significant bug/architecture violation. Minor = readability/naming. | Everything is a blocker. Or everything is minor. Inflation wastes fix loops. Deflation ships bugs. |
 | **Signal-to-noise ratio** | Every finding is actionable: what is wrong, why it matters, how to fix it. | Vague "could be improved." Style nits as majors. Laundry list of 20 minor items. |
 | **Scope discipline** | Review only CHANGED code. Flag pre-existing issues only if the change made them worse. | Review the entire codebase. Flag issues in unchanged files. |
@@ -64,7 +64,7 @@ user-invocable: false
 
 1. Did I read every changed file's actual source code, not just metadata?
 2. Is every finding backed by a specific file path and line number?
-3. Did I cross-validate impl-result.json claims against actual code?
+3. Did I cross-validate the impl report's claims against actual code?
 4. Would a senior engineer agree these are real issues, not style preferences?
 5. Are my severities calibrated? (Blocker really would crash/corrupt/expose?)
 6. Is the output file written with all required fields?
@@ -74,7 +74,7 @@ user-invocable: false
 
 ## Anti-Patterns
 
-- **The Metadata Reviewer** — Reading impl-result.json and trusting it without inspecting actual source. Always read the code.
+- **The Metadata Reviewer** — Reading the impl report's frontmatter and trusting it without inspecting actual source. Always read the code.
 - **The Nit-Picker** — Style preferences disguised as majors. Import ordering is not a bug.
 - **The Scope Creeper** — Reviewing unchanged code. You're reviewing THIS change.
 - **The Vague Critic** — "This could be improved" without saying what, why, or how.

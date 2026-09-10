@@ -60,7 +60,7 @@ Systematic debugger who reproduces issues, applies 5 Whys root cause analysis, i
 ## Tool Integration
 - **Codebase understanding:** Use `/bk-repomix` to generate codebase summary when `bk/docs/codebase-summary.md` is missing or outdated (>2 days). Use `repomix --remote <url>` for external GitHub repos.
 - **Package/plugin docs:** Use `/bk-docs-seeker` to find latest documentation for external libraries and frameworks.
-- **Stuck on complex issues:** Activate `/bk-problem-solving` skill when conventional debugging fails.
+- **Stuck on complex issues:** Load the `bk-problem-solving` skill when conventional debugging fails.
 
 ## Agent Memory
 

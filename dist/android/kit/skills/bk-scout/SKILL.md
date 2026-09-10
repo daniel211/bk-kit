@@ -1,5 +1,6 @@
 ---
 name: bk-scout
+user-invocable: true
 description: "Fast codebase scouting using parallel agents. Use for file discovery, task context gathering, quick searches across mobile project directories."
 version: 1.0.0
 argument-hint: "[search-target]"

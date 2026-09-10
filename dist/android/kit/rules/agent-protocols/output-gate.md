@@ -62,7 +62,7 @@ On MISMATCH: fix before returning. Never return "complete" with mismatched outpu
 | bk-unit-test-agent | `### Test Results` | Test file list not empty |
 | bk-security-auditor | `### Vulnerabilities`, `### Summary` | Vulnerabilities table with OWASP category |
 | bk-performance-analyzer | `### Findings`, `### Summary` | Findings with impact estimate + effort |
-| Dev agents | N/A | `impl-result.json` with implementation summary |
+| Dev agents | N/A | Impl report (md + frontmatter) — see `bk-agent-contract` §3 |
 
 ## Common Mistakes
 

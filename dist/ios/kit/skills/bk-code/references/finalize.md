@@ -4,21 +4,26 @@ Sync-back all progress, update docs, commit.
 
 ## Full Sync-Back (CRITICAL)
 
-Sweep ALL `phase-XX-*.md` files in plan directory — not just current phase.
+Sweep ALL `sub-task-NN-*.md` files in plan directory — not just the current sub-task.
 
 ### Checkbox sync
 
-For each phase file:
-1. Read `## Tasks` section
-2. Cross-check with completed Claude Tasks (by metadata.phaseFile)
+For each sub-task file:
+1. Read the `## Tasks` section ONLY (never `## Edge Cases & Risks`, `## Success Criteria`
+   or `## Review Checklist`)
+2. Cross-check with completed Claude Tasks (by metadata.subTaskFile)
 3. Mark every completed item: `- [ ]` → `- [x]`
-4. Include earlier phases finished before current session
+4. Include earlier sub-tasks finished before current session
+5. Pre-0.6.0 sub-task (no `## Tasks`): tick nothing. Set frontmatter `status: complete` when
+   its single task completed, and record it in `.plan-state.json`. See
+   `references/plan-consumption.md` §Legacy plans.
 
 ### Plan status update
 
-1. For each phase: if ALL checkboxes `[x]` → set YAML `status: complete`
-2. Update plan.md phase table: Status column matches phase YAML
-3. If ALL phases complete → plan.md YAML `status: completed`
+1. For each sub-task: if ALL `## Tasks` checkboxes `[x]` → set YAML `status: complete`
+   (legacy sub-task: its one task completed → `status: complete`)
+2. Update the plan.md sub-task table: Status column matches sub-task YAML
+3. If ALL sub-tasks complete → plan.md YAML `status: completed`
 
 ### State file
 
@@ -31,8 +36,8 @@ Write final `.plan-state.json`:
   "platforms": ["{from plan.md}"],
   "currentStep": "finalized",
   "completedSteps": [1, 2, 3, ...],
-  "completedPhases": N,
-  "totalPhases": M,
+  "completedSubTasks": N,
+  "totalSubTasks": M,
   "updatedAt": "{ISO timestamp}"
 }
 ```
@@ -66,8 +71,9 @@ Task(subagent_type: "bk-project-manager", model: "haiku", run_in_background: tru
   description: "Sync plan progress", prompt: "
   Task: Sync-back plan progress at {plan-dir}
   Sync-back plan at {plan-dir}:
-  - Read ALL phase-*.md files
-  - Mark completed [ ] → [x] across all phases
+  - Read ALL sub-task-*.md files
+  - Mark completed [ ] → [x] in each file's `## Tasks` section only
+  - Files with no ## Tasks section are pre-0.6.0: set frontmatter status only, tick nothing
   - Update plan.md status/progress
   - Report unresolved mappings
   Output: {plan-dir}/plan.md (updated status + checkboxes)
@@ -139,7 +145,7 @@ Task(subagent_type: "bk-git-manager", model: "haiku", description: "Commit chang
 ## Output
 
 ```
-✓ Finalized: {N}/{M} phases complete
+✓ Finalized: {N}/{M} sub-tasks complete
   Files: {count} created, {count} modified
   Tests: {pass}/{total} passed
   Review: {score}/10

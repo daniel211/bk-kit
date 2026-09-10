@@ -7,35 +7,38 @@ paths:
 
 ## Plan Structure
 
-Save plans in `./bk/dev` directory with timestamp and descriptive name.
+Save plans in `./bk/dev/{feature-slug}/` — one directory per feature.
+This is the single plan-directory convention: `/bk-spec`, `/bk-plan`, `/bk-code` and
+`traceability-check.cjs` all resolve `bk/dev/{feature}/`. Do not use timestamped directory names.
 
-**Format:** `bk/dev/{YYMMDD}-{HHMM}-{descriptive-slug}/`
+**Format:** `bk/dev/{feature-slug}/`
 
 ```
-bk/dev/{YYMMDD}-{HHMM}-{slug}/
-├── research/              # Research reports from scouts/researchers
-├── reports/               # Agent output reports
-├── plan.md                # Overview — under 80 lines, links to phases
-├── phase-01-{name}.md     # Detailed phase files
-├── phase-02-{name}.md
+bk/dev/{feature-slug}/
+├── research/                 # Research reports from scouts/researchers
+├── reports/                  # Agent output reports
+├── plan.md                   # Overview — under 80 lines, links to sub-tasks
+├── sub-task-01-{name}.md     # Detailed sub-task files
+├── sub-task-02-{name}.md
 └── ...
 ```
 
 ### plan.md (Overview)
 - Keep generic and under 80 lines
-- List each phase with status (⬜/🔄/✅)
-- Link to phase files; note key dependencies
+- List each sub-task with status (⬜/🔄/✅)
+- Link to sub-task files; note key dependencies
 
-### Phase Files
-Each phase file contains:
-- **Overview** — priority, status, brief description
-- **Requirements** — functional + non-functional
-- **Related Code Files** — files to modify/create/delete
-- **Implementation Steps** — numbered, specific instructions
-- **Todo List** — checkbox tracking
+### Sub-Task Files
+Templates: `skills/bk-plan/templates/sub-task-{coding,ui,test,input-extraction}.md`.
+Each sub-task file contains:
+- **Scope** — files to create/modify, LOC estimate
+- **Input References** — PRD section, API endpoints, dependency outputs
+- **Existing Code / Expected Code** — patterns to follow, implementation spec
+- **Tasks** — checkbox tracking (the ONLY checkbox section used for progress)
+- **Edge Cases & Risks** — potential issues + mitigations
 - **Success Criteria** — definition of done
-- **Risk Assessment** — potential issues + mitigations
-- **Security Considerations** — auth, data protection (mobile: Keychain/Keystore, cert pinning)
+- **Test Plan** — test cases for this sub-task
+- **Review Checklist** — sub-task-specific review checks (incl. auth, Keychain/Keystore, cert pinning)
 
 ## Report Conventions
 

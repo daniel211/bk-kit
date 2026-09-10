@@ -35,6 +35,13 @@ Parse each row:
 
 Build batch execution queue. Process batches in table order (top → bottom).
 
+## FSM State Per Batch
+
+Each dispatch phase below changes `current_phase` in `bk/dev/shared/.workflow-state.json`
+before the dispatch: Implement → `coding`, Test → `testing`, Review → `review`, review fix
+loop → `coding` (with `quality_fix_count += 1`). See `references/workflow-state.md` for the
+field list, the batch-boundary recurrence reset, and why `.plan-state.json` alone is not enough.
+
 ## Per-Batch Execution
 
 For each batch in the Execution Batches table:
@@ -62,7 +69,8 @@ Task(subagent_type: "bk-{platform}-developer", model: "opus",
   - UI text: use localized string keys from Strings table only
   - Only edit files listed in sub-task Scope (owns enforcement)
   - Run lint + build after each file
-  - Update sub-task Tasks checkboxes [ ] → [x] as you complete each
+  - Update the sub-task's `## Tasks` checkboxes [ ] → [x] as you complete each
+    (that section only — never tick `## Edge Cases & Risks` or `## Review Checklist`)
   - Report any deviations from Expected Code
   - Verify implementation covers all reqs listed in sub-task YAML
   - Before returning: verify all created/modified files exist and are non-empty
@@ -70,6 +78,12 @@ Task(subagent_type: "bk-{platform}-developer", model: "opus",
   Expected completion: 15 minutes.
   If stuck: save partial progress to output file, report what's blocking.
   Output: {plan-dir}/research/impl-sub-task-{NN}.md
+    Impl report — markdown with YAML frontmatter. Required frontmatter: schema_type: impl-report,
+    agent, feature, sub_task, status, timestamp, build_verified, requirements_satisfied,
+    files_changed (min 1: {path, change, description}), skills_loaded.
+    Required sections: ## Summary, ## Deviations from Expected Code, ## Edge Cases Addressed,
+    ## Anti-Patterns Avoided, ## Notes for Reviewer. Schema: bk-agent-contract §3.
+    Write it even when blocked — status: needs_info + info_needed. There is no impl-result.json.
 ")
 ```
 
@@ -92,11 +106,18 @@ Task(subagent_type: "bk-{platform}-developer", model: "opus",
   - UI text: use localized string keys from Strings table only
   - Only edit files listed in sub-task Scope (owns enforcement)
   - Run lint + build after each file
-  - Update sub-task Tasks checkboxes [ ] → [x] as you complete each
+  - Update the sub-task's `## Tasks` checkboxes [ ] → [x] as you complete each
+    (that section only — never tick `## Edge Cases & Risks` or `## Review Checklist`)
   - Before returning: verify all created/modified files exist and are non-empty
 
   Expected completion: 15 minutes.
   Output: {plan-dir}/research/impl-sub-task-{NN}.md
+    Impl report — markdown with YAML frontmatter. Required frontmatter: schema_type: impl-report,
+    agent, feature, sub_task, status, timestamp, build_verified, requirements_satisfied,
+    files_changed (min 1: {path, change, description}), skills_loaded.
+    Required sections: ## Summary, ## Deviations from Expected Code, ## Edge Cases Addressed,
+    ## Anti-Patterns Avoided, ## Notes for Reviewer. Schema: bk-agent-contract §3.
+    Write it even when blocked — status: needs_info + info_needed. There is no impl-result.json.
 ")
 
 Task(subagent_type: "bk-{platform}-developer", model: "opus",
@@ -107,6 +128,12 @@ Task(subagent_type: "bk-{platform}-developer", model: "opus",
   Sub-task file: {plan-dir}/sub-task-{MM}-{slug}.md
   ...same structure...
   Output: {plan-dir}/research/impl-sub-task-{MM}.md
+    Impl report — markdown with YAML frontmatter. Required frontmatter: schema_type: impl-report,
+    agent, feature, sub_task, status, timestamp, build_verified, requirements_satisfied,
+    files_changed (min 1: {path, change, description}), skills_loaded.
+    Required sections: ## Summary, ## Deviations from Expected Code, ## Edge Cases Addressed,
+    ## Anti-Patterns Avoided, ## Notes for Reviewer. Schema: bk-agent-contract §3.
+    Write it even when blocked — status: needs_info + info_needed. There is no impl-result.json.
 ")
 ```
 
@@ -118,6 +145,14 @@ After each sub-task completes:
 Wait for ALL sub-tasks in batch to complete before proceeding to Test phase.
 
 ---
+
+### Gate: Impl Reports Before Test
+
+Before dispatching the test agent, confirm every sub-task in the batch wrote its impl report.
+This is the `coding → testing` artifact required by `rules/state-machine.md`. Union the
+reports' `files_changed` and pass that list to the test agent — do not let it re-derive scope.
+
+A report with `status: needs_info` is not a pass: read `info_needed`, resolve it, re-dispatch.
 
 ### Phase 2: Test
 
@@ -137,7 +172,8 @@ Task(subagent_type: "bk-unit-test-agent", model: "haiku",
   {paste all test case rows from sub-tasks in this batch}
 
   Implemented code files:
-  {list files from impl results of all sub-tasks in batch}
+  {union of files_changed from each sub-task's impl report in this batch}
+  Impl reports: {plan-dir}/research/impl-sub-task-{NN}.md, ...
 
   Platform context: platform-context.json
   Foundation test pattern: bk/docs/foundation/code-guidelines.md → Test Pattern section
@@ -234,7 +270,13 @@ Task(subagent_type: "bk-code-reviewer", model: "sonnet",
   {paste all ## Review Checklist items from sub-tasks in this batch}
 
   Changed files:
-  {list all files created/modified across all sub-tasks in batch}
+  {union of files_changed from each sub-task's impl report in this batch}
+
+  Impl reports: {plan-dir}/research/impl-sub-task-{NN}.md, ...
+    Frontmatter is the dev agent's claim, not evidence. Cross-validate every claim against
+    the actual source: files_changed accurate? requirements_satisfied really implemented?
+    build_verified backed by a build that ran? Read ## Deviations from Expected Code and
+    ## Notes for Reviewer before starting.
 
   Sub-task files: {list paths for reference}
   Platform context: platform-context.json
@@ -317,13 +359,17 @@ Task(subagent_type: "bk-code-reviewer", model: "sonnet",
 
 A batch is complete when ALL of these are true:
 - ✅ All sub-tasks in batch: implemented and build passes
+- ✅ Every sub-task in the batch has an impl report at
+  `{plan-dir}/research/impl-sub-task-{NN}.md` with `status: complete` and `files_changed`
+  (min 1). A missing report means the dev agent did not finish — re-dispatch or escalate;
+  do not mark the sub-task done on the strength of source files alone.
 - ✅ All P0 tests pass (P1 should pass, edge cases best effort)
 - ✅ No critical review findings (or fixed within 2 cycles)
 - ✅ No files edited outside sub-task `owns` scope
 
 ### State Updates on Batch Complete
 
-1. **Sub-task checkboxes**: mark all `[ ]` → `[x]` in each sub-task file
+1. **Sub-task checkboxes**: mark all `[ ]` → `[x]` in each sub-task file's `## Tasks` section
 2. **Sub-task YAML**: update `status: complete` in each sub-task frontmatter
 3. **ClaudeTask**: `TaskUpdate(completed)` for each sub-task in batch
 4. **Plan table**: update plan.md Sub-Tasks table — set Status = `done` for batch sub-tasks
@@ -344,7 +390,11 @@ A batch is complete when ALL of these are true:
 }
 ```
 
-6. **Log**: `"✓ Batch {N} ({name}) complete — {sub-task count} sub-tasks, {file count} files changed"`
+6. **.workflow-state.json**: write `batch: N+1` and `phase_recurrence_count: {}` — leave
+   `current_phase` unchanged so the write is not a transition. This is what stops a 4-batch
+   plan from tripping the phase-recurrence block on batch 3. Reset only on a batch that
+   actually completed; never to escape a fix loop.
+7. **Log**: `"✓ Batch {N} ({name}) complete — {sub-task count} sub-tasks, {file count} files changed"`
 
 ### Proceed to Next Batch
 

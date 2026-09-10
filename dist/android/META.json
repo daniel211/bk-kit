@@ -1,10 +1,10 @@
 {
   "kit": "beer-kit",
   "platform": "android",
-  "version": "0.5.1",
-  "commit": "561753756999eb109367018ae485dddaaa0e4947",
-  "builtAt": "2026-09-10T08:24:17.316Z",
-  "nodeVersion": "v22.15.0",
+  "version": "0.6.0",
+  "commit": "f8349d139e57abff15cf4aca67ec616d7826bd89",
+  "builtAt": "2026-09-10T15:39:48.376Z",
+  "nodeVersion": "v26.8.1",
   "stats": {
     "agents": 22,
     "skills": 40,

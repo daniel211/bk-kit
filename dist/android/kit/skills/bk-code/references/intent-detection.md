@@ -17,9 +17,9 @@ FUNCTION detectIntent(args):
   ELSE: executionOverride = null
 
   # 3. Detect target
-  IF args matches "phase-XX-*.md":
-    target = "single-phase"
-    path = resolved phase file
+  IF args matches "sub-task-NN-*.md":
+    target = "single-sub-task"
+    path = resolved sub-task file
   ELSE IF args matches "plan.md" OR is directory:
     target = "full-plan"
     path = resolved plan.md
@@ -33,7 +33,7 @@ FUNCTION detectIntent(args):
     execution = readPlanFrontmatter(path).execution ?? "sequential"
     IF execution == "auto": execution = autoDetect(path)
   ELSE:
-    execution = "sequential"  # single-phase always sequential
+    execution = "sequential"  # single sub-task always sequential
 
   RETURN { mode, execution, target, path }
 ```
@@ -64,10 +64,10 @@ Priority (highest first):
 
 ## Target Behaviors
 
-| Target | Phases | Dependencies | Quality Loop |
-|--------|--------|--------------|-------------|
-| full-plan | All phases in order | Enforced | Per mode |
-| single-phase | Only specified phase | Skipped (user chose explicitly) | Per mode |
+| Target | Sub-tasks | Dependencies | Quality Loop |
+|--------|-----------|--------------|-------------|
+| full-plan | All sub-tasks in batch order | Enforced | Per mode |
+| single-sub-task | Only the specified sub-task | Skipped (user chose explicitly) | Per mode |
 
 ## Combinations
 
@@ -77,11 +77,11 @@ Priority (highest first):
 | `/bk-code plan.md --parallel` | full | parallel | force parallel |
 | `/bk-code plan.md --sequential` | full | sequential | override frontmatter |
 | `/bk-code plan.md --fast --parallel` | fast | parallel | fast + parallel groups |
-| `/bk-code phase-02-login.md --fast` | fast | sequential | single-phase always sequential |
+| `/bk-code sub-task-02-login.md --fast` | fast | sequential | single sub-task always sequential |
 
 ## Output
 
 After detection, log:
 ```
-Mode: {full|fast|no-review} | Execution: {parallel|sequential} | Target: {full-plan|single-phase} | Path: {resolved path}
+Mode: {full|fast|no-review} | Execution: {parallel|sequential} | Target: {full-plan|single-sub-task} | Path: {resolved path}
 ```

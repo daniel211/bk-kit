@@ -153,7 +153,7 @@ try {
             const cmd = ws.command || '';
             if (cmd === 'bk-code' || cmd === 'bk-debug' || cmd === 'bk-refactor') {
               lines.push('- FSM: phases must follow state-machine transitions. Max 2 fix-loops before escalate.');
-              lines.push('- Traceability: tag commits/tests with REQ IDs from plan.');
+              lines.push('- Traceability: tag commits/tests with the trace IDs from the sub-task reqs: field.');
             }
             if (cmd === 'bk-plan') {
               lines.push('- Plan outputs sub-task files (30-80 LOC each) with test plan + review checklist.');

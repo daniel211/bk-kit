@@ -50,11 +50,22 @@ Test cases for {scope}. Tester agent reads this + implemented code to write test
 | test_{navigation_flow} | {screens involved} | P1 | {setup} | {expected navigation} |
 | test_{error_recovery} | {components involved} | P0 | {setup} | {expected recovery} |
 
+## Tasks
+
+_The ONLY checkbox section. bk-code hydrates Claude Tasks from here and the test agent
+ticks these as it goes. One line = one unit of work, ordered._
+
+- [ ] {write P0 unit tests for sub-task NN}
+- [ ] {write P0 unit tests for sub-task MM}
+- [ ] {write integration tests}
+- [ ] {write/refresh mocks per Foundation References}
+- [ ] Run full suite — all P0 green
+
 ## Edge Cases
 
-- [ ] {edge case 1 — scenario + expected behavior}
-- [ ] {edge case 2 — scenario + expected behavior}
-- [ ] {edge case 3 — scenario + expected behavior}
+- {edge case 1 — scenario + expected behavior}
+- {edge case 2 — scenario + expected behavior}
+- {edge case 3 — scenario + expected behavior}
 
 ## Test Strategy
 - **Mock**: {what to mock — repositories, network clients, platform APIs}
@@ -83,21 +94,23 @@ Test cases for {scope}. Tester agent reads this + implemented code to write test
 - {What can't be unit tested: OAuth flows, device-specific behavior}
 
 ## Review Checklist
-- [ ] All P0 test cases from dependent sub-tasks covered?
-- [ ] All P1 test cases from dependent sub-tasks covered?
-- [ ] Edge cases documented (tested or noted as untested)?
-- [ ] Mocks follow Foundation References test patterns?
-- [ ] No flaky tests (deterministic, no sleep/delay)?
-- [ ] Coverage > 80% for business logic in scope?
+- All P0 test cases from dependent sub-tasks covered?
+- All P1 test cases from dependent sub-tasks covered?
+- Edge cases documented (tested or noted as untested)?
+- Mocks follow Foundation References test patterns?
+- No flaky tests (deterministic, no sleep/delay)?
+- Coverage > 80% for business logic in scope?
 ```
 
 ## Guidelines
 
+- `## Tasks` is the ONLY checkbox section — bk-code hydrates Claude Tasks from it and
+  dev agents tick it. Keep `## Edge Cases & Risks` and `## Review Checklist` as plain
+  bullets so they are never mistaken for progress.
 - NO test code in this template — only case descriptions with inputs + expected outputs
 - Tables = structured, scannable format for tester agent
 - Test cases are aggregated from `## Test Plan` sections of dependent coding/UI sub-tasks
 - P0 cases map to `must` priority requirements; P1 to `should`
-- Edge Cases use `[ ]` checkboxes — tester checks off as covered
 - `parallel-with` often includes UI sub-tasks (tests can run while UI is built)
 - `depends` = the coding sub-tasks whose code is being tested
 - `owns` = test file patterns only (no overlap with implementation sub-tasks)

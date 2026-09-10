@@ -15,7 +15,7 @@ Pack mobile codebase into a single LLM-readable file using repomix with mobile-o
 <Use_When>
 - Onboarding a new project (before running /bk-bootstrap)
 - Planning a large feature — need full codebase context for /bk-plan
-- Preparing code review context for /bk-code-review
+- Preparing code review context for /bk-review
 - Sharing codebase with external AI tool
 - Estimating token budget before a large analysis task
 </Use_When>
@@ -96,7 +96,7 @@ Excluded: Pods/ (would have added ~180K tokens)
 
 Next steps:
 - Feed to /bk-plan for feature planning
-- Feed to /bk-code-review for full review
+- Feed to /bk-review for full review
 - Check token count fits target LLM context window
 ```
 

@@ -13,7 +13,7 @@ status: pending
 effort: {Xh}
 platform: {ios|android|flutter}
 owns: ["{glob patterns for files this sub-task creates/modifies}"]
-reqs: [{REQ-IDs this sub-task fulfills}]
+reqs: [{trace IDs this sub-task fulfills — UC-NNN / NFR-CAT-NNN / REQ-NNN, verbatim}]
 ---
 
 # Sub-Task {NN}: {Title}
@@ -89,9 +89,20 @@ Show 5-15 lines per snippet with file path and line number.}
 
 _Include only platforms targeted by this sub-task. For Flutter: single section instead of iOS + Android._
 
+## Tasks
+
+_The ONLY checkbox section. bk-code hydrates Claude Tasks from here and dev agents
+tick these as they go. One line = one unit of work, ordered._
+
+- [ ] {create/modify file 1 — what goes in it}
+- [ ] {create/modify file 2 — what goes in it}
+- [ ] {wire into DI / navigation / call site}
+- [ ] {handle edge cases listed below}
+- [ ] Build + lint pass
+
 ## Edge Cases & Risks
-- [ ] {edge case 1 — scenario + expected handling}
-- [ ] {edge case 2 — scenario + expected handling}
+- {edge case 1 — scenario + expected handling}
+- {edge case 2 — scenario + expected handling}
 
 ## Success Criteria
 - {verifiable criterion 1}
@@ -107,28 +118,34 @@ _Include only platforms targeted by this sub-task. For Flutter: single section i
 _Test sub-tasks (05, 06) aggregate these test cases. bk-code executes them._
 
 ## Review Checklist
-- [ ] Follows architecture pattern from Foundation References?
-- [ ] Naming conventions match code-guidelines.md?
-- [ ] Error handling complete (all failure paths covered)?
-- [ ] No hardcoded values (URLs, keys, magic numbers)?
-- [ ] File ownership: no overlap with other sub-tasks' `owns`?
-- [ ] {sub-task specific check}
+- Follows architecture pattern from Foundation References?
+- Naming conventions match code-guidelines.md?
+- Error handling complete (all failure paths covered)?
+- No hardcoded values (URLs, keys, magic numbers)?
+- File ownership: no overlap with other sub-tasks' `owns`?
+- {sub-task specific check}
 
 ## Refs
-- {REQ-ID}: {brief requirement text}
+- {trace ID}: {brief requirement text}
 - Endpoint: {method} {path} (if API related)
 - Pattern: {existing file}:{line}
 ```
 
 ## Guidelines
 
+- `## Tasks` is the ONLY checkbox section — bk-code hydrates Claude Tasks from it and
+  dev agents tick it. Keep `## Edge Cases & Risks` and `## Review Checklist` as plain
+  bullets so they are never mistaken for progress.
 - Target 30-80 LOC expected output per sub-task; split if >100 LOC, merge if <20 LOC
 - Max 3-5 files owned per sub-task
 - Expected Code = preview spec, not full implementation
 - Always reference existing patterns: "follows `File:line` pattern"
 - Mark NEW vs MODIFY clearly
 - `owns` in YAML = file ownership for parallel execution safety
-- `reqs` links sub-task to requirements for traceability: `Requirement → Sub-Task → Test Case → Review`
+- `reqs` links sub-task to requirements for traceability: `Requirement → Sub-Task → Test Case → Review`.
+  IDs come from their source verbatim (UC-/NFR- from a /bk-spec SRS, REQ-/TC- from enterprise
+  docs) — never renumbered. Empty `reqs: []` means untraced; say why in `## Scope`.
+  Protocol: `rules/traceability.md`
 - `depends` = sub-tasks that must complete before this one starts
 - `parallel-with` = sub-tasks that can execute concurrently with this one
 - Test Plan feeds into test sub-tasks (05, 06) for aggregation

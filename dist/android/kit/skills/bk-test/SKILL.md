@@ -19,7 +19,7 @@ Optionally dispatches bk-device-test-agent for UI/device-level testing. No code 
 
 <Do_Not_Use_When>
 - Implementation needed first — use /bk-code
-- Code review only — use /bk-code-review
+- Code review only — use /bk-review
 </Do_Not_Use_When>
 
 ## Approval Gates
@@ -32,7 +32,21 @@ Auto-approve — no user gate required.
 
 Parse `$ARGUMENTS` for feature name, platform, and test type (unit / UI / device / all).
 Detect platform from project files. Load platform context from `config/platform-context.{platform}.json`.
-Check for `impl-result.json` at `bk/dev/shared/{platform}/{feature}-impl-result.json`.
+
+Collect the impl reports for this feature — markdown, one per implementation dispatch
+(schema: `bk-agent-contract` §3). There is no `impl-result.json`.
+
+```
+Glob bk/dev/{feature}/research/impl-sub-task-*.md      # from /bk-code
+Glob bk/dev/shared/reports/impl-{feature}-*.md         # from /bk-debug, /bk-refactor
+```
+
+Union their `files_changed` frontmatter → the surface under test.
+
+IF no report matches: the feature has not been implemented through a bk workflow, or the
+dev agent returned without writing one. Do NOT infer scope from the feature name — say what
+is missing and ask the user whether to test the working tree as-is (`git diff --name-only`)
+or stop.
 
 ### Foundation Context Loading
 Before dispatching the test-architect agent:
@@ -47,7 +61,8 @@ Dispatch bk-test-architect foreground (sonnet):
 Task(subagent_type: "bk-test-architect", model: "sonnet", prompt: "
   Feature: {feature_name}
   Platform: {platform}
-  impl-result: bk/dev/shared/{platform}/{feature}-impl-result.json
+  Impl reports: {list of resolved report paths from Step 1}
+  Read each report's `files_changed` + `## Notes for Reviewer` before planning strategy.
   Output: bk/dev/shared/reports/test-strategy-{feature}.json
 ")
 ```

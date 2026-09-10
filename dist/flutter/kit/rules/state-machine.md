@@ -22,7 +22,7 @@ paths:
 |------|----|-------------------|
 | (none) | plan | — |
 | plan | coding | Plan approved, skills loaded |
-| coding | testing | `impl-result.json` exists |
+| coding | testing | Impl report exists for every sub-task in the batch |
 | testing | review | Test agents complete |
 | review | commit | All post-tasks complete |
 | review | coding | Fix loop: `quality_fix_count < 2` AND critical/major findings |
@@ -55,7 +55,7 @@ paths:
 | analyze | code | Root cause identified | Complexity: Standard |
 | analyze | brainstorm | Root cause identified | Complexity: Complex |
 | brainstorm | code | Brainstorm + research reports | Complexity: Complex |
-| code | test | Fix applied, `impl-result.json` exists | — |
+| code | test | Fix applied, `impl-{feature}-debug.md` exists | — |
 | test | review | Test agents complete | Standard/Complex |
 | test | commit | — | Trivial — skip review |
 | review | commit | Post-tasks complete | — |
@@ -83,7 +83,7 @@ paths:
 |------|----|-------------------|
 | (none) | analyze | — |
 | analyze | refactor | Refactoring scope identified |
-| refactor | test | `impl-result.json` exists |
+| refactor | test | `impl-{feature}-refactor.md` exists |
 | test | commit | Tests pass |
 | test | refactor | Fix loop: `refactor_fix_count < 1` AND tests fail |
 
@@ -95,12 +95,23 @@ Fix-loop max 1: 1 automatic retry, then escalate to user.
 
 File: `bk/dev/shared/.workflow-state.json`
 
+Written by the FSM commands (`/bk-code`, `/bk-debug`, `/bk-refactor`) at **every** phase
+change. `fsm-guard.cjs` fires on Write/Edit of this path — a command that tracks its progress
+only in a per-feature state file (`.plan-state.json`, `.spec-state.json`) gets no transition
+validation, no recurrence ladder and no compaction recovery.
+
+`workflow_type` (alias: `command`) is what the guard matches against the transition tables
+below. Without it every transition passes through unvalidated.
+
 ```json
 {
+  "workflow_type": "bk-code|bk-debug|bk-refactor",
   "command": "bk-code|bk-debug|bk-refactor",
   "feature": "feature-name-slug",
   "current_phase": "plan|coding|testing|review|commit|escalated|aborted|classify|analyze|brainstorm",
-  "phase_history": [{"from": "", "to": "", "timestamp": ""}],
+  "phase_history": [{"phase": "", "from_phase": "", "ts": 0, "entered_by": ""}],
+  "phase_recurrence_count": {},
+  "batch": 1,
   "quality_fix_count": 0,
   "build_retry_count": 0,
   "test_fix_count": 0,
@@ -150,6 +161,8 @@ File: `bk/dev/shared/.workflow-state.json`
 
 ## On Resume After Compaction
 
+0. If `workflow_paused: true` — the recurrence hard block fired. Do NOT continue;
+   AskUserQuestion with the options from the block message.
 1. Read `current_phase` and `phase_history[]` from `.workflow-state.json`
 2. Resume from `current_phase` — do not re-execute completed phases
 3. Check fix-loop counters before quality→coding transitions
@@ -164,6 +177,18 @@ Before writing `current_phase`:
 2. Check transition table for current command
 3. Verify transition is valid
 4. Verify required artifact exists
-5. Append to `phase_history[]`
 
-Phase re-entry 3+ times triggers `[REACTIVE-SIGNAL: fix_loop_stuck]`. See `reactive-orchestration.md`.
+`phase_history[]` and `phase_recurrence_count{}` are appended by `fsm-guard.cjs` on every
+accepted transition — read them, do not hand-maintain them.
+
+Phase re-entry 3+ times triggers `[REACTIVE-SIGNAL: fix_loop_stuck]`, then a hard block at 4.
+See `reactive-orchestration.md`.
+
+### Batch loops are not fix loops
+
+`/bk-code` re-enters `coding → testing → review` once per execution batch. On **successful
+batch completion**, write `batch: N+1` together with `phase_recurrence_count: {}`, leaving
+`current_phase` unchanged (a non-transition write, so the guard lets it through). Without
+that reset a 4-batch plan is blocked at batch 3 as if it were stuck. Never reset the counter
+to get out of a fix loop — only batch progress earns it.
+See `skills/bk-code/references/workflow-state.md`.

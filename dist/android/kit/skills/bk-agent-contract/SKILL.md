@@ -1,6 +1,6 @@
 ---
 name: bk-agent-contract
-description: "REQUIRED before dispatching agents. Defines agent I/O file contracts, impl-result.json schema, background agent limitations, output verification protocol, and workflow completion report format."
+description: "REQUIRED before dispatching agents. Defines agent I/O file contracts, the impl report schema, background agent limitations, output verification protocol, and workflow completion report format."
 user-invocable: false
 ---
 
@@ -20,7 +20,7 @@ user-invocable: false
 | IO-002 | Agent MUST write ALL output files before return |
 | IO-003 | Missing input → return `need_data`, do NOT assume |
 | IO-004 | Output MUST have enough info for downstream |
-| IO-005 | JSON output MUST have schema_version |
+| IO-005 | JSON output MUST have schema_version; markdown reports MUST have YAML frontmatter |
 
 ---
 
@@ -28,11 +28,14 @@ user-invocable: false
 
 ```
 bk/dev/
+├── {feature}/
+│   └── research/impl-sub-task-{NN}.md   # impl report — /bk-code
 ├── shared/
 │   ├── design/{feature}-specs.md, -tokens.json
 │   ├── api/{feature}-endpoints.json, -models.json
-│   ├── {platform}/{feature}-impl-result.json
 │   └── reports/
+│       ├── impl-{feature}-debug.md      # impl report — /bk-debug
+│       └── impl-{feature}-refactor.md   # impl report — /bk-refactor
 ├── research/{feature}-requirements.md
 ├── test-cases/{platform}-{feature}.md
 └── checkpoints/
@@ -42,23 +45,68 @@ bk/dev/
 
 ## 3. KEY OUTPUT SCHEMAS
 
-### impl-result.json (Dev → Test/Quality)
+### impl report (Dev → Test/Review/Docs/Commit)
 
-```json
-{
-  "schema_version": "1.0",
-  "agent": "main",
-  "feature": "login",
-  "requirements_satisfied": ["REQ-001"],
-  "spec_sections_read": ["SEC-001"],
-  "edge_cases_addressed": ["Token refresh during network interruption"],
-  "anti_patterns_avoided": ["Storing tokens in plaintext"],
-  "files_changed": [
-    {"path": "...", "change": "created", "description": "..."}
-  ],
-  "test_plan": "bk/dev/test-cases/{platform}-login.md"
-}
+**There is no `impl-result.json`.** One artifact per implementation dispatch: a markdown
+report with YAML frontmatter. The frontmatter carries the machine-readable fields; the body
+carries what a human (or a reviewer agent) needs to read. A dev agent that writes source
+files but no impl report has not completed its dispatch.
+
+| Command | Report path |
+|---------|-------------|
+| `/bk-code` | `{plan-dir}/research/impl-sub-task-{NN}.md` — one per sub-task |
+| `/bk-debug` | `bk/dev/shared/reports/impl-{feature}-debug.md` |
+| `/bk-refactor` | `bk/dev/shared/reports/impl-{feature}-refactor.md` |
+
+One report per dispatch, never a shared file: two agents writing one path lose each other's
+work. Consumers that need the whole feature read every matching report.
+
+```md
+---
+schema_version: "2.0"
+schema_type: impl-report
+agent: bk-ios-developer
+feature: login
+sub_task: "02"                  # /bk-code only; omit for debug/refactor
+status: complete                # complete | needs_info | blocked
+timestamp: "2026-09-10T14:20:00Z"
+build_verified: true            # true only if the build command actually ran and passed
+requirements_satisfied: [REQ-login-001]
+files_changed:
+  - path: Login/LoginViewModel.swift
+    change: created             # created | modified | deleted
+    description: "State + validation for the login form"
+skills_loaded: [bk-code-workflow, ios-clean-mvvm]
+learnings: []                   # [{type, content}] — see bk-task-tracking
+info_needed: []                 # required when status: needs_info
+---
+
+## Summary
+{2-4 sentences: what was implemented and how it fits the sub-task scope.}
+
+## Deviations from Expected Code
+{Each deviation + why. "None" if the plan was followed as written.}
+
+## Edge Cases Addressed
+- {edge case → how it is handled}
+
+## Anti-Patterns Avoided
+- {anti-pattern → what was done instead}
+
+## Notes for Reviewer
+{Anything a reviewer would otherwise have to reverse-engineer: assumptions, known gaps,
+files touched outside `owns` and why.}
 ```
+
+**Partial work:** if critical information is missing, do not guess. Write the report with
+`status: needs_info`, fill `info_needed`, and list whatever `files_changed` got done.
+Same for `status: blocked`. A missing report is indistinguishable from a crashed agent;
+a `needs_info` report is actionable.
+
+**`build_verified` is a claim about a command that ran.** Never set it true from inspection.
+
+**Reading it:** frontmatter is a claim, not evidence. Reviewers cross-validate against the
+actual source — see `bk-code-review-workflow`.
 
 ### test-files.json (Test Agent → Main)
 
@@ -84,10 +132,10 @@ bk/dev/
 | design-spec-writer | Figma nodeId + slug | design.md (per screen) |
 | design-asset-exporter | assets.json (from design.md) | platform asset folders + asset-export-report.json |
 | api-integrator | API spec | endpoints.json, models.json |
-| bk-{platform}-developer (e.g. bk-ios-developer) | requirements, design, api, spec_index | impl-result.json |
-| bk-unit-test-agent | impl-result, test-cases, spec_index | test-files.json |
-| bk-code-reviewer | impl-result, spec_index | code-review.md |
-| security-auditor | impl-result | security.md |
+| bk-{platform}-developer (e.g. bk-ios-developer) | requirements, design, api, spec_index | impl report (md) |
+| bk-unit-test-agent | impl report(s), test-cases, spec_index | test-files.json |
+| bk-code-reviewer | impl report(s), spec_index | code-review.md |
+| security-auditor | impl report(s) | security.md |
 
 ---
 
@@ -215,7 +263,7 @@ Path: `bk/dev/shared/reports/workflow-report-{feature}.json`
 ### Generate Logic
 
 ```
-1. Read impl-result.json → files_changed
+1. Read every impl report for the feature → union of `files_changed`
 2. Read test-execution-*.json → test_results
 3. Read code-review-*.json → review_summary
 4. Calculate impact from impl data

@@ -16,18 +16,20 @@ Task(subagent_type: "bk-{platform}-developer", model: "opus", prompt: "
   Files to modify: {affected_files}
   Fix approach: {fix_approach}
   Platform context: {from platform-context.json}
-  Output: bk/dev/shared/{platform}/{feature}-impl-result.json
+  Output: bk/dev/shared/reports/impl-{feature}-debug.md
+    (impl report — markdown + YAML frontmatter, schema in bk-agent-contract §3)
 
   Requirements:
   - Follow platform conventions from {platform}-rules.md
-  - Verify build after changes
-  - Report files_changed in output
+  - Verify build after changes; set build_verified only if the build actually ran
+  - List every changed file in the report's files_changed frontmatter
+  - If blocked: still write the report with status: needs_info + info_needed
 ")
 ```
 
 ## After Agent Returns
 
-1. Verify `impl-result.json` exists with `files_changed` (min 1)
+1. Verify `bk/dev/shared/reports/impl-{feature}-debug.md` exists with `files_changed` (min 1)
 2. If build errors: resume via `Task(resume: dev_agent_id)`, max 3 retries
 3. Write `dev_agent_id` to `.workflow-state.json`
 

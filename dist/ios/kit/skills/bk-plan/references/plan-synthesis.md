@@ -66,17 +66,29 @@ Sub-tasks are grouped into batches for implement → test → review cycle:
 
 ## Requirement Traceability
 
-Every sub-task traces back to a requirement:
+Every sub-task traces back to a requirement. Full protocol: `rules/traceability.md`.
 
-1. If `inputs/requirements.json` exists: use REQ-IDs from extraction
-2. If no formal requirements: derive IDs from feature description (REQ-01, REQ-02, ...)
-3. Sub-task YAML `reqs` field lists which REQ-IDs the sub-task fulfills
-4. Sub-task `## Refs` section maps REQ-ID → brief text
-5. Test sub-task cases map to REQ-IDs via Priority column
+Source precedence — take IDs from the highest tier that exists, verbatim:
+
+1. `/bk-spec` SRS: `bk/dev/{feature}/srs/02-functional-requirements.md` → `UC-{NNN}`,
+   `srs/03-nonfunctional-requirements.md` → `NFR-{CAT}-{NNN}`
+2. `{plan-dir}/inputs/requirements.json` (enterprise docs, Step 4b) → `REQ-{NNN}`, `TC-{NNN}`
+3. `bk/dev/{feature}/srs.md` (Step 3, derived) → `REQ-{NNN}`
+
+**Never renumber or re-prefix an ID.** A `UC-001` from the SRS stays `UC-001` everywhere;
+rewriting it as `REQ-payment-001` severs the link to the document it came from, which is
+the only thing the chain is for. Lower-tier requirements that duplicate a higher tier are
+dropped, not re-ID'd — note the overlap in `plan.md ## Gaps`.
+
+Then:
+4. Sub-task YAML `reqs` field lists which IDs the sub-task fulfills
+5. Sub-task `## Refs` section maps ID → brief text
+6. Test sub-task cases map to IDs via Priority column
+7. If no source exists at all: `reqs: []`, and the sub-task's `## Scope` says why
 
 Traceability chain: `Requirement → Sub-Task → Test Case → Review Checklist`
 
-Chain example: BRD-001 → sub-task-02 → test_login_success → review checklist item.
+Chain example: UC-001 → sub-task-02 → test_login_success → review checklist item.
 
 ### Test Plan in Sub-Tasks
 Every coding/UI sub-task has `## Test Plan` section listing tests needed.
@@ -104,6 +116,10 @@ Each sub-task declares files it owns (for parallel execution safety):
 | Coding (no UI) | `templates/sub-task-coding.md` | Models, services, utilities, ViewModels |
 | UI screen | `templates/sub-task-ui.md` | Sub-task touches screens, has Figma data |
 | Tests | `templates/sub-task-test.md` | Unit/integration test sub-tasks |
+| Input extraction | `templates/sub-task-input-extraction.md` | Sub-task 00, only when input sources provided |
+
+**File naming (hard requirement):** `sub-task-NN-{slug}.md`. `/bk-code` globs `sub-task-*`;
+a file named `phase-*.md` is invisible to it and the plan silently executes as empty.
 
 ## Expected Code Guidelines
 
@@ -162,8 +178,13 @@ The values above are examples — populate with actual data from `foundation_con
 6. Design Specs: paste Figma data from inputs/design.json (UI sub-tasks)
 7. Expected Code: write per-platform previews following detected patterns
 8. Strings table: extract all user-visible text with i18n keys (UI sub-tasks)
-9. Edge Cases & Risks: list scenarios that need handling
-10. Success Criteria: concrete, verifiable criteria
-11. Test Plan: list test cases with type + priority + what they verify
-12. Review Checklist: sub-task-specific checks for code reviewer
-13. Refs: REQ-IDs, endpoints, pattern references
+9. **Tasks: the checkbox worklist — MANDATORY, never omit.** One `- [ ]` line per unit of
+   work, in execution order, ending with a build/lint line. This is the ONLY checkbox
+   section in the file: `## Edge Cases & Risks` and `## Review Checklist` use plain
+   bullets, because `/bk-code` hydrates Claude Tasks from `## Tasks` alone and dev agents
+   tick `## Tasks` alone. A sub-task file with no `## Tasks` produces zero tracked progress.
+10. Edge Cases & Risks: list scenarios that need handling (plain bullets, no checkboxes)
+11. Success Criteria: concrete, verifiable criteria
+12. Test Plan: list test cases with type + priority + what they verify
+13. Review Checklist: sub-task-specific checks for code reviewer (plain bullets, no checkboxes)
+14. Refs: trace IDs, endpoints, pattern references

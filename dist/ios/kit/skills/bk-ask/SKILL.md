@@ -22,7 +22,7 @@ Read-only consultation — no code changes.
 - Implementation needed — use /bk-code
 - Bug fix — use /bk-debug
 - Planning a feature — use /bk-plan
-- Code review — use /bk-code-review
+- Code review — use /bk-review
 </Do_Not_Use_When>
 
 ## CRITICAL ENFORCEMENT

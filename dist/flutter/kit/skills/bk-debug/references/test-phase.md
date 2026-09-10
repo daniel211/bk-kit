@@ -14,7 +14,7 @@ Dispatch ALL test agents in ONE message (background, sonnet):
 Task(subagent_type: "bk-unit-test-agent", model: "sonnet", run_in_background: true, prompt: "
   Feature: {feature}
   Platform: {platform}
-  Files changed: {from impl-result.json}
+  Files changed: {from impl-{feature}-debug.md → files_changed}
   Test command: {from platform-context.json}
   Output: bk/dev/shared/reports/unit-test-{platform}-{feature}.md
 

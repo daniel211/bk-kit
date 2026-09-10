@@ -51,9 +51,10 @@ user-invocable: false
 
 ### Learnings Flow
 
-Dev agents may include `learnings[]` in impl-result.json. Main extracts and appends to plan JSON:
+Dev agents may include `learnings[]` in their impl report frontmatter. Main extracts and
+appends to plan JSON:
 
-1. After dev agent returns, check impl-result.json for `learnings[]`
+1. After dev agent returns, read its impl report frontmatter for `learnings[]`
 2. Infer `relevant_to_tasks` from dependency graph
 3. Append to `plan.learnings[]` with `source_agent` and `task_id`
 4. Include relevant learnings in next agent's dispatch prompt:

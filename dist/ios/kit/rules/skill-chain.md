@@ -18,7 +18,24 @@ Rules and registry for automatic skill chaining in beer-kit.
 | bk-code | committed | `/bk-docs` (if Complex tier) |
 | bk-debug | fixed | `/bk-test` |
 | bk-refactor | complete | `/bk-test` |
-| bk-test | complete | `/bk-code-review` (if issues found) |
+| bk-test | complete | `/bk-review` (if issues found) |
+
+## Who Emits Which Row
+
+Two paths emit chain suggestions, and they do not cover the same rows.
+
+| Path | Covers | Requires |
+|------|--------|----------|
+| `skill-chain-suggest.cjs` (SubagentStop hook) | bk-bootstrap, bk-spec, bk-plan, bk-code, bk-debug, bk-refactor | The skill wrote `bk/dev/shared/.workflow-state.json` with `command` + a terminal `current_phase` |
+| Conductor | Every row | Reading this table at the end of a workflow |
+
+The hook reads `state.command`, so a skill that tracks progress only in its own state file
+(`.plan-state.json`, `.spec-state.json`) never reaches it. `/bk-test` writes no workflow
+state at all, so the `bk-test → /bk-review` row is conductor-only by construction — do not
+expect the hook to fire it, and do not add it to the hook's chain map as if it would.
+
+Command names in this table must be user-invocable skills. `/bk-code-review` is not one and
+never was — the review command is `/bk-review`; `bk-code-reviewer` is an agent.
 
 ## Rules
 

@@ -19,7 +19,7 @@ If task involves Views, Screens, Widgets, or UI components:
    - Read `bk/dev/{feature}/.spec-state.json` → check `design_review_verdict`
    - If at least one design.md exists for current task screen:
      - `verdict == "OKAY"` → read screen design.md + `bk/docs/foundation/design-system.md` for tokens, proceed
-     - `verdict == "REVISE"` or `design_partial` set → proceed with warning, add `"design_verdict": "REVISE"` to impl-result.json
+     - `verdict == "REVISE"` or `design_partial` set → proceed with warning, add `design_verdict: REVISE` to the impl report frontmatter
      - `design_cancelled` → fall through to step 2
 
 2. **Legacy fallback** (backward compat for features built before `/bk-spec` migration — TODO: remove after v2.x sunset, see plan `260511-1447-remove-bk-design-agent-consolidate-to-spec`):
@@ -27,7 +27,7 @@ If task involves Views, Screens, Widgets, or UI components:
    - Both exist → read + log warning "DEPRECATED design path — migrate to /bk-spec", proceed
 
 3. **Inline guidance fallback**:
-   - Task prompt contains design details (colors, sizes, layout described inline) → proceed, add `"design_specs_missing": true` to impl-result.json
+   - Task prompt contains design details (colors, sizes, layout described inline) → proceed, add `design_specs_missing: true` to the impl report frontmatter
 
 4. **No specs anywhere**:
    - Return error: `"Design specs required. Run /bk-spec --design first to extract Figma specs for this feature."`
@@ -45,7 +45,7 @@ After loading design context, validate completeness:
 If validation fails:
 - Per-screen design.md missing for current task screen → warn conductor: "Design spec missing for screen {slug}"
 - Conductor decides:
-  - Proceed with inline guidance + `"design_specs_missing": true`
+  - Proceed with inline guidance + `design_specs_missing: true` in the impl report
   - AskUserQuestion: "Quay về /bk-spec --design để extract screen {slug}?"
 
 ---
@@ -64,7 +64,7 @@ Read the file first. Identify what exists, where to add, and patterns used. Use 
 
 ## RETURNING TO MAIN (needs_info Protocol)
 
-If critical information is missing after checking plan, specs, and design — do not guess. Write partial `impl-result.json` with `"status": "needs_info"`, `"info_needed": ["what's missing"]`, and any `"files_changed"` completed so far.
+If critical information is missing after checking plan, specs, and design — do not guess. Write the impl report anyway with `status: needs_info`, `info_needed: ["what's missing"]`, and whatever `files_changed` got done. A missing report is indistinguishable from a crashed agent; a `needs_info` report is actionable.
 
 ---
 
@@ -74,7 +74,7 @@ When `spec_index_file` is provided:
 1. Read spec-index, find sections mapped to your task IDs
 2. Read original spec files at each section's `line_range`
 3. Address every `edge_cases[]` item, avoid every `anti_patterns[]` item, follow `samples[]`
-4. Report in impl-result.json: `spec_sections_read`, `edge_cases_addressed`, `anti_patterns_avoided`
+4. Report in the impl report: `spec_sections_read` (frontmatter), `## Edge Cases Addressed`, `## Anti-Patterns Avoided`
 
 **STOP GATE**: If spec-index provided AND your task ID appears nowhere → return error, do not code.
 
@@ -84,25 +84,35 @@ When `spec_index_file` is provided:
 
 After coding, write these files before spawning post-tasks:
 
-1. `impl-result.json` — implementation summary
+1. **The impl report** — one markdown file per dispatch. There is no `impl-result.json`.
 2. `test-plan.md` — test specifications
 
-### impl-result.json Required Fields
+### Impl Report
 
-```json
-{
-  "agent": "string (required)",
-  "feature": "string (required)",
-  "timestamp": "string (required)",
-  "specs_read": "object (required)",
-  "requirements_satisfied": "array (required)",
-  "files_changed": "array (required, min 1 item)",
-  "test_plan": "string (required)",
-  "skills_loaded": "array (required)",
-  "spec_sections_read": "array (optional, required when spec-index exists)",
-  "learnings": "array (optional, [{type, content}])"
-}
-```
+Write it to the path the dispatch prompt names. If none was given:
+
+| Command | Path |
+|---------|------|
+| `/bk-code` | `{plan-dir}/research/impl-sub-task-{NN}.md` |
+| `/bk-debug` | `bk/dev/shared/reports/impl-{feature}-debug.md` |
+| `/bk-refactor` | `bk/dev/shared/reports/impl-{feature}-refactor.md` |
+
+One report per dispatch — never append to another agent's file.
+
+Required frontmatter: `schema_version`, `schema_type: impl-report`, `agent`, `feature`,
+`status`, `timestamp`, `build_verified`, `requirements_satisfied`, `files_changed` (min 1
+item, each `{path, change, description}`), `skills_loaded`.
+Optional: `sub_task`, `spec_sections_read` (required when a spec-index exists), `learnings`,
+`info_needed` (required when `status: needs_info`), `design_verdict`, `design_specs_missing`,
+`trace_markers_added`, `fix_details`.
+
+Required body sections: `## Summary`, `## Deviations from Expected Code`,
+`## Edge Cases Addressed`, `## Anti-Patterns Avoided`, `## Notes for Reviewer`.
+
+Full schema + example: `bk-agent-contract` §3.
+
+`build_verified: true` means the platform build command ran and passed. Never set it from
+inspection — downstream agents skip their own build check when they see it.
 
 ---
 
@@ -118,7 +128,7 @@ If prompt contains "FIX TEST FAILURES", "retry #", "retry_count", "debug_artifac
 2. **Analyze failures**: parse failures, map to file locations, cross-reference with suggested_fixes
 3. **Apply fixes**: read each file, apply fix, check impact via Grep
 4. **Verify locally** using platform build command
-5. **Update impl-result.json** with fix_details field
+5. **Update the impl report** — add the `fix_details` frontmatter field and note the fix in `## Summary`
 
 ### Platform Build Commands
 
@@ -132,31 +142,37 @@ If prompt contains "FIX TEST FAILURES", "retry #", "retry_count", "debug_artifac
 
 ### fix_details Schema
 
-```json
-{
-  "fix_details": {
-    "retry_number": 1,
-    "failures_addressed": ["test_name_1"],
-    "changes_made": [
-      {"file": "path/to/file", "fix": "description", "line": 42}
-    ],
-    "ready_for_retest": true
-  }
-}
+In the impl report frontmatter:
+
+```yaml
+fix_details:
+  retry_number: 1
+  failures_addressed: [test_name_1]
+  changes_made:
+    - file: path/to/file
+      fix: "description"
+      line: 42
+  ready_for_retest: true
 ```
 
 ---
 
 ## TRACE MARKERS
 
-When requirement IDs are available in plan task `urd_ref` fields or dispatch prompt:
+When requirement IDs are available in the sub-task's `reqs:` frontmatter or the dispatch
+prompt:
 
-`// @trace REQ-{feature}-{NNN} [Tn] brief description`
+`// @trace {ID} [Tn] brief description`
+
+`{ID}` is whatever the sub-task's `reqs:` field carries, copied verbatim — `UC-001`,
+`NFR-SEC-001`, `REQ-014`. Do not renumber or re-prefix it into a different scheme; the
+prefix identifies the source document. See `rules/traceability.md`.
 
 - Place immediately before function/class declaration
 - One marker per function-level boundary (not every line)
-- Skip entirely if no REQ IDs present
-- Include `trace_markers_added` (number) in impl-result.json
+- Skip entirely when `reqs:` is empty
+- List the same IDs in the impl report's `requirements_satisfied` frontmatter
+- Include `trace_markers_added` (number) in the impl report frontmatter
 
 ---
 
@@ -167,4 +183,4 @@ When requirement IDs are available in plan task `urd_ref` fields or dispatch pro
 | Platform skill first | Load swift/kotlin/flutter before coding |
 | Design first | UI = must have specs |
 | Test plan | Always write before post-tasks |
-| Impl result | Always write before post-tasks |
+| Impl report | Always write before post-tasks — including on needs_info/blocked |
