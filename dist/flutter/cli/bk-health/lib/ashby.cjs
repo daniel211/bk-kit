@@ -8,6 +8,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { resolveCliProjectRoot } = require('./project-root.cjs');
 
 const isTTY = process.stdout.isTTY;
 const YELLOW = isTTY ? '\x1b[33m' : '';
@@ -61,7 +62,7 @@ const SENSOR_CONFIGS = [
  * @returns {{ warnings: Array, sensors: Array }}
  */
 function runAshbyChecks(opts = {}) {
-  const root = opts.projectRoot || process.env.BK_PROJECT_ROOT || process.cwd();
+  const root = resolveCliProjectRoot(opts.projectRoot);
   const silentDaysWarn = opts.silentDaysWarn || 7;
   const windowMs = silentDaysWarn * 24 * 60 * 60 * 1000;
   const cutoff = Date.now() - windowMs;
@@ -139,7 +140,7 @@ function runAshbyChecks(opts = {}) {
  * Log new Ashby warnings to ashby-warnings.jsonl (dedup by source within 24h).
  */
 function logAshbyWarnings(warnings, opts = {}) {
-  const root = opts.projectRoot || process.env.BK_PROJECT_ROOT || process.cwd();
+  const root = resolveCliProjectRoot(opts.projectRoot);
   const metricsDir = path.join(root, '.bk-metrics');
   if (!fs.existsSync(metricsDir)) fs.mkdirSync(metricsDir, { recursive: true });
 

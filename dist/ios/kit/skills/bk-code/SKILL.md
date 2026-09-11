@@ -87,6 +87,9 @@ Load: `references/intent-detection.md` + `references/plan-consumption.md`
 
 - Parse $ARGUMENTS for plan.md or sub-task file path
 - Read `.plan-state.json` if exists → resume from last incomplete batch/sub-task
+  - `.plan-state.json` present but `.workflow-state.json` missing → the plan came from
+    another machine or developer. Re-derive the phase from `completedSteps` instead of
+    starting over (`references/plan-consumption.md`)
 - **Foundation check**: Read `bk/docs/foundation/architecture.md` → extract architecture pattern, state management
   - IF missing → warn: "Foundation docs missing. Code quality may be reduced. Consider running `/bk-bootstrap`."
   - IF exists → include architecture pattern + state management + naming conventions in agent dispatch prompt

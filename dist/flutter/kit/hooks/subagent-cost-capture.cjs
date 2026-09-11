@@ -97,10 +97,13 @@ try {
 
       appendEntry(entry);
 
-      // Update cumulative cost in workflow state
-      const prevCumulative = state.cumulativeCostUsd || 0;
-      const newCumulative = Math.round((prevCumulative + costUsd) * 1e8) / 1e8;
-      writeWorkflowState({ cumulativeCostUsd: newCumulative });
+      // Update cumulative cost in workflow state. Accumulate from the state read under the
+      // write lock, not from `state` read at the top of this hook: parallel subagents all
+      // reach SubagentStop at once, and adding to a stale total silently drops the cost of
+      // every agent but the last — which budget-guard then spends.
+      writeWorkflowState((fresh) => ({
+        cumulativeCostUsd: Math.round(((fresh.cumulativeCostUsd || 0) + costUsd) * 1e8) / 1e8
+      }));
 
       // P1-1: Release any parallel-safety locks owned by this agent.
       // Symmetric pair to acquisition in parallel-safety (PreToolUse Task).

@@ -80,7 +80,7 @@ try {
         process.exit(0);
       }
 
-      const { readWorkflowState, writeWorkflowState } = require('./lib/bk-config-utils.cjs');
+      const { writeWorkflowState } = require('./lib/bk-config-utils.cjs');
 
       let input = '';
       for await (const chunk of process.stdin) input += chunk;
@@ -118,23 +118,21 @@ try {
         // Deduplicate signals
         const unique = [...new Map(detectedSignals.map(s => [s.signal, s])).values()];
 
-        // Write signal state to workflow-state for downstream hooks
+        // Write signal state to workflow-state for downstream hooks. The counter and the
+        // agent list accumulate, so they are derived under the write lock — concurrent
+        // subagents signalling at once must not overwrite each other's entries.
         try {
-          const state = readWorkflowState() || {};
-          const retryAgents = state.retry_agents || [];
-          retryAgents.push(agentType);
-          // Keep last 10 entries to avoid unbounded growth
-          if (retryAgents.length > 10) retryAgents.splice(0, retryAgents.length - 10);
-          writeWorkflowState({
+          writeWorkflowState((fresh) => ({
             last_signal: {
               type: unique[0].signal,
               priority: unique[0].priority,
               agent: agentType,
               timestamp: Date.now()
             },
-            signal_count: (state.signal_count || 0) + unique.length,
-            retry_agents: retryAgents
-          });
+            signal_count: (fresh.signal_count || 0) + unique.length,
+            // Keep last 10 entries to avoid unbounded growth
+            retry_agents: [...(fresh.retry_agents || []), agentType].slice(-10)
+          }));
         } catch { /* best-effort state write */ }
 
         const lines = [];

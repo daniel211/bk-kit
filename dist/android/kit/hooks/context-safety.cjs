@@ -10,7 +10,7 @@ try {
   const { createHookTimer } = require('./lib/hook-logger.cjs');
   const fs = require('fs');
   const path = require('path');
-  const { isHookEnabled } = require('./lib/bk-config-utils.cjs');
+  const { isHookEnabled, sharedDir, workflowStatePath } = require('./lib/bk-config-utils.cjs');
   const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');
 
   async function main() {
@@ -35,8 +35,8 @@ try {
       let source = 'none';  // 'cache' | 'heuristic' | 'none'
 
       const candidates = [
-        path.join(cwd, 'bk', 'dev', 'shared', '.statusline-cache.json'),
-        path.join(cwd, 'bk', 'dev', 'shared', '.workflow-state.json')
+        path.join(sharedDir(cwd), '.statusline-cache.json'),
+        workflowStatePath(cwd)
       ];
 
       for (const filePath of candidates) {

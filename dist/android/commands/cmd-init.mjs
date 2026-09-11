@@ -5,7 +5,7 @@
  * Writes .bk-version.json for update tracking.
  */
 
-import { existsSync, writeFileSync, readFileSync, unlinkSync, rmSync, readdirSync } from 'node:fs';
+import { existsSync, writeFileSync, readFileSync, appendFileSync, unlinkSync, rmSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { hashAllFiles } from '../lib/hash-tracker.mjs';
 import { runDoctor } from './cmd-doctor.mjs';
@@ -23,6 +23,7 @@ export function registerInit(program, platform) {
     .description(`Initialize .claude/ with ${platform} development kit`)
     .option('--target <dir>', 'Target project directory', '.')
     .option('--force', 'Overwrite existing .claude/ directory')
+    .option('--gitignore', "Add the kit's per-machine state files to .gitignore")
     // Async because runDoctor is: its design-engine check dynamically imports the kit that
     // was just written into the target directory.
     .action(async (opts) => {
@@ -164,42 +165,117 @@ export function registerInit(program, platform) {
         console.log(`\n⚠ Kit initialized with ${doctorResult.errors} issue(s). Run "bk-${platform} doctor" for details.`);
       }
 
-      printVersionControlNotice(targetDir);
+      let wroteGitignore = false;
+      if (opts.gitignore) {
+        const added = writeGitignoreEntries(targetDir);
+        wroteGitignore = true;
+        if (added.length > 0) {
+          console.log(`\n  ✓ Added ${added.length} entr${added.length === 1 ? 'y' : 'ies'} to .gitignore`);
+        } else {
+          console.log('\n  ✓ .gitignore already covers the kit\'s per-machine state');
+        }
+      }
+
+      printVersionControlNotice(targetDir, wroteGitignore);
     });
 }
 
 /**
- * Tell the user exactly what init put in their repository and let them decide
- * whether to track it. init creates three entries a clean working tree will show
- * as untracked, and silently leaving the repo in that state is unhelpful:
+ * Paths the kit writes that must never be committed.
  *
- *   .claude/           the kit itself — commit it to share one version across a team
- *   .bk-version.json   install manifest used by `update` to detect local edits
- *   .bk-metrics/       per-developer runtime telemetry, never worth committing
+ * Every one is a record of *this machine's* session, not of the work:
  *
- * Only prints inside a git repository, and stays quiet about entries the project
- * already ignores.
+ *   .workflow-state.json  FSM phase plus session-scoped agent ids — `dev_agent_id` is
+ *                         resumable only in the session that spawned it, so the file is
+ *                         actively misleading on a second machine. It also changes on
+ *                         nearly every tool call, and merging its counters and appended
+ *                         arrays is exactly what git cannot do.
+ *   checkpoints/          snapshots of the above
+ *   handoff/              context-reset handoff notes, written per session
+ *   .statusline-cache.json, .retry-state.json   live counters
+ *   .bk-metrics/          per-developer runtime telemetry
+ *
+ * What carries work between machines is the plan directory — `bk/dev/{feature}/` with its
+ * `.plan-state.json` — which records what is *done* rather than which session did it, and
+ * from which the phase is re-derived on the other machine. That is what belongs in git.
  */
-function printVersionControlNotice(targetDir) {
-  if (!existsSync(join(targetDir, '.git'))) return;
+export const NEVER_COMMIT = [
+  'bk/dev/shared/.workflow-state.json',
+  'bk/dev/shared/.workflow-state.json.*',
+  'bk/dev/shared/checkpoints/',
+  'bk/dev/shared/handoff/',
+  'bk/dev/shared/.statusline-cache.json',
+  'bk/dev/shared/.retry-state.json',
+  '.bk-metrics/',
+];
 
-  const entries = ['.claude/', '.bk-version.json', '.bk-metrics/'];
-  let ignored = '';
+const GITIGNORE_HEADER =
+  '# beer-kit — per-machine session state; the plans in bk/dev/{feature}/ are committed';
+
+/**
+ * Read the project's .gitignore as a set of trimmed, de-slashed entries.
+ * @param {string} targetDir
+ * @returns {{ text: string, entries: Set<string> }}
+ */
+function readGitignore(targetDir) {
+  let text = '';
   try {
-    ignored = readFileSync(join(targetDir, '.gitignore'), 'utf8');
+    text = readFileSync(join(targetDir, '.gitignore'), 'utf8');
   } catch {
     // No .gitignore — nothing is ignored yet.
   }
-  const ignoredSet = new Set(
-    ignored.split('\n').map((l) => l.trim().replace(/\/$/, '')).filter(Boolean),
+  const entries = new Set(
+    text.split('\n').map((l) => l.trim().replace(/\/$/, '')).filter(Boolean),
   );
-  const untracked = entries.filter((e) => !ignoredSet.has(e.replace(/\/$/, '')));
-  if (untracked.length === 0) return;
+  return { text, entries };
+}
 
-  console.log('\nVersion control — this created files git will show as untracked:');
-  console.log('  .claude/          the kit; commit it to pin one version for the team');
-  console.log('  .bk-version.json  install manifest, read by `update` to spot local edits');
-  console.log('  .bk-metrics/      per-developer runtime telemetry — do not commit');
-  console.log('\nCommit them, or ignore them by adding to .gitignore:');
-  for (const e of untracked) console.log(`  ${e}`);
+/**
+ * Append the missing never-commit entries to .gitignore.
+ *
+ * Appends only what is absent, so running it twice adds nothing the second time and a user
+ * who ignores more than the kit asks for keeps their own rules.
+ *
+ * @param {string} targetDir
+ * @returns {string[]} The entries actually written
+ */
+export function writeGitignoreEntries(targetDir) {
+  const { text, entries } = readGitignore(targetDir);
+  const missing = NEVER_COMMIT.filter((e) => !entries.has(e.replace(/\/$/, '')));
+  if (missing.length === 0) return [];
+
+  const prefix = text.length === 0 || text.endsWith('\n') ? '' : '\n';
+  const block = `${prefix}\n${GITIGNORE_HEADER}\n${missing.join('\n')}\n`;
+  appendFileSync(join(targetDir, '.gitignore'), block, 'utf8');
+  return missing;
+}
+
+/**
+ * Tell the user what init put in their repository and what to do with it.
+ *
+ * Silently leaving a repo full of untracked kit files is unhelpful, and the split is not
+ * obvious: the kit and the plans are shared, the session state is not. Only prints inside a
+ * git repository.
+ *
+ * @param {string} targetDir
+ * @param {boolean} wroteGitignore - Whether --gitignore already handled the ignore list
+ */
+function printVersionControlNotice(targetDir, wroteGitignore) {
+  if (!existsSync(join(targetDir, '.git'))) return;
+
+  console.log('\nVersion control — what to do with what this created:');
+  console.log('  commit  .claude/          the kit; pins one version for the team');
+  console.log('  commit  .bk-version.json  install manifest, read by `update` to spot local edits');
+  console.log('  commit  bk/dev/{feature}/ plans and .plan-state.json — this is what moves');
+  console.log('                            work between machines and between people');
+  console.log('  ignore  session state     per-machine, changes every tool call, does not merge');
+
+  if (wroteGitignore) return;
+
+  const { entries } = readGitignore(targetDir);
+  const missing = NEVER_COMMIT.filter((e) => !entries.has(e.replace(/\/$/, '')));
+  if (missing.length === 0) return;
+
+  console.log('\nAdd to .gitignore (or re-run init with --gitignore to write them):');
+  for (const e of missing) console.log(`  ${e}`);
 }

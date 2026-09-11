@@ -55,20 +55,16 @@ try {
         process.exit(0);
       }
 
-      const phaseHistory = Array.isArray(state.phase_history) ? state.phase_history : [];
-      phaseHistory.push({
-        from: state.current_phase || null,
-        to: 'commit',
-        timestamp: new Date().toISOString()
-      });
-      // Cap history at 20 entries to prevent unbounded growth
-      if (phaseHistory.length > 20) phaseHistory.splice(0, phaseHistory.length - 20);
-
-      writeWorkflowState({
+      // Append to the history read under the write lock — a hook that lands between the read
+      // above and this write would otherwise have its entry dropped.
+      writeWorkflowState((fresh) => ({
         current_phase: 'commit',
-        phase_history: phaseHistory,
+        phase_history: [
+          ...(Array.isArray(fresh.phase_history) ? fresh.phase_history : []),
+          { from: fresh.current_phase || null, to: 'commit', timestamp: new Date().toISOString() }
+        ].slice(-20),  // cap to prevent unbounded growth
         ...(commitHash ? { last_commit_hash: commitHash } : {})
-      });
+      }));
 
       process.stdout.write(JSON.stringify({
         additionalContext: `[POST-COMMIT] Workflow phase updated to "committed"${commitHash ? ` (${commitHash})` : ''}. Feature "${state.feature || 'unknown'}" committed successfully.`

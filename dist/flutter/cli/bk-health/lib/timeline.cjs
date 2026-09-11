@@ -5,6 +5,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { resolveCliProjectRoot } = require('./project-root.cjs');
 
 const isTTY = process.stdout.isTTY;
 const YELLOW = isTTY ? '\x1b[33m' : '';
@@ -30,7 +31,7 @@ function readJsonlFiltered(filePath, windowMs) {
  * @returns {Array<{ts, kind, summary, data}>}
  */
 function getTimelineEvents(opts = {}) {
-  const root = opts.projectRoot || process.env.BK_PROJECT_ROOT || process.cwd();
+  const root = resolveCliProjectRoot(opts.projectRoot);
   const windowMs = opts.windowMs || (24 * 60 * 60 * 1000);
   const metricsDir = path.join(root, '.bk-metrics');
 

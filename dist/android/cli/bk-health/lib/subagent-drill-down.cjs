@@ -14,6 +14,7 @@
 const fs = require('fs');
 const path = require('path');
 const { computeParallelMetric } = require('./subagent-parallel-metric.cjs');
+const { resolveCliProjectRoot } = require('./project-root.cjs');
 
 /**
  * Read and parse JSONL file, return array of parsed entries (skip malformed lines).
@@ -178,7 +179,7 @@ function renderText(sessionId, breakdown, metric) {
  * @returns {Promise<string>}
  */
 async function drillDown({ sessionId, format = 'text', sinceHours, projectRoot } = {}) {
-  const root = projectRoot || process.cwd();
+  const root = resolveCliProjectRoot(projectRoot);
   const liveFile = path.join(root, '.bk-metrics', 'subagent-live.jsonl');
 
   let allEvents = readJsonl(liveFile);

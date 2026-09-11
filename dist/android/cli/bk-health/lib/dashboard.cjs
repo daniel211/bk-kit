@@ -13,6 +13,8 @@ const { buildInferentialPanel, renderInferentialPanel } = require('./inferential
 const { buildBehaviourPanel, renderBehaviourPanel } = require('./behaviour.cjs');
 const { buildNativeLintPanel, renderNativeLintPanel } = require('./native-lint.cjs');
 const { buildCiReadinessPanel, renderCiReadinessPanel } = require('./ci-readiness.cjs');
+const { resolveCliProjectRoot } = require('./project-root.cjs');
+const { requireHookLib } = require('./kit-hook-lib.cjs');
 
 // ─── ANSI helpers ──────────────────────────────────────────────────────────
 const isTTY = process.stdout.isTTY;
@@ -65,18 +67,25 @@ function parseDuration(str) {
  * @returns {object} aggregated data
  */
 function getDashboardData(opts = {}) {
-  const root = opts.projectRoot || process.env.BK_PROJECT_ROOT || process.cwd();
+  const root = resolveCliProjectRoot(opts.projectRoot);
   const windowMs = opts.windowMs || (24 * 60 * 60 * 1000); // default 24h
 
   const metricsDir = path.join(root, '.bk-metrics');
-  const stateFile = path.join(root, 'bk', 'dev', 'shared', '.workflow-state.json');
+  // Through the kit lib so a corrupt or deleted state file shows its recovered contents
+  // rather than a clean empty dashboard.
+  const kitLib = requireHookLib('bk-config-utils.cjs');
+  const stateFile = kitLib && typeof kitLib.workflowStatePath === 'function'
+    ? kitLib.workflowStatePath(root)
+    : path.join(root, 'bk', 'dev', 'shared', '.workflow-state.json');
 
   const violations = readJsonlFiltered(path.join(metricsDir, 'violations.jsonl'), windowMs);
   const decisions  = readJsonlFiltered(path.join(metricsDir, 'decisions.jsonl'), windowMs);
   const redSignals = readJsonlFiltered(path.join(metricsDir, 'red-signals.jsonl'), windowMs);
   const workflows  = readJsonlFiltered(path.join(metricsDir, 'workflow-summary.jsonl'), windowMs);
   const ashbyWarns = readJsonlFiltered(path.join(metricsDir, 'ashby-warnings.jsonl'), 24 * 60 * 60 * 1000);
-  const state      = readJson(stateFile) || {};
+  const state      = (kitLib && typeof kitLib.readWorkflowState === 'function'
+    ? kitLib.readWorkflowState(root)
+    : readJson(stateFile)) || {};
 
   // Token panel
   let tokenPanel = null;

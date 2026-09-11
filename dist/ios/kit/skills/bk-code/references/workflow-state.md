@@ -58,6 +58,16 @@ Valid transitions (enforced by `fsm-guard`):
 `(none)→plan→coding→testing→review→{coding|commit|escalated}`, `escalated→{coding|commit|aborted}`.
 Anything else is refused with exit 2 — that refusal is the guard working, not a bug to route around.
 
+## Starting the next feature
+
+`commit` and `aborted` end the episode, they do not end the repo. Code-Step-1 of the *next*
+feature writes `current_phase: "plan"` over the terminal state: the guard reads that as a new
+episode, allows it, and resets `phase_history[]` / `phase_recurrence_count{}` so the last
+feature's fix loops cannot block this one. It also bumps `workflow_episode` and stores the
+finished workflow under `previous_episode`.
+
+Write the opening phase — never delete `.workflow-state.json` to escape a terminal state.
+
 ## Batch boundary reset (important)
 
 The recurrence ladder counts how many times a phase is entered. A 4-batch plan legitimately

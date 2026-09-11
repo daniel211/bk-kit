@@ -16,6 +16,7 @@
 
 const path = require('path');
 const { getDashboardData, renderDashboard, parseDuration } = require('./lib/dashboard.cjs');
+const { resolveCliProjectRoot } = require('./lib/project-root.cjs');
 const { getTimelineEvents, renderTimeline } = require('./lib/timeline.cjs');
 const { resumeWorkflow, resetCounts } = require('./lib/resume.cjs');
 const { runAshbyChecks, logAshbyWarnings, renderAshbyReport } = require('./lib/ashby.cjs');
@@ -81,7 +82,7 @@ function parseArgs(argv) {
 
 async function main() {
   const flags = parseArgs(process.argv);
-  const projectRoot = process.env.BK_PROJECT_ROOT || process.cwd();
+  const projectRoot = resolveCliProjectRoot();
 
   // ── Subagent Drill-Down ────────────────────────────────────────────────
   if (flags.subagentDrillDown) {

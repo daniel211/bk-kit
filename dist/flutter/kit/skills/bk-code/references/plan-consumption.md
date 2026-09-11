@@ -40,6 +40,29 @@ If `{plan-dir}/.plan-state.json` exists:
 
 If no `.plan-state.json` → fresh start from sub-task 00.
 
+### Resume on another machine (no `.workflow-state.json`)
+
+`.plan-state.json` is committed with the plan; `bk/dev/shared/.workflow-state.json` is not —
+it holds this machine's session, including agent ids that only resume where they were
+spawned. So a plan pulled from another machine (or another developer) arrives with
+`.plan-state.json` and **no FSM state at all**. That is the normal case, not a broken one.
+
+When `.plan-state.json` exists and `.workflow-state.json` does not:
+
+1. Do NOT start over. `completedSteps` is the record of what is done.
+2. Re-derive the phase from the last completed sub-task and write a fresh
+   `.workflow-state.json` (`workflow_type`, `feature`, `plan_dir`, `platform`,
+   `complexity_tier`, `total_batches`, `batch`, `current_phase`).
+   Mid-batch → `coding`. Batch complete, tests not run → `testing`. All batches done → `review`.
+3. Verify before continuing: the artifacts `stepResults` claims exist must be on disk, and
+   `git log` must show the code those sub-tasks produced. If the code is missing, the other
+   machine did not push — stop and tell the user, do not re-implement over it.
+4. Counters (`quality_fix_count`, `phase_recurrence_count`) start at zero. They measure this
+   session's loops, not the previous machine's.
+
+The same reconciliation applies when the two files disagree — see `references/workflow-state.md`
+("Sync rule"): `.plan-state.json` is authoritative for *what work is done*.
+
 ### Platform Detection
 
 Read `platforms` from plan.md YAML, then load `platform-context.json` — an installed kit

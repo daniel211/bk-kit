@@ -139,6 +139,54 @@ below. Without it every transition passes through unvalidated.
 | `escalated` | Terminal (pending) | Fix-loop max exceeded — awaiting user decision |
 | `aborted` | Terminal (failure) | User chose to discard work |
 
+### Halt flags (set by the harness, cleared only by the user)
+
+| Field | Set by | Meaning |
+|-------|--------|---------|
+| `global_halt` | `global-kill-switch.cjs` | Repeated red signals — every guarded tool call is refused |
+| `halt_reasons[]` | `global-kill-switch.cjs` | Which signals tripped it |
+| `halt_override_consumed` | `global-kill-switch.cjs` | The one-shot `BK_HARNESS_OVERRIDE=1` has been spent |
+| `workflow_paused` | `fsm-guard.cjs` | Phase-recurrence hard block — do NOT continue, ask the user |
+
+None of these clear themselves, and no new session resets them. The user clears them with
+`node .claude/cli/bk-health/index.cjs --resume` (which also re-arms the one-shot override);
+dispatch counts are cleared with `--reset-counts [--agent <name>]`. Never write these fields
+to false yourself to get past a block — surface the block and the command to the user.
+
+### Not version controlled
+
+`bk/dev/shared/.workflow-state.json` and `checkpoints/` are per-machine and are not committed
+(`bk-<platform> init --gitignore` writes the rules). What is committed is the plan directory,
+`bk/dev/{feature}/` with its `.plan-state.json`.
+
+So a plan pulled from another machine or another developer legitimately has no FSM state.
+Re-derive the phase from `.plan-state.json` — `skills/bk-code/references/plan-consumption.md`
+— rather than treating it as a fresh start.
+
+### State recovery (do not delete the file)
+
+`.workflow-state.json` is backed up to `.workflow-state.json.bak` on every write, and
+`checkpoint-save` snapshots it. A read that finds the file corrupt **or missing** recovers
+from the backup, then the newest checkpoint, and marks the state `recovered_from_backup` /
+`recovered_from_checkpoint`. So deleting the file does not reset a workflow — start a new
+episode instead.
+
+### Starting the next workflow (new episode)
+
+`commit` and `aborted` have no outgoing edges inside an episode. The next workflow starts by
+writing an **opening phase** — `plan` (bk-code), `classify` (bk-debug), `analyze` (bk-refactor)
+— straight over the terminal state. `fsm-guard.cjs` recognises that as a new episode and:
+
+- lets it through (`commit → plan` is not an invalid transition, it is a restart);
+- starts `phase_history[]` and `phase_recurrence_count{}` from zero, so the previous feature's
+  fix loops cannot halt the new one;
+- increments `workflow_episode` and records the finished one in `previous_episode`.
+
+The new workflow may be a different one: `bk-code` ending at `commit` followed by `bk-debug`
+opening at `classify` is a valid restart. Any *other* phase written out of a terminal state is
+still refused — resuming a committed workflow at `review` is a bug, not a restart. Never delete
+`.workflow-state.json` to get unstuck; write the opening phase.
+
 ### Escalation Transitions
 
 | From | To | Condition |

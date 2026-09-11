@@ -20,6 +20,7 @@ try {
       testing: ['review'],
       review: ['coding', 'commit', 'escalated'],
       commit: [],
+      aborted: [],
       escalated: ['aborted', 'commit', 'coding']
     },
     'bk-debug': {
@@ -31,6 +32,7 @@ try {
       test: ['review', 'commit'],
       review: ['code', 'commit', 'escalated'],
       commit: [],
+      aborted: [],
       escalated: ['aborted', 'commit']
     },
     'bk-refactor': {
@@ -39,9 +41,14 @@ try {
       refactor: ['test'],
       test: ['refactor', 'commit', 'escalated'],
       commit: [],
+      aborted: [],
       escalated: ['aborted', 'commit']
     }
   };
+
+  // Phases a workflow ends in. They have no outgoing edges *within* an episode — the only
+  // move out of one is starting a new workflow, handled by startsNewEpisode() below.
+  const TERMINAL_PHASES = new Set(['commit', 'aborted']);
 
   /**
    * Extract current_phase from JSON content string.
@@ -50,15 +57,51 @@ try {
    * @returns {string|null}
    */
   function extractPhase(content) {
+    return extractStringField(content, 'current_phase');
+  }
+
+  /**
+   * Extract a top-level string field from JSON content, falling back to a regex for the
+   * partial content an Edit's new_string carries.
+   * @param {string} content
+   * @param {string} field
+   * @returns {string|null}
+   */
+  function extractStringField(content, field) {
     if (!content) return null;
     // Try direct JSON parse first
     try {
       const parsed = JSON.parse(content);
-      if (parsed && typeof parsed.current_phase === 'string') return parsed.current_phase;
+      if (parsed && typeof parsed[field] === 'string') return parsed[field];
     } catch { /* not full JSON — try regex */ }
     // Regex fallback for partial content (Edit new_string)
-    const match = content.match(/"current_phase"\s*:\s*"([^"]+)"/);
+    const match = content.match(new RegExp('"' + field + '"\\s*:\\s*"([^"]+)"'));
     return match ? match[1] : null;
+  }
+
+  /**
+   * Decide whether a write out of a terminal phase opens a NEW workflow episode.
+   *
+   * A repo does not get one workflow and then stop: after `/bk-code` lands on `commit`,
+   * the next feature has to be able to start. `commit` and `aborted` have no outgoing edges,
+   * so without this every workflow after the first is refused with exit 2 and the only way
+   * out is deleting the state file by hand.
+   *
+   * A new episode is exactly: currently in a terminal phase, and the incoming phase is an
+   * opening phase (`TRANSITIONS[type].null`) of the workflow being written. Anything else
+   * out of a terminal phase stays blocked — resuming a committed workflow at `review` is
+   * still a bug, not a restart.
+   *
+   * @param {string|null} currentPhase - Phase on disk
+   * @param {string} newPhase - Phase being written
+   * @param {string|null} startType - Workflow type the new write declares, else the one on disk
+   * @returns {boolean}
+   */
+  function startsNewEpisode(currentPhase, newPhase, startType) {
+    if (!currentPhase || !TERMINAL_PHASES.has(currentPhase)) return false;
+    const table = startType && TRANSITIONS[startType];
+    if (!table) return false;
+    return (table.null || []).includes(newPhase);
   }
 
   /**
@@ -178,10 +221,42 @@ try {
       // Accept either `workflow_type` (canonical) or `command` (schema documented in
       // rules/state-machine.md and the bk-debug/bk-refactor state files).
       const workflowType = currentState.workflow_type || currentState.command || null;
+      // The type the incoming write declares. Only consulted for restart detection: a new
+      // episode may switch workflows (`bk-code` commits, `bk-debug` starts), and validation
+      // of an in-flight workflow still goes by what is on disk.
+      const newWorkflowType =
+        extractStringField(newContent, 'workflow_type') || extractStringField(newContent, 'command');
 
       // If phase not changing, pass through
       if (currentPhase === newPhase) {
         timer.end({ status: 'same_phase', exit: 0 });
+        process.exit(0);
+      }
+
+      // A finished workflow is not a dead end — starting the next one is allowed, and starts
+      // its counters at zero so the previous episode's history cannot halt it.
+      const startType =
+        (newWorkflowType && TRANSITIONS[newWorkflowType]) ? newWorkflowType : workflowType;
+      if (startsNewEpisode(currentPhase, newPhase, startType)) {
+        try {
+          writeWorkflowState({
+            workflow_episode: (currentState.workflow_episode || 1) + 1,
+            previous_episode: {
+              workflow_type: workflowType,
+              feature: currentState.feature || null,
+              ended_phase: currentPhase,
+              ended_at: currentState.updated_at || null
+            },
+            phase_history: [{
+              phase: newPhase,
+              ts: Date.now(),
+              entered_by: input.session_id || 'unknown',
+              from_phase: currentPhase
+            }],
+            phase_recurrence_count: { [newPhase]: 1 }
+          });
+        } catch { /* fail-open on write */ }
+        timer.end({ status: 'new_episode', from: currentPhase, to: newPhase, exit: 0 });
         process.exit(0);
       }
 
@@ -195,10 +270,17 @@ try {
       const allowed = TRANSITIONS[workflowType][stateKey] || [];
 
       if (!allowed.includes(newPhase)) {
+        const openingPhases = ((TRANSITIONS[startType] || {}).null || []).join(', ');
+        const restartHint = TERMINAL_PHASES.has(currentPhase)
+          ? `"${currentPhase}" is terminal. To start the next workflow, write an opening ` +
+            `phase [${openingPhases || 'see the transition table'}] — that opens a new ` +
+            `episode with fresh counters.\n`
+          : '';
         process.stderr.write(
           `[FSM-GUARD] Invalid transition in ${workflowType}: ` +
           `"${currentPhase}" → "${newPhase}"\n` +
-          `Allowed from "${currentPhase}": [${allowed.join(', ') || 'none'}]\n`
+          `Allowed from "${currentPhase}": [${allowed.join(', ') || 'none'}]\n` +
+          restartHint
         );
         trackViolation({
           hook: 'fsm-guard',

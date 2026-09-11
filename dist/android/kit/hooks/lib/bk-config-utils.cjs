@@ -23,6 +23,8 @@ const DEFAULT_CONFIG = {
     dateFormat: 'YYMMDD-HHmm',
     reportsDir: 'reports'
   },
+  // `plans` is read by resolvePlanPath when looking up an existing plan directory. It does
+  // NOT move the shared state directory — see sharedDir() for why that location is fixed.
   paths: {
     docs: 'docs',
     plans: 'bk/dev'
@@ -160,7 +162,7 @@ function readPlatformContext() {
   const root = resolveProjectRoot();
   const candidates = [
     path.join(root, '.claude', 'platform-context.json'),
-    path.join(root, 'bk', 'dev', 'shared', 'platform-context.json')
+    path.join(sharedDir(root), 'platform-context.json')
   ];
   for (const p of candidates) {
     try {
@@ -173,13 +175,43 @@ function readPlatformContext() {
 }
 
 /**
+ * The kit's shared state directory.
+ *
+ * Fixed at `bk/dev/shared/`, deliberately. `paths.plans` in `.bk.json` moves nothing here:
+ * the shipped skills and rules name `bk/dev/shared/...` literally in their instructions, so a
+ * configurable state directory would only split the agents from the hooks. That knob affects
+ * plan-directory *lookup* in resolvePlanPath and nothing else — see DEFAULT_CONFIG.paths.
+ *
+ * @param {string} [root] - Project root; defaults to the resolved one
+ * @returns {string}
+ */
+function sharedDir(root) {
+  return path.join(root || resolveProjectRoot(), 'bk', 'dev', 'shared');
+}
+
+/**
+ * Absolute path of `.workflow-state.json`. Every reader and writer — hooks and the
+ * bk-health CLI alike — resolves it through here, so there is one answer to "which file".
+ *
+ * @param {string} [root] - Project root; defaults to the resolved one
+ * @returns {string}
+ */
+function workflowStatePath(root) {
+  return path.join(sharedDir(root), '.workflow-state.json');
+}
+
+/**
  * Read .workflow-state.json from bk/dev/shared/
  * Fallback chain: primary file → .bak backup → latest checkpoint
+ *
+ * @param {string} [root] - Project root. Pass it from a caller that already knows which
+ *   project it is acting on (the bk-health CLI resolves its own root); hooks omit it and
+ *   get the one the Claude Code runtime reports.
  * @returns {Object|null}
  */
-function readWorkflowState() {
-  const root = resolveProjectRoot();
-  const statePath = path.join(root, 'bk', 'dev', 'shared', '.workflow-state.json');
+function readWorkflowState(root) {
+  root = root || resolveProjectRoot();
+  const statePath = workflowStatePath(root);
   const bakPath = statePath + '.bak';
 
   // Try primary file
@@ -187,65 +219,161 @@ function readWorkflowState() {
     if (fs.existsSync(statePath)) {
       return JSON.parse(fs.readFileSync(statePath, 'utf8'));
     }
-  } catch {
-    // Primary corrupted — try backup
-    try {
-      const backup = JSON.parse(fs.readFileSync(bakPath, 'utf8'));
-      try {
-        const logger = require('./hook-logger.cjs');
-        logger.log('warn', 'bk-config', 'workflow-state corrupted, recovered from .bak');
-      } catch { /* logger unavailable */ }
-      return backup;
-    } catch { /* no backup */ }
+  } catch { /* corrupted — fall through to the same recovery a missing file gets */ }
 
-    // Try latest checkpoint
-    const checkpoint = readLatestCheckpoint();
-    if (checkpoint) {
-      try {
-        const logger = require('./hook-logger.cjs');
-        logger.log('warn', 'bk-config', 'workflow-state and .bak failed, recovered from checkpoint');
-      } catch { /* logger unavailable */ }
-      return checkpoint;
-    }
+  // Primary unusable: corrupt, or gone. The old code only recovered from the corrupt case,
+  // so a state file that was deleted read as "no workflow here" while an intact .bak sat
+  // beside it — and the workflow silently restarted from nothing. Deleting the state file is
+  // not how a workflow is reset (write an opening phase; see rules/state-machine.md), so
+  // treat its absence as loss and recover.
+  try {
+    const backup = JSON.parse(fs.readFileSync(bakPath, 'utf8'));
+    logStateWarning('workflow-state unusable, recovered from .bak');
+    return { ...backup, recovered_from_backup: true };
+  } catch { /* no usable backup */ }
+
+  // Try latest checkpoint
+  const recovered = unwrapCheckpointState(readLatestCheckpoint(root));
+  if (recovered) {
+    logStateWarning('workflow-state and .bak unusable, recovered from checkpoint');
+    return recovered;
   }
 
   return null;
 }
 
 /**
- * Write (merge-update) .workflow-state.json atomically
- * @param {Object} updates - Fields to merge into state
- * @returns {boolean}
+ * Unwrap a checkpoint into a workflow-state shaped object.
+ *
+ * checkpoint-save.cjs writes an envelope — `{ version, timestamp, workflow: {...}, git, platform }`
+ * — so returning the checkpoint verbatim hands every caller an object with no `current_phase`
+ * and no `workflow_type`. fsm-guard then takes its `unknown_workflow` branch and passes every
+ * transition through: the state file looks recovered while enforcing nothing. Unwrap to the
+ * inner `workflow` block, keeping `platform` (top-level in the envelope, a state field
+ * everywhere else) and recording where the state came from.
+ *
+ * @param {Object|null} checkpoint - Raw checkpoint file contents
+ * @returns {Object|null} Workflow state, or null when there is nothing usable
  */
-function writeWorkflowState(updates) {
-  const root = resolveProjectRoot();
-  const statePath = path.join(root, 'bk', 'dev', 'shared', '.workflow-state.json');
+function unwrapCheckpointState(checkpoint) {
+  if (!checkpoint || typeof checkpoint !== 'object') return null;
+
+  // Pre-envelope checkpoints (and hand-written ones) are already workflow state.
+  const inner = checkpoint.workflow;
+  if (!inner || typeof inner !== 'object') return checkpoint;
+
+  const state = { ...inner, recovered_from_checkpoint: true };
+  if (checkpoint.timestamp) state.recovered_checkpoint_ts = checkpoint.timestamp;
+  // `platform` lives outside `workflow` in the envelope but inside state everywhere else.
+  if (state.platform == null && checkpoint.platform && checkpoint.platform !== 'unknown') {
+    state.platform = checkpoint.platform;
+  }
+  return state;
+}
+
+// How long a writer waits for the lock before giving up. Hooks run inside a tool call, so
+// this is a ceiling on user-visible stall, not a budget to spend: contended writes finish in
+// milliseconds and only a pathological writer gets anywhere near it.
+const STATE_LOCK_TIMEOUT_MS = 2000;
+// A lock older than this belonged to a process that died holding it.
+const STATE_LOCK_STALE_MS = 15000;
+const STATE_LOCK_RETRY_MS = 25;
+
+/** Block the thread for `ms`. Hooks are synchronous CJS — there is no event loop to await on. */
+function sleepSync(ms) {
+  try {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+  } catch {
+    const until = Date.now() + ms;
+    while (Date.now() < until) { /* SharedArrayBuffer unavailable — spin */ }
+  }
+}
+
+/** Log a warning through hook-logger when it is available. */
+function logStateWarning(message) {
+  try {
+    require('./hook-logger.cjs').log('warn', 'bk-config', message);
+  } catch { /* logger unavailable */ }
+}
+
+/**
+ * Take the workflow-state lock, waiting for a live holder and breaking an abandoned one.
+ *
+ * Waiting is the point. The previous version returned immediately when the lock was held,
+ * and every caller ignored the `false` — so under parallel subagents (SubagentStop fires
+ * once per agent, all at the same moment) writes simply vanished, taking cost accounting
+ * and dispatch counts with them.
+ *
+ * @param {string} lockPath
+ * @param {number} timeoutMs
+ * @returns {boolean} true when this process owns the lock
+ */
+function acquireStateLock(lockPath, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  // Every branch below falls through to the deadline check: a lock directory that cannot be
+  // written to (missing, read-only) must end as a refused write, never as a spin.
+  for (;;) {
+    try {
+      // `wx` is atomic: under a race exactly one process creates the file and the rest retry.
+      fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' });
+      return true;
+    } catch { /* held by someone else, or unwritable — inspect it below */ }
+
+    try {
+      if (Date.now() - fs.statSync(lockPath).mtimeMs > STATE_LOCK_STALE_MS) {
+        // Break it; the `wx` create above still decides who wins the retry.
+        try { fs.unlinkSync(lockPath); } catch { /* another writer broke it first */ }
+      }
+    } catch { /* no lock file — the create failed for another reason, retry until deadline */ }
+
+    if (Date.now() >= deadline) return false;
+    sleepSync(STATE_LOCK_RETRY_MS);
+  }
+}
+
+/**
+ * Write (merge-update) .workflow-state.json atomically.
+ *
+ * Pass a function for any update derived from the current state — a counter, an accumulated
+ * cost, an appended history entry. The function receives the state read *inside* the lock and
+ * returns the fields to merge, which is the only way two concurrent writers both land their
+ * change: `read(); write({ n: n + 1 })` at the call site loses one increment whenever the
+ * reads interleave, no matter how atomic the write itself is. Return null from the function
+ * to decide, with the fresh state in hand, that no write is needed.
+ *
+ * @param {Object|function(Object): (Object|null)} updates - Fields to merge, or an updater
+ * @param {string} [root] - Project root; defaults to the resolved one. Callers outside the
+ *   hook runtime (the bk-health CLI) pass the root they resolved, so writer and reader
+ *   cannot end up on two different state files.
+ * @returns {boolean} true when the state on disk reflects this call
+ */
+function writeWorkflowState(updates, root) {
+  root = root || resolveProjectRoot();
+  const statePath = workflowStatePath(root);
   const bakPath = statePath + '.bak';
   const lockPath = statePath + '.lock';
   const tmpPath = statePath + '.' + Math.random().toString(36).slice(2);
-  try {
-    // Simple lockfile — fail fast if another writer holds it
-    try {
-      fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' });
-    } catch {
-      // Lock exists — check if stale (>5s) and force-acquire
-      try {
-        const stat = fs.statSync(lockPath);
-        if (Date.now() - stat.mtimeMs > 15000) {
-          fs.unlinkSync(lockPath);
-          fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' });
-        } else {
-          return false; // Another writer is active, skip
-        }
-      } catch { return false; }
-    }
 
+  // The lock file lives beside the state file, so the directory has to exist before we can
+  // take it — on a fresh repo this is the call that creates bk/dev/shared/.
+  try { fs.mkdirSync(path.dirname(statePath), { recursive: true }); } catch { /* checked below */ }
+
+  if (!acquireStateLock(lockPath, STATE_LOCK_TIMEOUT_MS)) {
+    logStateWarning(`workflow-state write dropped — lock held for ${STATE_LOCK_TIMEOUT_MS}ms`);
+    return false;
+  }
+
+  try {
     // Back up current state before overwriting
     try { fs.copyFileSync(statePath, bakPath); } catch { /* no existing file to back up */ }
 
-    const existing = readWorkflowState() || {};
-    const next = { ...existing, ...updates, updated_at: new Date().toISOString() };
-    fs.mkdirSync(path.dirname(statePath), { recursive: true });
+    const existing = readWorkflowState(root) || {};
+    const patch = typeof updates === 'function' ? updates(existing) : updates;
+    if (patch === null || typeof patch !== 'object') {
+      // The updater looked at the fresh state and chose not to write.
+      return true;
+    }
+    const next = { ...existing, ...patch, updated_at: new Date().toISOString() };
     fs.writeFileSync(tmpPath, JSON.stringify(next, null, 2));
     fs.renameSync(tmpPath, statePath);
 
@@ -257,16 +385,17 @@ function writeWorkflowState(updates) {
       try {
         fs.copyFileSync(bakPath, statePath);
       } catch { /* backup also unavailable */ }
-      try { fs.unlinkSync(lockPath); } catch { /* ignore */ }
+      logStateWarning('workflow-state write produced invalid JSON, restored from .bak');
       return false;
     }
 
-    try { fs.unlinkSync(lockPath); } catch { /* ignore */ }
     return true;
-  } catch {
+  } catch (err) {
     try { fs.unlinkSync(tmpPath); } catch { /* ignore */ }
-    try { fs.unlinkSync(lockPath); } catch { /* ignore */ }
+    logStateWarning(`workflow-state write failed: ${err && err.message}`);
     return false;
+  } finally {
+    try { fs.unlinkSync(lockPath); } catch { /* ignore */ }
   }
 }
 
@@ -278,7 +407,7 @@ function writeWorkflowState(updates) {
  * @returns {string} Absolute path
  */
 function getOutputPath(agentType, feature, platform) {
-  const base = path.join(resolveProjectRoot(), 'bk', 'dev', 'shared', 'reports');
+  const base = path.join(sharedDir(), 'reports');
   // Normalize: strip bk- prefix for filename generation
   const bare = agentType.replace(/^bk-/, '');
   const pfx = platform || 'unknown';
@@ -315,7 +444,7 @@ function parseReportMetadata(content) {
  * @returns {boolean}
  */
 function saveCheckpoint(data, maxKeep = 5) {
-  const dir = path.join(resolveProjectRoot(), 'bk', 'dev', 'shared', 'checkpoints');
+  const dir = path.join(sharedDir(), 'checkpoints');
   try {
     fs.mkdirSync(dir, { recursive: true });
     const ts = new Date().toISOString().replace(/[:.]/g, '-');
@@ -331,10 +460,11 @@ function saveCheckpoint(data, maxKeep = 5) {
 
 /**
  * Read the most recent checkpoint file
+ * @param {string} [root] - Project root; defaults to the resolved one
  * @returns {Object|null}
  */
-function readLatestCheckpoint() {
-  const dir = path.join(resolveProjectRoot(), 'bk', 'dev', 'shared', 'checkpoints');
+function readLatestCheckpoint(root) {
+  const dir = path.join(sharedDir(root), 'checkpoints');
   try {
     if (!fs.existsSync(dir)) return null;
     const files = fs.readdirSync(dir)
@@ -613,6 +743,8 @@ module.exports = {
   loadConfigFromPath,
   isHookEnabled,
   readPlatformContext,
+  sharedDir,
+  workflowStatePath,
   readWorkflowState,
   writeWorkflowState,
   writeEnv,
@@ -620,6 +752,7 @@ module.exports = {
   parseReportMetadata,
   saveCheckpoint,
   readLatestCheckpoint,
+  unwrapCheckpointState,
   pruneCheckpoints,
   formatDate,
   buildLanguageSection,

@@ -6,20 +6,67 @@
 const fs = require('fs');
 const path = require('path');
 const readline = require('readline');
+const { requireHookLib } = require('./kit-hook-lib.cjs');
+const { resolveCliProjectRoot } = require('./project-root.cjs');
 
 function readJson(filePath) {
   if (!filePath || !fs.existsSync(filePath)) return null;
   try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return null; }
 }
 
-function writeJson(filePath, obj) {
-  const dir = path.dirname(filePath);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(filePath, JSON.stringify(obj, null, 2), 'utf8');
+function getStateFile(projectRoot) {
+  const lib = requireHookLib('bk-config-utils.cjs');
+  if (lib && typeof lib.workflowStatePath === 'function') return lib.workflowStatePath(projectRoot);
+  return path.join(projectRoot, 'bk', 'dev', 'shared', '.workflow-state.json');
 }
 
-function getStateFile(projectRoot) {
-  return path.join(projectRoot, 'bk', 'dev', 'shared', '.workflow-state.json');
+/**
+ * Read workflow state the way the hooks read it — including the .bak and checkpoint
+ * fallbacks, so the CLI does not report "no workflow state" over a recoverable one.
+ *
+ * @param {string} root - Project root
+ * @returns {Object|null}
+ */
+function readState(root) {
+  const lib = requireHookLib('bk-config-utils.cjs');
+  if (lib && typeof lib.readWorkflowState === 'function') return lib.readWorkflowState(root);
+  return readJson(getStateFile(root));
+}
+
+/**
+ * Update workflow state through the kit's writer.
+ *
+ * Both commands here read the state, prompt the user, and only then write — a gap long
+ * enough for any hook to write in between. Going through writeWorkflowState puts the
+ * decision inside the same lock the hooks take, on state read there, so a resume cannot
+ * quietly revert whatever landed while the user was reading the prompt.
+ *
+ * The direct write is the fallback for a CLI running without the kit's hooks beside it.
+ *
+ * @param {string} root - Project root
+ * @param {function(Object): (Object|null)} updater - Receives fresh state, returns fields to merge
+ * @returns {boolean} true when the state on disk reflects the update
+ */
+function updateState(root, updater) {
+  const lib = requireHookLib('bk-config-utils.cjs');
+  if (lib && typeof lib.writeWorkflowState === 'function') {
+    return lib.writeWorkflowState(updater, root);
+  }
+  // Fallback: no hook lib next to the CLI. Unlocked, but still atomic via tmp + rename.
+  const stateFile = getStateFile(root);
+  const patch = updater(readJson(stateFile) || {});
+  if (patch === null || typeof patch !== 'object') return true;
+  const next = { ...(readJson(stateFile) || {}), ...patch, updated_at: new Date().toISOString() };
+  const tmp = stateFile + '.' + Math.random().toString(36).slice(2);
+  try {
+    fs.mkdirSync(path.dirname(stateFile), { recursive: true });
+    fs.writeFileSync(tmp, JSON.stringify(next, null, 2), 'utf8');
+    fs.renameSync(tmp, stateFile);
+    return true;
+  } catch {
+    try { fs.unlinkSync(tmp); } catch { /* ignore */ }
+    return false;
+  }
 }
 
 /**
@@ -43,9 +90,8 @@ function askConfirm(prompt) {
  * @returns {{ success: boolean, message: string }}
  */
 async function resumeWorkflow(opts = {}) {
-  const root = opts.projectRoot || process.env.BK_PROJECT_ROOT || process.cwd();
-  const stateFile = getStateFile(root);
-  const state = readJson(stateFile);
+  const root = resolveCliProjectRoot(opts.projectRoot);
+  const state = readState(root);
 
   if (!state) {
     return { success: false, message: 'No workflow state found.' };
@@ -70,22 +116,25 @@ async function resumeWorkflow(opts = {}) {
     }
   }
 
-  // Update state
-  const updated = { ...state };
-  updated.global_halt = false;
-  updated.workflow_paused = false;
-  updated.halt_override_consumed = false;  // re-arm one-shot for next episode
-  updated.resume_ts = Date.now();
-  updated.resume_log = [...(state.resume_log || []), {
-    ts: Date.now(),
-    cleared: reasons,
-    previous_halt_reasons: state.halt_reasons || []
-  }];
-  // Clear halt fields
-  delete updated.halt_ts;
-  updated.halt_reasons = [];
+  // Clear the halt against the state as it is now, not as it was before the prompt.
+  const written = updateState(root, (fresh) => ({
+    global_halt: false,
+    workflow_paused: false,
+    halt_override_consumed: false,  // re-arm one-shot for next episode
+    resume_ts: Date.now(),
+    resume_log: [...(fresh.resume_log || []), {
+      ts: Date.now(),
+      cleared: reasons,
+      previous_halt_reasons: fresh.halt_reasons || []
+    }],
+    // Clear halt fields
+    halt_ts: null,
+    halt_reasons: []
+  }));
 
-  writeJson(stateFile, updated);
+  if (!written) {
+    return { success: false, message: 'Could not write workflow state — another writer holds it. Try again.' };
+  }
 
   // Write resume log to metrics
   const metricsDir = path.join(root, '.bk-metrics');
@@ -109,9 +158,8 @@ async function resumeWorkflow(opts = {}) {
  * @returns {{ success: boolean, message: string }}
  */
 async function resetCounts(opts = {}) {
-  const root = opts.projectRoot || process.env.BK_PROJECT_ROOT || process.cwd();
-  const stateFile = getStateFile(root);
-  const state = readJson(stateFile);
+  const root = resolveCliProjectRoot(opts.projectRoot);
+  const state = readState(root);
 
   if (!state) {
     return { success: false, message: 'No workflow state found.' };
@@ -132,10 +180,28 @@ async function resetCounts(opts = {}) {
     }
   }
 
-  const updated = { ...state };
+  const written = updateState(root, (fresh) => buildCountReset(fresh, targetAgent, targetFeature));
+
+  if (!written) {
+    return { success: false, message: 'Could not write workflow state — another writer holds it. Try again.' };
+  }
+
+  return { success: true, message: `Reset complete: ${descr}.` };
+}
+
+/**
+ * Build the count-reset patch from the state as read under the write lock.
+ *
+ * @param {object} state - Fresh workflow state
+ * @param {string|null} targetAgent
+ * @param {string|null} targetFeature
+ * @returns {object} Fields to merge
+ */
+function buildCountReset(state, targetAgent, targetFeature) {
+  const updated = {};
 
   if (targetAgent || targetFeature) {
-    const counts = updated.agent_dispatch_count || {};
+    const counts = state.agent_dispatch_count || {};
     // The pre-feature shape was `{ [agent]: number }`. It has no feature dimension, but it
     // is keyed by agent — so an --agent reset is still exactly expressible, and clearing
     // more than was asked for would throw away counts the caller wanted kept.
@@ -165,10 +231,7 @@ async function resetCounts(opts = {}) {
     updated.agent_dispatch_count = {};
   }
   updated.counts_reset_ts = Date.now();
-
-  writeJson(stateFile, updated);
-
-  return { success: true, message: `Reset complete: ${descr}.` };
+  return updated;
 }
 
 module.exports = { resumeWorkflow, resetCounts };

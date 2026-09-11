@@ -124,7 +124,7 @@ try {
 
     const state = readWorkflowState() || {};
     const featureKey = extractFeatureKey(toolInput, state);
-    const { counts, all: allCounts } = readCounts(state, featureKey);
+    const { counts } = readCounts(state, featureKey);
     const currentCount = counts[agentType] || 0;
 
     // Determine cap
@@ -191,23 +191,27 @@ try {
       process.exit(2);
     }
 
-    // Under cap — increment this feature's count
-    counts[agentType] = currentCount + 1;
-    const dispatchCounts = { ...allCounts, [featureKey]: counts };
-
-    // Append to history
-    const history = state.agent_dispatch_history || [];
-    history.push({ ts: Date.now(), agent: agentType, feature: featureKey });
-    // Keep last 50
-    const trimmedHistory = history.slice(-50);
-
+    // Under cap — increment this feature's count and append to history, both derived from
+    // the state read under the write lock. Parallel dispatches of the same agent reach this
+    // hook together; counting from `state` read above lets them all write "n + 1" and the cap
+    // then never trips.
     try {
-      writeWorkflowState({
-        agent_dispatch_count: dispatchCounts,
-        agent_dispatch_history: trimmedHistory,
-        // Other hooks read state.feature and have only ever seen null. Record what this
-        // dispatch identified so they stop guessing too.
-        ...(featureKey !== 'unscoped' ? { feature: featureKey } : {})
+      writeWorkflowState((fresh) => {
+        // readCounts, not fresh.agent_dispatch_count directly — the legacy flat shape has to
+        // be migrated here too, or a write would resurrect the counts it drops.
+        const { counts: freshCounts, all: freshAll } = readCounts(fresh, featureKey);
+        freshCounts[agentType] = (freshCounts[agentType] || 0) + 1;
+        const freshHistory = [
+          ...(fresh.agent_dispatch_history || []),
+          { ts: Date.now(), agent: agentType, feature: featureKey }
+        ].slice(-50);  // keep last 50
+        return {
+          agent_dispatch_count: { ...freshAll, [featureKey]: freshCounts },
+          agent_dispatch_history: freshHistory,
+          // Other hooks read state.feature and have only ever seen null. Record what this
+          // dispatch identified so they stop guessing too.
+          ...(featureKey !== 'unscoped' ? { feature: featureKey } : {})
+        };
       });
     } catch { /* fail-open */ }
 
