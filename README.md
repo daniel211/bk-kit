@@ -147,7 +147,7 @@ Thêm vào `~/.gemini/antigravity-cli/settings.json`:
 Không phải tự gõ đường dẫn — lệnh này in ra đúng snippet cho project bạn đang đứng:
 
 ```bash
-bk-<platform> doctor --design-engine
+bk doctor --design-engine
 ```
 
 Ba điều quan trọng:
@@ -228,17 +228,39 @@ Dual tốn gấp đôi thời gian và quota. Chỉ dùng khi cần đối chi�
 
 ## 4. Cài mới
 
+> **Ba package cũ đã gộp thành một.** `@beerkit/bk-ios`, `@beerkit/bk-android`,
+> `@beerkit/bk-flutter` không còn nữa; thay bằng **một** package `@beerkit/bk` với **một** lệnh
+> `bk`, chứa sẵn cả ba kit. Nền tảng giờ là tham số `--kit`, không phải tên lệnh. Nếu máy bạn
+> từng cài bản cũ, gỡ trước khi cài bản mới — nếu không, lệnh `bk-flutter` cũ vẫn nằm lại trên
+> PATH và bạn sẽ tưởng mình đang chạy kit mới:
+>
+> ```bash
+> npm uninstall -g @beerkit/bk-ios @beerkit/bk-android @beerkit/bk-flutter
+> ```
+
 ```bash
-gh release download v0.5.0 --repo daniel211/bk-kit --pattern 'beerkit-bk-flutter-*.tgz'
-npm install -g ./beerkit-bk-flutter-0.5.0.tgz
-cd <project> && bk-flutter init
-bk-flutter doctor
+gh release download --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz' --clobber
+npm install -g ./beerkit-bk-*.tgz
+cd <project> && bk init --kit flutter
+bk doctor
 ```
 
-Đổi `flutter` thành `ios` hoặc `android` tuỳ nền tảng. Sau đó làm §2 nếu cần agy.
+Không có tag thì `gh release download` lấy release mới nhất — khỏi phải sửa tài liệu mỗi lần ra
+bản mới. Muốn nhìn thấy số phiên bản thì:
+
+```bash
+VER=$(gh release view --repo daniel211/bk-kit --json tagName -q .tagName)
+echo "$VER"
+```
+
+Đổi `flutter` thành `ios` hoặc `android` tuỳ nền tảng — **lệnh y hệt nhau cho cả ba**, chỉ khác
+giá trị `--kit`. Không truyền `--kit` thì `bk` tự đoán theo file mốc trong thư mục project
+(`pubspec.yaml` → flutter, `*.xcodeproj` / `*.xcworkspace` / `Package.swift` → ios,
+`build.gradle*` / `settings.gradle*` → android); đoán không ra thì nó dừng và bảo bạn truyền
+`--kit`. Sau đó làm §2 nếu cần agy.
 
 `doctor` phải báo `✓ Figma token available` — nếu là `⚠` thì quay lại §2.1. Muốn biết engine
-design sẽ chạy là engine nào thì `bk-flutter doctor --design-engine` (§6).
+design sẽ chạy là engine nào thì `bk doctor --design-engine` (§6).
 
 ---
 
@@ -250,15 +272,21 @@ design sẽ chạy là engine nào thì `bk-flutter doctor --design-engine` (§6
 > lỗi này, nhưng chỉ có tác dụng nếu bạn dùng nó để update.
 
 ```bash
-# 1. Cài CLI mới trước
-gh release download v0.3.0 --repo daniel211/bk-kit --pattern 'beerkit-bk-flutter-*.tgz'
-npm install -g ./beerkit-bk-flutter-0.3.0.tgz
+# 1. Gỡ ba package cũ (xem §4) rồi cài CLI mới trước
+npm uninstall -g @beerkit/bk-ios @beerkit/bk-android @beerkit/bk-flutter
+gh release download --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz' --clobber
+npm install -g ./beerkit-bk-*.tgz
 
 # 2. Rồi mới update project
 cd <project>
-bk-flutter update                      # hỏi từng conflict
-bk-flutter update --conflict keep      # giữ hết bản của mình, không hỏi
+bk update --kit flutter                      # hỏi từng conflict
+bk update --kit flutter --conflict keep      # giữ hết bản của mình, không hỏi
 ```
+
+**Project cũ không phải làm gì thêm.** Định dạng `.claude/` và `.bk-version.json` không đổi, nên
+`bk update --kit <platform>` chạy thẳng trên project đã `init` bằng CLI đời cũ. Đổi chỉ nằm ở
+CLI toàn cục, không nằm trong project. Nếu `.bk-version.json` đã ghi sẵn nền tảng thì `bk update`
+lấy theo đó, khỏi cần `--kit`.
 
 ### Ba việc cần làm tay sau khi update
 
@@ -305,7 +333,7 @@ node .claude/cli/bk-health/index.cjs --reset-counts --force
 ### Engine design sẽ chạy là engine nào
 
 ```bash
-bk-<platform> doctor --design-engine
+bk doctor --design-engine
 ```
 
 Allow-rule nằm ngoài repo, thuộc về máy, và không ai nhớ mình đã thêm hay chưa — đây là lệnh
@@ -350,7 +378,7 @@ Copy nguyên khối JSON đó vào `~/.gemini/antigravity-cli/settings.json` r�
 ### Sức khoẻ cài đặt nói chung
 
 ```bash
-bk-<platform> doctor
+bk doctor
 ```
 
 Ba dòng liên quan tới tài liệu này:
@@ -380,7 +408,7 @@ node .claude/scripts/figma-cli.mjs discover --url "<figma-url>"
 
 | Triệu chứng | Nguyên nhân | Xử lý |
 |---|---|---|
-| Đã cài agy, đã đăng nhập, nhưng kit vẫn chạy engine `claude` | Thiếu allow-rule — `auto` im lặng rơi về claude đúng như thiết kế | `bk-<platform> doctor --design-engine` (§6): nó chỉ đúng cổng nào trượt và in sẵn snippet |
+| Đã cài agy, đã đăng nhập, nhưng kit vẫn chạy engine `claude` | Thiếu allow-rule — `auto` im lặng rơi về claude đúng như thiết kế | `bk doctor --design-engine` (§6): nó chỉ đúng cổng nào trượt và in sẵn snippet |
 | agy chạy xong, response rỗng, không có file | Tool bị auto-deny | Thêm allow-rule §2.3. Runner in sẵn dòng cần thêm |
 | Đã thêm allow-rule vẫn bị deny | Rule dùng đường dẫn tương đối, hoặc trỏ vào thư mục flow của feature cũ | Dùng scope repo `write_file(<repo>/bk/**)` với đường dẫn tuyệt đối — lấy nguyên văn từ `doctor --design-engine` |
 | `variables.json` bị skip, 403 | Figma Variables API cần scope `file_variables:read` **và gói Enterprise** | Bình thường, không phải bug. Design token lấy từ style name + giá trị thô. Ghi rõ điều này trong spec thay vì bịa tên token |

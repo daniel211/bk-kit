@@ -1,0 +1,31 @@
+{
+  "name": "@beerkit/bk",
+  "version": "0.8.0",
+  "description": "beer-kit — iOS, Android and Flutter development kits for Claude Code: agents, skills, and hooks",
+  "type": "module",
+  "bin": {
+    "bk": "./bin/bk.mjs"
+  },
+  "files": [
+    "bin/",
+    "commands/",
+    "lib/",
+    "kits/"
+  ],
+  "dependencies": {
+    "commander": "^12.0.0",
+    "chalk": "^5.3.0"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": [
+    "claude-code",
+    "mobile-dev",
+    "ai-toolkit",
+    "ios",
+    "android",
+    "flutter"
+  ],
+  "license": "MIT"
+}
