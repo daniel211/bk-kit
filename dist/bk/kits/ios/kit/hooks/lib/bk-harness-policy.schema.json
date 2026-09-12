@@ -116,6 +116,23 @@
             },
             "bypass_env": {
               "type": "string"
+            },
+            "window_minutes": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Sliding-window length for dispatch counting; 0 = lifetime (legacy)"
+            },
+            "batch_coalesce_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Dispatches of the same agent+feature within this span count as one iteration"
+            },
+            "exempt_agents": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Agents never subject to the iteration cap"
             }
           }
         }
@@ -146,6 +163,24 @@
         },
         "red_signals_file": {
           "type": "string"
+        },
+        "min_signal_weight": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Halt threshold on the weighted sum of distinct active signal types"
+        },
+        "red_signal_weights": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          },
+          "description": "Per-type weight; types absent default to 1.0"
+        },
+        "override_window_minutes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How long one BK_HARNESS_OVERRIDE grant stays valid; 0 = single call (legacy)"
         }
       }
     },
@@ -267,11 +302,17 @@
           "minimum": 30000
         },
         "usage_month_budget_usd": {
-          "type": ["number", "null"],
+          "type": [
+            "number",
+            "null"
+          ],
           "minimum": 0
         },
         "usage_week_budget_usd": {
-          "type": ["number", "null"],
+          "type": [
+            "number",
+            "null"
+          ],
           "minimum": 0
         }
       }
@@ -471,6 +512,14 @@
               "type": "string"
             }
           }
+        },
+        "red_on_error_only": {
+          "type": "boolean",
+          "description": "Emit a red signal only when the lint run produced errors; warnings go to warn_signal_file"
+        },
+        "warn_signal_file": {
+          "type": "string",
+          "description": "JSONL path for warning-severity (non-halting) lint signals"
         }
       }
     },

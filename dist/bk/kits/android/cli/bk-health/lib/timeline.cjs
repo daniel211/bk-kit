@@ -70,6 +70,19 @@ function getTimelineEvents(opts = {}) {
     });
   }
 
+  // Yellow signals — warning-only native-lint runs. Same file name as the policy default
+  // (native_lint.warn_signal_file); resolved the same hardcoded way as red-signals above
+  // because this function has no policy handle to read from.
+  const yellowSignals = readJsonlFiltered(path.join(metricsDir, 'yellow-signals.jsonl'), windowMs);
+  for (const y of yellowSignals) {
+    events.push({
+      ts: y.ts,
+      kind: 'yellow_signal',
+      summary: `lint warning: ${y.type || 'unknown'}`,
+      data: y
+    });
+  }
+
   // Sort by timestamp
   events.sort((a, b) => (a.ts || 0) - (b.ts || 0));
   return events;
@@ -94,6 +107,10 @@ function renderTimeline(events) {
       case 'violation':  kindColor = `${RED}VIOLATION ${RESET}`; break;
       case 'decision':   kindColor = `${GREEN}DECISION  ${RESET}`; break;
       case 'red_signal': kindColor = `${YELLOW}RED-SIG   ${RESET}`; break;
+      // Dim + lowercase so a reader scanning the column cannot mistake it for RED-SIG:
+      // yellow signals never count toward the kill switch, and the marker has to say so
+      // at a glance even when the terminal strips colour.
+      case 'yellow_signal': kindColor = `${DIM}warn-lint ${RESET}`; break;
       default:           kindColor = `${DIM}EVENT     ${RESET}`;
     }
     lines.push(`${DIM}${ts}${RESET}  ${kindColor}${ev.summary}`);

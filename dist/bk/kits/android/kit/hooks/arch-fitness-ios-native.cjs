@@ -28,7 +28,7 @@ const path = require('path');
 const cp   = require('child_process');
 
 const libDir = path.join(__dirname, 'lib');
-const { loadHarnessPolicy, trackRedSignal, resolveMetricPath } = require(path.join(libDir, 'harness-policy-loader.cjs'));
+const { loadHarnessPolicy, trackRedSignal, trackWarnSignal, resolveMetricPath } = require(path.join(libDir, 'harness-policy-loader.cjs'));
 const { detectTool, runTool } = require(path.join(libDir, 'native-lint-runner.cjs'));
 const { appendJsonl: rotatorAppend } = require(path.join(libDir, 'jsonl-rotator.cjs'));
 
@@ -167,19 +167,30 @@ async function main() {
   // No findings
   if (findings.length === 0) process.exit(0);
 
-  // Emit red signal
+  // Emit signal (red or yellow — see routing below)
   const errFindings  = findings.filter(f => f.severity === 'error');
   const warnFindings = findings.filter(f => f.severity === 'warning');
   const convFindings = findings.filter(f => f.severity === 'convention');
 
+  // Route by severity. A warning-only run must not reach red-signals.jsonl: the kill switch
+  // weighs every entry there, so a single unused import used to push the workflow toward a
+  // full halt even though this hook is configured `block_on_error: false`. The warning is
+  // still recorded — in yellow-signals.jsonl, where nothing counts it toward the halt.
+  const signalMeta = {
+    file:      filePath,
+    errors:    errFindings.length,
+    warnings:  warnFindings.length,
+    durationMs,
+    truncated
+  };
+  const redOnErrorOnly = nativeCfg.red_on_error_only !== false;
+
   try {
-    trackRedSignal(SIGNAL_TYPE, {
-      file:      filePath,
-      errors:    errFindings.length,
-      warnings:  warnFindings.length,
-      durationMs,
-      truncated
-    });
+    if (!redOnErrorOnly || errFindings.length > 0) {
+      trackRedSignal(SIGNAL_TYPE, signalMeta);
+    } else {
+      trackWarnSignal(SIGNAL_TYPE, signalMeta);
+    }
   } catch { /* fail-open */ }
 
   // Format and emit

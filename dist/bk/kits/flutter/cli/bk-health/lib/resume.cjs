@@ -121,7 +121,14 @@ async function resumeWorkflow(opts = {}) {
     global_halt: false,
     workflow_paused: false,
     halt_override_consumed: false,  // re-arm one-shot for next episode
+    halt_override_until: null,      // any time-boxed grant ends with the episode
     resume_ts: Date.now(),
+    // Acknowledge the signals that caused the halt, not just the halt flag.
+    // The kill-switch re-reads red-signals.jsonl on the next non-read tool call, and the
+    // entries that tripped it are still inside the 30-minute lookback — so clearing
+    // global_halt alone bought about nine minutes before the identical window re-halted.
+    // Everything logged up to this instant has now been put in front of the user.
+    red_signal_ack_ts: Date.now(),
     resume_log: [...(fresh.resume_log || []), {
       ts: Date.now(),
       cleared: reasons,

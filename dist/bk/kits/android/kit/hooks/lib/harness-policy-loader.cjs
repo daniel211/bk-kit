@@ -43,6 +43,13 @@ const DEFAULT_POLICY = {
     },
     subagent_iteration: {
       enabled: true, default_cap: 3, per_agent_caps: {},
+      // The cap catches a conductor looping, so it counts within a window. A lifetime
+      // count is a ratchet: a long feature exhausts it legitimately and never recovers.
+      window_minutes: 60,
+      // Parallel fan-out reaches this hook as N dispatches at once. That is one
+      // iteration, not N, so same agent+feature inside this span collapses to one.
+      batch_coalesce_ms: 5000,
+      exempt_agents: [],
       bypass_env: 'BK_HARNESS_DISPATCH_OVERRIDE'
     }
   },
@@ -52,9 +59,18 @@ const DEFAULT_POLICY = {
       'tool_repetition_blocked', 'oscillation_blocked',
       'phase_recurrence_blocked', 'subagent_cap_exceeded',
       'budget_exceeded', 'fsm_invalid_transition_repeated',
+      'token_burn_spike', 'inferential_fail',
       'ui_snapshot_gap', 'test_gap_persistent',
       'native_lint_ios', 'native_lint_android', 'native_lint_flutter'
     ],
+    // Distinct types alone say nothing about severity: one unused-import warning plus one
+    // cap hit used to equal a full halt. Weight each type and threshold on the sum.
+    // A type with no weight counts 1.0, so an older policy file keeps its old behaviour.
+    min_signal_weight: 2.0,
+    red_signal_weights: {},
+    // One grant covers a window, not a single tool call — a one-shot override cannot
+    // carry any real task to completion.
+    override_window_minutes: 15,
     bypass_env: 'BK_HARNESS_OVERRIDE',
     red_signals_file: '.bk-metrics/red-signals.jsonl'
   },
@@ -130,6 +146,10 @@ const DEFAULT_POLICY = {
     enabled: true,
     cache_ttl_seconds: 300,
     timeout_ms: 30000,
+    // A lint warning is not a reason to halt the workflow. Only an error-producing run
+    // reaches red-signals.jsonl; warnings are recorded separately and never counted.
+    red_on_error_only: true,
+    warn_signal_file: '.bk-metrics/yellow-signals.jsonl',
     ios: {
       enabled: true,
       tool: 'swiftlint',
@@ -327,6 +347,30 @@ function trackRedSignal(type, meta = {}) {
 }
 
 /**
+ * Track a yellow (warning-only) signal.
+ *
+ * Same shape and same append path as trackRedSignal, different destination. A lint run that
+ * produced nothing but warnings is real information worth keeping, but it must never land in
+ * red-signals.jsonl: every entry there is weighed by the global kill switch, so an unused
+ * import would help halt the workflow — which is exactly what `block_on_error: false` says
+ * must not happen.
+ *
+ * @param {string} type - same signal type the red path would have used
+ * @param {object} meta - arbitrary context (file, counts, timings)
+ */
+function trackWarnSignal(type, meta = {}) {
+  try {
+    const policy = loadHarnessPolicy();
+    const root = policy.__projectRoot;
+    const relPath = (policy.native_lint && policy.native_lint.warn_signal_file) ||
+      '.bk-metrics/yellow-signals.jsonl';
+    const file = resolveMetricPath(relPath, root);
+    const entry = { ts: Date.now(), type, ...meta };
+    appendJsonl(file, entry, policy.monitor.rotate_max_lines);
+  } catch { /* fail-open */ }
+}
+
+/**
  * Track a violation — unified violation log (input for dashboard + steerer).
  * @param {object} entry - { hook, violation_type, tool, target, agent, blocked, severity, context }
  */
@@ -386,6 +430,7 @@ module.exports = {
   resolveMetricPath,
   appendJsonl,
   trackRedSignal,
+  trackWarnSignal,
   trackViolation,
   trackDecision,
   readRecentRedSignals,

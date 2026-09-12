@@ -81,6 +81,9 @@ function getDashboardData(opts = {}) {
   const violations = readJsonlFiltered(path.join(metricsDir, 'violations.jsonl'), windowMs);
   const decisions  = readJsonlFiltered(path.join(metricsDir, 'decisions.jsonl'), windowMs);
   const redSignals = readJsonlFiltered(path.join(metricsDir, 'red-signals.jsonl'), windowMs);
+  // Warning-only native-lint runs. Read alongside red signals but kept in their own array so
+  // nothing downstream (halt weight, harness score) can accidentally fold them into a halt.
+  const yellowSignals = readJsonlFiltered(path.join(metricsDir, 'yellow-signals.jsonl'), windowMs);
   const workflows  = readJsonlFiltered(path.join(metricsDir, 'workflow-summary.jsonl'), windowMs);
   const ashbyWarns = readJsonlFiltered(path.join(metricsDir, 'ashby-warnings.jsonl'), 24 * 60 * 60 * 1000);
   const state      = (kitLib && typeof kitLib.readWorkflowState === 'function'
@@ -120,6 +123,11 @@ function getDashboardData(opts = {}) {
     redSignalTypes[r.type || 'unknown'] = (redSignalTypes[r.type || 'unknown'] || 0) + 1;
   }
 
+  // What the kill-switch itself would see right now — not the same set as the 24h counts
+  // above, and that difference is the point: a dashboard full of red entries that sum to
+  // 0.75 is healthy, and nothing here used to say so.
+  const redSignalWeight = buildRedSignalWeight(redSignals, state);
+
   // Phase recurrence
   const recurrenceCount = state.phase_recurrence_count || {};
   const phasesWithRecurrence = Object.entries(recurrenceCount)
@@ -136,6 +144,8 @@ function getDashboardData(opts = {}) {
     decisions,
     redSignals,
     redSignalTypes,
+    redSignalWeight,
+    yellowSignals,
     workflows,
     ashbyWarns,
     phasesWithRecurrence,
@@ -148,6 +158,49 @@ function getDashboardData(opts = {}) {
     windowMs,
     root
   };
+}
+
+/**
+ * Weighted severity of the red signals inside the kill-switch's own lookback window.
+ *
+ * Mirrors global-kill-switch.cjs: distinct types, a weight each (a type absent from the
+ * policy map counts 1.0), and everything a `--resume` acknowledged dropped. Returns null
+ * when the kit's hook lib is not next to the CLI, so the panel simply omits the line.
+ *
+ * @param {Array<object>} redSignals - entries already filtered to the dashboard window
+ * @param {object} state - workflow state
+ * @returns {{weight: number, threshold: number, types: string[], lookbackMinutes: number,
+ *            ackTs: number}|null}
+ */
+function buildRedSignalWeight(redSignals, state) {
+  try {
+    const loader = requireHookLib('harness-policy-loader.cjs');
+    if (!loader || typeof loader.loadHarnessPolicy !== 'function') return null;
+    const cfg = (loader.loadHarnessPolicy() || {}).kill_switch || {};
+
+    const lookbackMinutes = cfg.lookback_minutes || 30;
+    const cutoff = Date.now() - lookbackMinutes * 60 * 1000;
+    const ackTs = typeof state.red_signal_ack_ts === 'number' ? state.red_signal_ack_ts : 0;
+    const weights = cfg.red_signal_weights || {};
+    const weightOf = (type) => {
+      const w = weights[type];
+      return typeof w === 'number' && isFinite(w) ? w : 1.0;
+    };
+
+    const types = [...new Set(redSignals
+      .filter((r) => r && r.type && r.ts >= cutoff && !(ackTs && r.ts <= ackTs))
+      .map((r) => r.type))];
+
+    return {
+      weight: types.reduce((sum, t) => sum + weightOf(t), 0),
+      threshold: typeof cfg.min_signal_weight === 'number'
+        ? cfg.min_signal_weight
+        : (cfg.min_red_signals || 2),
+      types,
+      lookbackMinutes,
+      ackTs
+    };
+  } catch { return null; }
 }
 
 function computeHarnessScore({ violations, redSignals, state, ashbyWarns }) {
@@ -201,7 +254,7 @@ function divider() {
  */
 function renderDashboard(data) {
   const { state, violations, violationsByType, decisions, redSignals,
-          redSignalTypes, workflows, ashbyWarns, phasesWithRecurrence,
+          redSignalTypes, redSignalWeight, yellowSignals, workflows, ashbyWarns, phasesWithRecurrence,
           harnessScore, tokenPanel, inferentialPanel, behaviourPanel,
           nativeLintPanel, ciReadinessPanel, windowMs } = data;
 
@@ -261,6 +314,22 @@ function renderDashboard(data) {
     for (const [type, count] of Object.entries(redSignalTypes).slice(0, 5)) {
       lines.push(boxLine(`  ${type}: ${count}`));
     }
+  }
+  if (redSignalWeight) {
+    // The number the kill-switch actually thresholds on. The counts above are an audit
+    // trail; this one line says whether a halt is close.
+    const { weight, threshold, lookbackMinutes, ackTs } = redSignalWeight;
+    const wStr = `${weight.toFixed(2)} / ${threshold.toFixed(2)}`;
+    const colour = weight >= threshold ? red : weight >= threshold - 1 ? yellow : green;
+    lines.push(boxLine(`Halt weight (last ${lookbackMinutes}m): ${colour(wStr)}`));
+    if (ackTs) {
+      lines.push(boxLine(`Acknowledged:   ${new Date(ackTs).toISOString()} (earlier signals ignored)`));
+    }
+  }
+  // Lives in the RED SIGNALS box because that is where a reader looks for lint fallout, but
+  // never rendered red: these are recorded for the audit trail and cannot cause a halt.
+  if ((yellowSignals || []).length > 0) {
+    lines.push(boxLine(yellow(`Warnings (lint, non-halting): ${yellowSignals.length}`)));
   }
 
   // Phase recurrence

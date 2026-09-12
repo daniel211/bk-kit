@@ -143,15 +143,24 @@ below. Without it every transition passes through unvalidated.
 
 | Field | Set by | Meaning |
 |-------|--------|---------|
-| `global_halt` | `global-kill-switch.cjs` | Repeated red signals — every guarded tool call is refused |
-| `halt_reasons[]` | `global-kill-switch.cjs` | Which signals tripped it |
-| `halt_override_consumed` | `global-kill-switch.cjs` | The one-shot `BK_HARNESS_OVERRIDE=1` has been spent |
+| `global_halt` | `global-kill-switch.cjs` | Red signals whose weighted sum crossed `min_signal_weight` — every guarded tool call is refused |
+| `halt_reasons[]` | `global-kill-switch.cjs` | Which signal types tripped it |
+| `halt_weight` | `global-kill-switch.cjs` | The weighted sum at the moment of the halt |
+| `red_signal_ack_ts` | `--resume` | Signals logged at or before this instant are considered seen and no longer count |
+| `halt_override_until` | `global-kill-switch.cjs` | An override grant is open until this instant |
+| `halt_override_consumed` | `global-kill-switch.cjs` | Legacy one-shot marker; only gates anything when `override_window_minutes` is 0 |
 | `workflow_paused` | `fsm-guard.cjs` | Phase-recurrence hard block — do NOT continue, ask the user |
 
 None of these clear themselves, and no new session resets them. The user clears them with
-`node .claude/cli/bk-health/index.cjs --resume` (which also re-arms the one-shot override);
-dispatch counts are cleared with `--reset-counts [--agent <name>]`. Never write these fields
-to false yourself to get past a block — surface the block and the command to the user.
+`node .claude/cli/bk-health/index.cjs --resume`, which also writes `red_signal_ack_ts` and
+clears any override grant. **That ack is what makes a resume stick:** the signals that caused
+the halt stay in `red-signals.jsonl` afterwards, so without it the next tool call re-read the
+same lookback window and halted again within minutes.
+
+Dispatch counts are cleared with `--reset-counts [--agent <name>]`, but that is rarely the
+right move now — the cap counts iterations inside `window_minutes` and decays on its own.
+Never write any of these fields to false yourself to get past a block; surface the block and
+the command to the user.
 
 ### Not version controlled
 

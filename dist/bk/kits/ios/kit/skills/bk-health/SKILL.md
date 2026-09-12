@@ -42,7 +42,8 @@ node .claude/cli/bk-health/index.cjs --reset-counts --force  # skip confirmation
 **Files read**:
 - `.bk-metrics/violations.jsonl` — security/fsm/privacy violations
 - `.bk-metrics/decisions.jsonl` — agent architectural decisions
-- `.bk-metrics/red-signals.jsonl` — harness red signals (deadloops, caps)
+- `.bk-metrics/red-signals.jsonl` — harness red signals (deadloops, caps) — these count toward a halt
+- `.bk-metrics/yellow-signals.jsonl` — lint warnings; recorded for visibility, never count toward a halt
 - `.bk-metrics/workflow-summary.jsonl` — agent workflow summaries
 - `.bk-metrics/ashby-warnings.jsonl` — sensor silent warnings
 - `bk/dev/shared/.workflow-state.json` — FSM state

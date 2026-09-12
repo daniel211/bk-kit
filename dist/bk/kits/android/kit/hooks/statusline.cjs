@@ -426,14 +426,49 @@ try {
       : text;
   }
 
+  /**
+   * Weighted severity of the red signals the kill-switch would see right now.
+   *
+   * Mirrors global-kill-switch.cjs deliberately: distinct types, a weight each (absent from
+   * the map means 1.0), and everything a `--resume` already acknowledged dropped. The
+   * statusline used to warn on the raw entry count against `min_red_signals`, so a single
+   * lint warning rendered "halt imminent" for a halt that was never going to happen.
+   *
+   * @param {object} cfg - policy.kill_switch
+   * @param {Array<object>} recentRed - entries inside the lookback window
+   * @param {number} ackTs - state.red_signal_ack_ts, or 0
+   * @returns {{active: Array<object>, weight: number, threshold: number}}
+   */
+  function weighRedSignals(cfg, recentRed, ackTs) {
+    const weights = cfg.red_signal_weights || {};
+    const weightOf = (type) => {
+      const w = weights[type];
+      return typeof w === 'number' && isFinite(w) ? w : 1.0;
+    };
+    const active = recentRed.filter((s) =>
+      s && s.type && !(ackTs && typeof s.ts === 'number' && s.ts <= ackTs));
+    const types = [...new Set(active.map((s) => s.type))];
+    return {
+      active,
+      weight: types.reduce((sum, t) => sum + weightOf(t), 0),
+      threshold: typeof cfg.min_signal_weight === 'number'
+        ? cfg.min_signal_weight
+        : (cfg.min_red_signals || 2)
+    };
+  }
+
   function buildHarnessSummary(policy, state, root, sessionId, contextData) {
     try {
-      const lookback = policy.kill_switch.lookback_minutes || 30;
-      const minRed   = policy.kill_switch.min_red_signals  || 2;
+      const killCfg = policy.kill_switch || {};
+      const lookback = killCfg.lookback_minutes || 30;
       const recentRed = readRecentRedSignals(lookback);
+      const ackTs = typeof state.red_signal_ack_ts === 'number' ? state.red_signal_ack_ts : 0;
+      const { active, weight, threshold } = weighRedSignals(killCfg, recentRed, ackTs);
 
-      const redCount = recentRed.length;
-      const haltImminent = redCount >= (minRed - 1) && !state.global_halt;
+      const redCount = active.length;
+      // One more full-weight (1.0) signal would tip it. Below that the warning is noise:
+      // four lint hits sum to 1.0 and still cannot halt on their own.
+      const haltImminent = weight > 0 && weight >= threshold - 1 && !state.global_halt;
 
       // Phase recurrence
       const recurrenceCount = state.phase_recurrence_count || {};
@@ -477,6 +512,8 @@ try {
 
       return {
         red_signals_30m: redCount,
+        red_signal_weight: weight,
+        red_signal_threshold: threshold,
         halt_imminent: haltImminent,
         global_halt: state.global_halt || false,
         workflow_paused: state.workflow_paused || false,
@@ -498,8 +535,13 @@ try {
   function renderHarnessLine(summary, policy) {
     try {
       if (!summary) return '';
-      const minRed = policy.kill_switch.min_red_signals || 2;
       const tmCfg = policy.token_monitoring || {};
+
+      // A cached summary written before weights existed has no weight field — render the
+      // bare count for it rather than a misleading "0.0/2.0".
+      const weightTag = typeof summary.red_signal_weight === 'number'
+        ? ` w${summary.red_signal_weight.toFixed(2)}/${(summary.red_signal_threshold || 2).toFixed(1)}`
+        : '';
 
       if (summary.global_halt) {
         return _red('🛑 HALTED') +
@@ -512,8 +554,8 @@ try {
       // Red signals
       if (summary.red_signals_30m > 0) {
         const redPart = summary.halt_imminent
-          ? _yellow(`⚠ red:${summary.red_signals_30m} (halt imminent)`)
-          : _yellow(`red:${summary.red_signals_30m}`);
+          ? _yellow(`⚠ red:${summary.red_signals_30m}${weightTag} (halt imminent)`)
+          : _yellow(`red:${summary.red_signals_30m}${weightTag}`);
         parts.push(redPart);
       } else {
         parts.push(_green('🛡 sensors:ok'));

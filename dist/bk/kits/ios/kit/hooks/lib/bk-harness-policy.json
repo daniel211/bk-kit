@@ -39,9 +39,18 @@
         "bk-planner": 2,
         "bk-code-reviewer": 5,
         "bk-problem-solving": 2,
-        "bk-debugger": 4
+        "bk-debugger": 4,
+        "bk-gemini-reviewer": 10,
+        "bk-unit-test-agent": 6
       },
-      "bypass_env": "BK_HARNESS_DISPATCH_OVERRIDE"
+      "bypass_env": "BK_HARNESS_DISPATCH_OVERRIDE",
+      "window_minutes": 60,
+      "batch_coalesce_ms": 5000,
+      "exempt_agents": [
+        "bk-git-manager",
+        "bk-project-manager",
+        "bk-docs-writer"
+      ]
     }
   },
   "kill_switch": {
@@ -64,7 +73,24 @@
       "native_lint_flutter"
     ],
     "bypass_env": "BK_HARNESS_OVERRIDE",
-    "red_signals_file": ".bk-metrics/red-signals.jsonl"
+    "red_signals_file": ".bk-metrics/red-signals.jsonl",
+    "min_signal_weight": 2,
+    "red_signal_weights": {
+      "tool_repetition_blocked": 1,
+      "oscillation_blocked": 1,
+      "phase_recurrence_blocked": 1,
+      "subagent_cap_exceeded": 1,
+      "budget_exceeded": 1,
+      "fsm_invalid_transition_repeated": 1,
+      "token_burn_spike": 0.5,
+      "inferential_fail": 0.5,
+      "ui_snapshot_gap": 0.5,
+      "test_gap_persistent": 0.5,
+      "native_lint_ios": 0.25,
+      "native_lint_android": 0.25,
+      "native_lint_flutter": 0.25
+    },
+    "override_window_minutes": 15
   },
   "arch_fitness": {
     "ios": {
@@ -310,18 +336,20 @@
       "block_on_error": false,
       "analysis_options": "analysis_options.yaml"
     },
-    "fallback_to_regex": true
+    "fallback_to_regex": true,
+    "red_on_error_only": true,
+    "warn_signal_file": ".bk-metrics/yellow-signals.jsonl"
   },
   "cost_budget": {
     "enabled": true,
-    "pr_budget_usd": 5.0,
-    "session_budget_usd": 20.0,
+    "pr_budget_usd": 5,
+    "session_budget_usd": 20,
     "enforcement": "warn",
     "ledger_path": ".bk-metrics/cost-ledger.jsonl"
   },
   "policy_overrides": {
     "BK_HARNESS_POLICY_PATH": "Override path to policy file (absolute)",
-    "BK_HARNESS_OVERRIDE": "Bypass global kill-switch (one-time)",
+    "BK_HARNESS_OVERRIDE": "Bypass global kill-switch for a time-boxed window (kill_switch.override_window_minutes)",
     "BK_HARNESS_DISPATCH_OVERRIDE": "Format: agent=N,agent=N (raise per-agent cap)",
     "BK_HARNESS_RECURRENCE_OVERRIDE": "Bypass phase recurrence block (one-time)",
     "BK_ARCH_FITNESS_SKIP": "Comma-separated rule IDs to skip",

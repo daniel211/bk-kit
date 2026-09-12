@@ -2,8 +2,8 @@
 /**
  * aggregator.cjs — Aggregate findings from .bk-metrics/*.jsonl files.
  *
- * Merges violations, red-signals, inferential-results, and native-lint
- * streams into a canonical finding list suitable for CI reporting.
+ * Merges violations, red-signals, yellow-signals, inferential-results, and
+ * native-lint streams into a canonical finding list suitable for CI reporting.
  */
 
 const fs = require('fs');
@@ -59,6 +59,7 @@ function aggregateFindings(metricsDir, windowMs) {
   const sources = [
     { file: 'violations.jsonl',         key: 'violations'      },
     { file: 'red-signals.jsonl',         key: 'red_signals'     },
+    { file: 'yellow-signals.jsonl',      key: 'yellow_signals'  },
     { file: 'inferential-results.jsonl', key: 'inferential'     },
     { file: 'native-lint.jsonl',         key: 'native_lint'     },
     { file: 'ashby-warnings.jsonl',      key: 'ashby'           },
