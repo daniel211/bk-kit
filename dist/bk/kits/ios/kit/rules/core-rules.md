@@ -52,5 +52,6 @@ See `.claude/rules/mobile-shared-rules.md` (architecture, API, security, UI/UX, 
 - Conductor role: `.claude/rules/conductor-role.md`
 - State machine: `.claude/rules/state-machine.md`
 - Approval gates: `.claude/rules/approval-rules.md`
+- Dispatch labeling: `.claude/rules/dispatch-labeling.md`
 - Agent protocols: `.claude/rules/agent-protocols/`
 - Platform rules: `.claude/rules/{ios,android,flutter}-rules.md`

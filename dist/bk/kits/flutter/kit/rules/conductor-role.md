@@ -33,6 +33,10 @@
 | Git operations | bk-git-manager | haiku | background |
 | Plan sync-back | bk-project-manager | haiku | background |
 
+Every dispatch MUST pass `model` explicitly and prefix `description` with `[<model>]`
+so the running-agent footer shows which model each subagent uses — see
+`.claude/rules/dispatch-labeling.md`.
+
 **Conductor NEVER writes production code, documentation, plans, or test files.**
 
 **Conductor CAN write directly (state + tracking ONLY):**
