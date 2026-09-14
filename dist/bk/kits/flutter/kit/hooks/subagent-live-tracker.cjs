@@ -20,19 +20,27 @@ const { appendJsonl } = require('./lib/jsonl-rotator.cjs');
 const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');
 const { isHookEnabled } = require('./lib/bk-config-utils.cjs');
 const { isAgentDispatch, getToolInput } = require('./lib/hook-event-accessor.cjs');
+const {
+  readStopIdentity, isCompletion, alreadyRecorded, readJsonlRows
+} = require('./lib/subagent-stop-identity.cjs');
 
 /**
  * Find the most recent spawn in this session that no later stop has claimed.
  *
- * SubagentStop carries no agent name or id, so identity has to come from the spawn
- * recorded when the dispatch started. Reading the file is enough: it is append-only
- * and a session rarely has more than a handful of subagents in flight.
+ * Enrichment, not identity. The completion has already been identified by `agent_type`; this
+ * links it back to the dispatch that started it, for the description and for a duration when
+ * the transcript has none. `agentName` is required — matching whatever spawn happens to be
+ * unclaimed is how a stray event acquired a name it had no right to. Reading the file is
+ * enough: it is append-only and a session rarely has more than a handful of subagents in
+ * flight.
  *
  * @param {string} liveFile — path to subagent-live.jsonl
  * @param {string|null} sessionId
+ * @param {string} agentName — only a spawn of this agent may be claimed
  * @returns {object|null} the unmatched spawn entry, if any
  */
-function findUnmatchedSpawn(liveFile, sessionId) {
+function findUnmatchedSpawn(liveFile, sessionId, agentName) {
+  if (!agentName) return null;
   let rows;
   try {
     rows = fs.readFileSync(liveFile, 'utf8').trim().split('\n');
@@ -45,7 +53,7 @@ function findUnmatchedSpawn(liveFile, sessionId) {
     let entry;
     try { entry = JSON.parse(line); } catch { continue; }
     if (sessionId && entry.session_id && entry.session_id !== sessionId) continue;
-    if (entry.event === 'spawn') spawns.push(entry);
+    if (entry.event === 'spawn' && entry.name === agentName) spawns.push(entry);
     else if (entry.event === 'stop' && entry.subagent_id) claimed.add(entry.subagent_id);
   }
   for (let i = spawns.length - 1; i >= 0; i--) {
@@ -99,12 +107,9 @@ async function main() {
       appendJsonl(liveFile, JSON.stringify(entry) + '\n');
 
     } else if (eventName === 'SubagentStop') {
-      // SubagentStop fires far more often than subagents are dispatched: one live run
-      // recorded 5 spawns against 45 stops, spread evenly rather than bursting, so they
-      // are not duplicates of one completion. Whether the event marks a subagent finishing
-      // or something finer-grained cannot be told from the fields the kit currently reads.
-      // Record the payload's shape — keys and leaf types, never values — so the next run
-      // settles it instead of another guess.
+      // Keep recording the payload's shape — keys and leaf types, never values. It is what
+      // settled the identity question (agent_id / agent_type / agent_transcript_path are all
+      // there), and it is how the next CLI change gets noticed rather than guessed at.
       try {
         const shapeOf = (v, d) => {
           if (v === null) return 'null';
@@ -122,26 +127,52 @@ async function main() {
       // ── Stop event ───────────────────────────────────────────────────────────
       const { parseTranscriptAccurate, isOwnSessionTranscript } = require('./lib/token-accurate-parser.cjs');
       const sessionId = hookData.session_id || null;
+      const identity = readStopIdentity(hookData);
 
-      // SubagentStop hands over the *session* transcript — Claude Code keeps one
-      // transcript per session and subagent turns never appear in it. Parsing it here
-      // yields session-wide totals; recording those as this subagent's usage is what
-      // made all 25 stop records in a live run carry identical figures. Report the
-      // usage as unattributed rather than confidently wrong.
-      const unattributed = isOwnSessionTranscript(hookData.transcript_path, sessionId);
-      const parsed = hookData.transcript_path && !unattributed
-        ? await parseTranscriptAccurate(hookData.transcript_path, { timeoutMs: 800 })
+      // Most SubagentStop events are not a subagent finishing, and a completion can be
+      // reported twice. Both rules live in lib/subagent-stop-identity.cjs so that this hook,
+      // workflow-metrics and subagent-cost-capture cannot drift apart again — they once
+      // reported 7, 8 and 54 completions for the same run of work.
+      if (!isCompletion(identity)) {
+        timer.end({ status: 'unattributable_stop', exit: 0 });
+        process.exit(0);
+      }
+
+      if (alreadyRecorded(readJsonlRows(liveFile).filter((r) => r.event === 'stop'),
+        'stable_id', identity.id, sessionId)) {
+        timer.end({ status: 'duplicate_stop', exit: 0 });
+        process.exit(0);
+      }
+
+      // `agent_transcript_path` is this subagent's own transcript, which is the file the
+      // usage figures were supposed to come from all along. `transcript_path` is the
+      // session's, and parsing that yields session-wide totals — recording those as one
+      // subagent's usage is what made all 25 stop records in a live run carry identical
+      // figures. Prefer the agent transcript; fall back to the session one only when it is
+      // demonstrably not the session's own, and otherwise report unattributed.
+      const agentTranscript = identity.transcript;
+      const sessionTranscript = isOwnSessionTranscript(hookData.transcript_path, sessionId)
+        ? null
+        : hookData.transcript_path;
+      const transcript = agentTranscript || sessionTranscript;
+      const parsed = transcript
+        ? await parseTranscriptAccurate(transcript, { timeoutMs: 800 })
         : null;
 
-      // Identity comes from the matching spawn — SubagentStop carries no agent name.
-      const spawn = findUnmatchedSpawn(liveFile, sessionId);
+      // Enrichment, not identity: link this completion back to its dispatch so the record
+      // carries the spawn's description and can supply a duration when the transcript has no
+      // usable timestamps. Matched by name — an unclaimed spawn of a DIFFERENT agent is
+      // somebody else's dispatch, and claiming it is how phantom completions appeared.
+      const spawn = findUnmatchedSpawn(liveFile, sessionId, identity.name);
 
       const entry = {
         ts: new Date().toISOString(),
         event: 'stop',
         session_id: hookData.session_id || null,
+        stable_id: identity.id,
+        agent_id: identity.eventId,
         subagent_id: (spawn && spawn.subagent_id) || null,
-        name: (spawn && spawn.name) || hookData.agent_name || hookData.subagent_name || 'unknown',
+        name: identity.name,
         duration_ms: parsed ? parsed.durationMs : spawnDurationMs(spawn),
         tokens_in: parsed ? parsed.tokensIn : null,
         tokens_out: parsed ? parsed.tokensOut : null,

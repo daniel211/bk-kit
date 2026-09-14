@@ -17,6 +17,42 @@ const fs = require('fs');
 let _cachedRoot = null;
 
 /**
+ * Markers that distinguish a real project root from any directory that merely
+ * contains a `.claude/` folder.
+ */
+const PROJECT_MARKERS = ['.git', path.join('.claude', '.bk.json'), 'bk'];
+
+/**
+ * A candidate qualifies as a project root only if it has `.claude/` AND at least
+ * one project marker.
+ *
+ * `.claude/` alone is not enough, for two reasons both seen in the field:
+ *
+ *  - `~/.claude` exists on every machine with Claude Code installed, so a
+ *    CLAUDE_PROJECT_DIR left pointing at $HOME was accepted and every hook then
+ *    read the wrong root.
+ *
+ *  - Agents create stray `.claude/` directories by accident. Resolving their memory
+ *    path against the working directory instead of the project root produces
+ *    `<feature-dir>/.claude/agent-memory/<agent>/`, and six different agents did
+ *    exactly that in one project. agent-memory-path-guard blocks the write, but the
+ *    directory is already there — and from then on the feature directory resolved as
+ *    the project root, so `.bk-metrics/`, the workflow state and the harness policy
+ *    would all have been read and written in the wrong place.
+ *
+ * @param {string} dir
+ * @returns {boolean}
+ */
+function looksLikeProject(dir) {
+  try {
+    if (!fs.existsSync(path.join(dir, '.claude'))) return false;
+    return PROJECT_MARKERS.some((m) => fs.existsSync(path.join(dir, m)));
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Resolve project root from __dirname.
  * This file lives at {root}/.claude/hooks/lib/resolve-project-root.cjs
  * So project root = __dirname/../../..
@@ -25,7 +61,7 @@ let _cachedRoot = null;
 function resolveFromDirname() {
   const candidate = path.resolve(__dirname, '..', '..', '..');
   try {
-    if (fs.existsSync(path.join(candidate, '.claude'))) {
+    if (looksLikeProject(candidate)) {
       return candidate;
     }
   } catch { /* ignore */ }
@@ -56,7 +92,7 @@ function resolveProjectRoot(hookData) {
   // regardless of where the hook is currently executing from.
   if (process.env.CLAUDE_PROJECT_DIR) {
     const claudeRoot = process.env.CLAUDE_PROJECT_DIR;
-    if (fs.existsSync(path.join(claudeRoot, '.claude'))) {
+    if (looksLikeProject(claudeRoot)) {
       _cachedRoot = claudeRoot;
       return _cachedRoot;
     }
@@ -64,7 +100,7 @@ function resolveProjectRoot(hookData) {
 
   // Priority 2: hookData.cwd from Claude Code runtime stdin payload
   if (hookData && hookData.cwd && typeof hookData.cwd === 'string') {
-    if (fs.existsSync(path.join(hookData.cwd, '.claude'))) {
+    if (looksLikeProject(hookData.cwd)) {
       _cachedRoot = hookData.cwd;
       return _cachedRoot;
     }
@@ -100,7 +136,7 @@ function resolveByWalkingUp(start) {
   try {
     let dir = path.resolve(start);
     for (let i = 0; i < 20; i++) {  // safety cap against symlink loops
-      if (fs.existsSync(path.join(dir, '.claude'))) return dir;
+      if (looksLikeProject(dir)) return dir;
       const parent = path.dirname(dir);
       if (parent === dir) return null;  // hit filesystem root
       dir = parent;

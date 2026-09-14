@@ -114,6 +114,10 @@ try {
       timer.end({ status: 'ok', exit: 0 });
       process.exit(0);
     } catch (err) {
+      // See privacy-block.cjs: the happy-path exit(0) reaches here as a DispatchExit under
+      // bk-dispatch. Re-throw rather than file the hook's own success as an internal error.
+      if (err && err.bkDispatchExit) throw err;
+
       process.stderr.write(`[SECURITY BLOCK] security-check internal error: ${err.message}\n`);
       trackViolation({ hook: 'security-check', violation_type: 'internal_error', blocked: true, severity: 'error', context: { error: err.message } });
       timer.end({ status: 'error', error: err.message, exit: 2 });
@@ -122,6 +126,10 @@ try {
   }
   main();
 } catch (e) {
+  // A DispatchExit is this hook's own process.exit() unwinding under bk-dispatch, not a
+  // crash. Logging it here is how a clean run got filed as `status: "crash"`.
+  if (e && e.bkDispatchExit) throw e;
+
   try {
     const fs = require('fs');
     const p = require('path');

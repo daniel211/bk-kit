@@ -61,9 +61,44 @@ async function main() {
   // Diagnostics: BK_HOOK_DISPATCH_REPORT=<file> dumps the per-hook records. This is how the
   // "every hook exits on every path" assumption is checked against the real 50 rather than
   // assumed — a record with exited:false is a hook that stopped without saying so.
+  //
+  // A `.jsonl` path appends one line per dispatch instead of overwriting. A single JSON file
+  // only ever holds the last dispatch, which is enough to check one tool call by hand and
+  // useless for watching a session: the interesting dispatches are the rare ones, and they are
+  // overwritten by whatever fired next. Appending keeps the whole run, at one line each.
   if (process.env.BK_HOOK_DISPATCH_REPORT) {
-    try { require('fs').writeFileSync(process.env.BK_HOOK_DISPATCH_REPORT, JSON.stringify(records, null, 2)); }
-    catch { /* diagnostics are best-effort */ }
+    const reportPath = process.env.BK_HOOK_DISPATCH_REPORT;
+    try {
+      if (reportPath.endsWith('.jsonl')) {
+        // `payload` is the raw event text, not a parsed object — parse defensively, and label
+        // the dispatch as best we can if it is not JSON at all.
+        let event = null, tool = null;
+        try {
+          const parsed = JSON.parse(payload || '{}');
+          event = parsed.hook_event_name || null;
+          tool = parsed.tool_name || null;
+        } catch { /* unparseable payload still deserves a report line */ }
+
+        const line = JSON.stringify({
+          ts: new Date().toISOString(),
+          event,
+          tool,
+          durationMs: records.reduce((sum, r) => sum + (r.durationMs || 0), 0),
+          exitCode: mergeExitCode(records),
+          hooks: records.map((r) => ({
+            script: r.script,
+            status: r.status,
+            exitCode: r.exitCode,
+            exited: r.exited,
+            durationMs: r.durationMs,
+            ...(r.detail ? { detail: r.detail } : {})
+          }))
+        });
+        require('./lib/jsonl-rotator.cjs').appendJsonl(reportPath, line + '\n');
+      } else {
+        require('fs').writeFileSync(reportPath, JSON.stringify(records, null, 2));
+      }
+    } catch { /* diagnostics are best-effort */ }
   }
 
   const out = mergeStdout(records);

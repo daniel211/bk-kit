@@ -35,9 +35,32 @@ try {
         if (raw && raw.trim()) hookData = JSON.parse(raw);
       } catch { /* no stdin or not JSON — continue */ }
 
-      const transcriptPath = hookData.transcript_path || hookData.transcriptPath || null;
       const sessionId = hookData.session_id || hookData.sessionId || null;
-      const agentName = hookData.agent_name || hookData.agentName || hookData.subagent_name || 'unknown';
+
+      const {
+        readStopIdentity, isCompletion, alreadyRecorded, readJsonlRows
+      } = require('./lib/subagent-stop-identity.cjs');
+      const identity = readStopIdentity(hookData);
+      const agentName = identity.name || 'unknown';
+
+      // This hook had no gate at all: it billed every SubagentStop, and most of them are not
+      // a subagent finishing. In one field run that was 46 entries of `agent: "unknown"`,
+      // $0.00, against 8 real ones — and one real subagent billed twice, because its
+      // completion was reported twice with a longer transcript the second time.
+      if (!isCompletion(identity)) {
+        timer.end({ status: 'unattributable_stop', exit: 0 });
+        process.exit(0);
+      }
+
+      // `agent_transcript_path` is this subagent's own transcript — the file the usage figures
+      // were always meant to come from. It sits at `<session>/subagents/agent-*.jsonl` and
+      // carries that agent's turns with real per-turn usage; a sample run showed 23 usage
+      // records, 198k cache-read tokens, on haiku. Without it the hook fell back to
+      // `transcript_path`, which is the session's, and the guard below then correctly refused
+      // to attribute it — so every one of the 165 field ledger entries came out at $0.00 and
+      // the statusline reported a cumulative cost of zero for three days of work.
+      const transcriptPath = hookData.agent_transcript_path || hookData.agentTranscriptPath
+        || hookData.transcript_path || hookData.transcriptPath || null;
 
       if (!transcriptPath) {
         process.stderr.write('[subagent-cost-capture] warn: no transcript_path in hook data — skipping\n');
@@ -58,6 +81,16 @@ try {
         process.exit(0);
       }
 
+      // Never bill the same subagent twice. Checked before the parse, since a repeat costs
+      // nothing to detect and a transcript read is the expensive part of this hook.
+      const { resolveMetricsDir: _metricsDir } = require('./lib/cost-ledger-writer.cjs');
+      const ledgerPath = require('path').join(_metricsDir(), 'cost-ledger.jsonl');
+      if (alreadyRecorded(readJsonlRows(ledgerPath).filter((r) => r.type === 'subagent'),
+        'stableId', identity.id, sessionId)) {
+        timer.end({ status: 'duplicate_stop', exit: 0 });
+        process.exit(0);
+      }
+
       // Parse transcript with 500ms timeout
       const parsed = await parseTranscriptAccurate(transcriptPath, { timeoutMs: 500 });
 
@@ -67,19 +100,34 @@ try {
       const effort = state.effort || state.current_effort || 'medium';
       const model = parsed.model || state.model || 'claude-sonnet-4-6';
 
-      // P1-7 transitional: derive raw input from total to avoid overcharge.
-      // parseTranscriptAccurate's tokensIn = cacheRead + cacheCreation + raw.
-      // computeCost(model, tokensIn, ...) treats input as raw — pass raw only here.
-      // Proper cache-aware pricing lands in P1-4 (cost-ledger-writer refactor).
+      // parseTranscriptAccurate's tokensIn is the TOTAL — cacheRead + cacheCreation + raw — so
+      // the legacy `computeCost(model, tokensIn, ...)` shape, which treats its input argument as
+      // raw, would overcharge wildly. The transitional workaround was to pass raw only, which
+      // fixed the overcharge by charging nothing at all for cache, and cache is nearly the
+      // entire bill: a field run's three subagents read 17.5M, 11.7M and 9.9M cached tokens
+      // against 210, 156 and 166 raw ones. The ledger billed $0.10 for what actually cost about
+      // $19.70 — a ~190x undercount, and the first numbers anyone saw after subagent entries
+      // started being written at all.
+      //
+      // computeCost's granular shape prices cache properly (read 0.1x input, creation 1.25x).
       const rawInputTokens = Math.max(0,
         parsed.tokensIn - (parsed.cacheReadTokens || 0) - (parsed.cacheCreationTokens || 0));
-      const costUsd = computeCost(model, rawInputTokens, parsed.tokensOut, effort);
+      const costUsd = computeCost({
+        model,
+        rawInputTokens,
+        tokensOut: parsed.tokensOut,
+        cacheReadTokens: parsed.cacheReadTokens || 0,
+        cacheCreationTokens: parsed.cacheCreationTokens || 0,
+        thinkingTokens: parsed.thinkingTokens || 0,
+        effort
+      });
 
       // Build ledger entry (no prompt content — numbers/metadata only)
       const entry = {
         type: 'subagent',
         workflowId,
         agent: agentName,
+        stableId: identity.id,
         model,
         effort,
         tokensIn: parsed.tokensIn,
@@ -138,6 +186,10 @@ try {
 
   main();
 } catch (e) {
+  // A DispatchExit is this hook's own process.exit() unwinding under bk-dispatch, not a
+  // crash. Logging it here is how a clean run got filed as `status: "crash"`.
+  if (e && e.bkDispatchExit) throw e;
+
   try {
     const fs = require('fs');
     const p = require('path');

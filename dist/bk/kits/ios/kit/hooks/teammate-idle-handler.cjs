@@ -109,6 +109,10 @@ function main() {
   main();
 } catch (e) {
   // Minimal crash logging (zero deps — only Node builtins)
+  // A DispatchExit is this hook's own process.exit() unwinding under bk-dispatch, not a
+  // crash. Logging it here is how a clean run got filed as `status: "crash"`.
+  if (e && e.bkDispatchExit) throw e;
+
   try {
     const fs = require('fs');
     const p = require('path');

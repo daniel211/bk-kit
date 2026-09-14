@@ -35,8 +35,11 @@ try {
       const subagentSum = sumLedgerSubagentCosts();
       const cumulativeFromState = state.cumulativeCostUsd || 0;
 
-      // Use best available data
-      const finalCost = sessionCost ?? cumulativeFromState;
+      // Use best available data. The subagent ledger is the last resort rather than the first
+      // because it under-counts the conductor's own turns — but reporting 0 while the ledger
+      // holds real per-agent costs is worse than reporting a floor. All 165 field session
+      // entries read costUsd: 0, which is what made the statusline show $0.00 for three days.
+      const finalCost = sessionCost ?? (cumulativeFromState || subagentSum || 0);
 
       // Log scale factor if we have both data points
       if (sessionCost != null && subagentSum > 0) {
@@ -51,7 +54,7 @@ try {
         tokensOut: state.totalTokensOut || 0,
         costUsd: finalCost != null ? Math.round(finalCost * 1e8) / 1e8 : null,
         subagentSumUsd: Math.round(subagentSum * 1e8) / 1e8,
-        source: source || 'state',
+        source: source || (cumulativeFromState ? 'state' : (subagentSum ? 'subagent-ledger' : 'state')),
         accuracy: sessionCost != null ? 'high' : 'approx',
         note: 'accuracy ±15-30%; thinking tokens not visible in JSONL'
       };
@@ -157,6 +160,10 @@ try {
 
   main();
 } catch (e) {
+  // A DispatchExit is this hook's own process.exit() unwinding under bk-dispatch, not a
+  // crash. Logging it here is how a clean run got filed as `status: "crash"`.
+  if (e && e.bkDispatchExit) throw e;
+
   try {
     const fs = require('fs');
     const p = require('path');

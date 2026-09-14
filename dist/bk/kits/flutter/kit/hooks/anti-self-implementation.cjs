@@ -42,6 +42,39 @@ try {
     (p) => p.endsWith('-analysis.md')
   ];
 
+  /**
+   * Is this write coming from a subagent rather than the conductor?
+   *
+   * The hook fires on every Write/Edit, subagents included, and its whole premise is that the
+   * writer is the conductor skipping delegation. When a subagent writes, the advice inverts
+   * into nonsense: bk-planner writing its own plan.md is told to "delegate to bk-planner".
+   *
+   * The old guard read `BK_AGENT_TYPE`, which nothing in the kit ever sets — a hook cannot
+   * export an env var to the hook processes that follow it — so it never fired once, and
+   * every subagent write was charged to the conductor. Field evidence: 37 warnings raised
+   * against `bk/dev/` plan files, while the conductor's own transcripts contain 6 Write/Edit
+   * calls in total and the subagent transcripts contain 56 to exactly those paths.
+   *
+   * Signals, cheapest first:
+   *  - `BK_AGENT_TYPE`, still honoured for anything that does set it;
+   *  - `agent_type` / `agent_id` on the payload — the CLI supplies both;
+   *  - `agent_transcript_path`, or a `transcript_path` under `<session>/subagents/`, which is
+   *    where a subagent's own transcript lives.
+   *
+   * Confirmed in the field: a measured session ran 19 Write/Edit dispatches through this hook,
+   * every one of them from a subagent (bk-unit-test-agent and bk-gemini-reviewer, matched by
+   * timestamp against their dispatch windows), and hook-log.jsonl records all 19 as
+   * `agent_passthrough`. The payload does carry the identity.
+   */
+  function isAgentContext(data) {
+    if (process.env.BK_AGENT_TYPE) return true;
+    if (data && (data.agent_type || data.agent_id)) return true;
+    const transcript = String(
+      (data && (data.agent_transcript_path || data.transcript_path)) || ''
+    ).replace(/\\/g, '/');
+    return transcript.includes('/subagents/');
+  }
+
   async function main() {
     const timer = createHookTimer('anti-self-implementation');
     try {
@@ -53,15 +86,16 @@ try {
         process.exit(0);
       }
 
-      // If caller is an agent (BK_AGENT_TYPE set), pass through silently
-      if (process.env.BK_AGENT_TYPE) {
-        timer.end({ status: 'agent_passthrough', exit: 0 });
-        process.exit(0);
-      }
-
       let input = '';
       for await (const chunk of process.stdin) input += chunk;
       const data = JSON.parse(input || '{}');
+
+      // Delegation advice is for the conductor. A subagent writing its own deliverable is
+      // doing its job — see isAgentContext.
+      if (isAgentContext(data)) {
+        timer.end({ status: 'agent_passthrough', exit: 0 });
+        process.exit(0);
+      }
 
       const toolInput = data.tool_input || {};
       const filePath = toolInput.file_path || '';
@@ -119,6 +153,10 @@ try {
   }
   main();
 } catch (e) {
+  // A DispatchExit is this hook's own process.exit() unwinding under bk-dispatch, not a
+  // crash. Logging it here is how a clean run got filed as `status: "crash"`.
+  if (e && e.bkDispatchExit) throw e;
+
   try {
     const fs = require('fs');
     const p = require('path');

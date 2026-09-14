@@ -11,6 +11,8 @@
 const fs = require('fs');
 const path = require('path');
 
+const { hookAlreadyExited } = require('./hook-exited.cjs');
+
 const LOG_DIR = path.join(__dirname, '..', '.logs');
 const LOG_FILE = path.join(LOG_DIR, 'hook-log.jsonl');
 const MAX_LINES = 1000;
@@ -52,6 +54,10 @@ function rotateIfNeeded() {
  */
 function logHook(hookName, data) {
   try {
+    // A hook that has already called process.exit() is, as a separate process, gone — its
+    // trailing catch block never got to file anything. See lib/hook-exited.cjs.
+    if (hookAlreadyExited()) return;
+
     ensureLogDir();
     rotateIfNeeded();
 

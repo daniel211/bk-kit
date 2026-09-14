@@ -260,4 +260,28 @@ async function dispatch(hookPaths, { timeoutMs = 5000, beforeEach = null } = {})
   return records;
 }
 
-module.exports = { dispatch, DispatchExit, isDispatchExit };
+/**
+ * True when the caller belongs to a hook that has already called `process.exit()`.
+ *
+ * This is the same invariant the stdout/stderr capture above enforces, extended to the
+ * file-backed telemetry in lib/: as separate processes, a hook is GONE the moment it exits, so
+ * nothing its trailing catch block does afterwards was ever recorded. In-process it keeps
+ * running, and the shape almost every hook in this kit uses turns that into self-slander:
+ *
+ *     try   { timer.end({ status: 'ok' }); process.exit(0); }   // throws DispatchExit
+ *     catch (err) { trackViolation({ violation_type: 'internal_error', ... }); }
+ *
+ * The hook catches its own successful exit and files it as an internal error. In the field this
+ * was not a rounding error: 1496 of 1546 recorded violations were hooks reporting DispatchExit
+ * against themselves, and hook-log.jsonl carried one bogus `error` row for every `ok` row.
+ *
+ * Callers that write telemetry consult this and write nothing once it is true. Outside a
+ * dispatch (a hook running as its own process, or a test) there is no context and it is false,
+ * so standalone behaviour is untouched.
+ */
+function hookAlreadyExited() {
+  const ctx = hookContext.getStore();
+  return Boolean(ctx && ctx.settled);
+}
+
+module.exports = { dispatch, DispatchExit, isDispatchExit, hookAlreadyExited };

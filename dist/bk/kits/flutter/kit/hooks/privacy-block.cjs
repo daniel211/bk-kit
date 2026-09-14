@@ -44,6 +44,11 @@ try {
       timer.end({ status: 'ok', exit: 0 });
       process.exit(0);
     } catch (err) {
+      // Under bk-dispatch the happy-path `process.exit(0)` above arrives here as a
+      // DispatchExit. Re-throw it: the dispatch runner owns it, and treating it as a failure
+      // is what put 748 phantom `internal_error` violations in the field's violations.jsonl.
+      if (err && err.bkDispatchExit) throw err;
+
       process.stderr.write(`[PRIVACY BLOCK] privacy-block internal error: ${err.message}\n`);
       trackViolation({ hook: 'privacy-block', violation_type: 'internal_error', blocked: true, severity: 'error', context: { error: err.message } });
       timer.end({ status: 'error', error: err.message, exit: 2 });
@@ -52,6 +57,10 @@ try {
   }
   main();
 } catch (e) {
+  // A DispatchExit is this hook's own process.exit() unwinding under bk-dispatch, not a
+  // crash. Logging it here is how a clean run got filed as `status: "crash"`.
+  if (e && e.bkDispatchExit) throw e;
+
   try {
     const fs = require('fs');
     const p = require('path');

@@ -23,6 +23,7 @@ const fs = require('fs');
 const path = require('path');
 
 const { resolveProjectRoot } = require('./resolve-project-root.cjs');
+const { hookAlreadyExited } = require('./hook-exited.cjs');
 
 const DEFAULT_POLICY = {
   version: '1.0.0',
@@ -338,6 +339,9 @@ function appendJsonl(filePath, entry, _rotateMaxLines) {
  */
 function trackRedSignal(type, meta = {}) {
   try {
+    // Nothing is emitted once the hook has exited — its trailing catch block would
+    // otherwise file its own successful exit. See lib/hook-exited.cjs.
+    if (hookAlreadyExited()) return;
     const policy = loadHarnessPolicy();
     const root = policy.__projectRoot;
     const file = resolveMetricPath(policy.kill_switch.red_signals_file, root);
@@ -360,6 +364,9 @@ function trackRedSignal(type, meta = {}) {
  */
 function trackWarnSignal(type, meta = {}) {
   try {
+    // Nothing is emitted once the hook has exited — its trailing catch block would
+    // otherwise file its own successful exit. See lib/hook-exited.cjs.
+    if (hookAlreadyExited()) return;
     const policy = loadHarnessPolicy();
     const root = policy.__projectRoot;
     const relPath = (policy.native_lint && policy.native_lint.warn_signal_file) ||
@@ -376,6 +383,9 @@ function trackWarnSignal(type, meta = {}) {
  */
 function trackViolation(entry) {
   try {
+    // Nothing is emitted once the hook has exited — its trailing catch block would
+    // otherwise file its own successful exit. See lib/hook-exited.cjs.
+    if (hookAlreadyExited()) return;
     const policy = loadHarnessPolicy();
     const root = policy.__projectRoot;
     const file = resolveMetricPath(policy.monitor.violations_file, root);
@@ -389,6 +399,9 @@ function trackViolation(entry) {
  */
 function trackDecision(entry) {
   try {
+    // Nothing is emitted once the hook has exited — its trailing catch block would
+    // otherwise file its own successful exit. See lib/hook-exited.cjs.
+    if (hookAlreadyExited()) return;
     const policy = loadHarnessPolicy();
     const root = policy.__projectRoot;
     const file = resolveMetricPath(policy.monitor.decisions_file, root);

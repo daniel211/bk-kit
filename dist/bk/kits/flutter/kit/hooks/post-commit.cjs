@@ -9,6 +9,85 @@
 try {
   const { createHookTimer } = require('./lib/hook-logger.cjs');
 
+  /**
+   * Files still untracked in the working tree right after a commit.
+   *
+   * A commit that reports success is not the same as a commit that captured the work.
+   * `git add <dir>` stages modifications to files git already knows about and silently
+   * ignores everything new, so a deliverable made entirely of new files can be committed
+   * away to nothing. That is not hypothetical: bk-git-manager reported two commits with
+   * "no staged files remaining, ready for your review" while all 15 new files of the
+   * sub-task — 12 widgets and 3 tests, the whole deliverable — sat untracked, and it took
+   * a follow-up commit to repair. Nothing in the harness noticed.
+   *
+   * Only files this session actually wrote are reported. That is the whole question — "did
+   * the commit capture the work?" — and anything else is somebody else's untracked clutter.
+   *
+   * The first version reported every untracked path, and the field showed why that fails: on
+   * two consecutive commits it named the same 10 files, 9 of which were kit infrastructure
+   * that `bk update` had installed and the project had simply not committed yet. A warning
+   * that says the same irrelevant thing after every commit is one nobody reads, which is the
+   * same as not having it.
+   *
+   * file-edit-history.jsonl is the record of what the session wrote, so intersecting against
+   * it keeps exactly the files whose absence from the commit would be a real loss — the 15 new
+   * widgets and tests of the original failure would all be in it — and drops the rest.
+   *
+   * Untracked files are surfaced, never blocked: only the caller knows what the deliverable
+   * was supposed to contain.
+   */
+  function sessionEditedFiles(cwd) {
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');
+      const root = resolveProjectRoot({ cwd });
+      const file = path.join(root, '.bk-metrics', 'file-edit-history.jsonl');
+      const out = new Set();
+      for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+        const raw = line.trim();
+        if (!raw) continue;
+        try {
+          const entry = JSON.parse(raw);
+          if (entry && entry.file) out.add(path.resolve(String(entry.file)));
+        } catch { /* skip malformed */ }
+      }
+      return out;
+    } catch {
+      return null; // no history — fall back to reporting every untracked file
+    }
+  }
+
+  function untrackedFiles(cwd) {
+    try {
+      const { execSync } = require('child_process');
+      const out = execSync('git status --porcelain --untracked-files=normal', {
+        encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'], windowsHide: true,
+        cwd: cwd || undefined, timeout: 3000
+      });
+      const path = require('path');
+      const edited = sessionEditedFiles(cwd);
+      const base = cwd || process.cwd();
+
+      return out.split('\n')
+        .filter((l) => l.startsWith('?? '))
+        .map((l) => l.slice(3).trim())
+        .filter(Boolean)
+        .filter((f) => !f.endsWith('.bak') && !f.startsWith('.bk-metrics/'))
+        .filter((f) => {
+          if (!edited) return true;                      // no history: report everything
+          if (f.endsWith('/')) {                         // git collapses an untracked directory
+            const dir = path.resolve(base, f);
+            for (const e of edited) if (e.startsWith(dir)) return true;
+            return false;
+          }
+          return edited.has(path.resolve(base, f));
+        });
+    } catch {
+      return []; // not a repo, git missing, timeout — never block the commit path
+    }
+  }
+
   async function main() {
     const timer = createHookTimer('post-commit');
     try {
@@ -66,11 +145,30 @@ try {
         ...(commitHash ? { last_commit_hash: commitHash } : {})
       }));
 
-      process.stdout.write(JSON.stringify({
-        additionalContext: `[POST-COMMIT] Workflow phase updated to "committed"${commitHash ? ` (${commitHash})` : ''}. Feature "${state.feature || 'unknown'}" committed successfully.`
-      }) + '\n');
+      let context = `[POST-COMMIT] Workflow phase updated to "committed"${commitHash ? ` (${commitHash})` : ''}. Feature "${state.feature || 'unknown'}" committed successfully.`;
 
-      timer.end({ status: 'ok', exit: 0 });
+      const untracked = untrackedFiles(data.cwd);
+      if (untracked.length) {
+        const shown = untracked.slice(0, 20);
+        const more = untracked.length - shown.length;
+        context += `\n[POST-COMMIT] WARNING: ${untracked.length} file(s) are still untracked after this commit:\n` +
+          shown.map((f) => `  ?? ${f}`).join('\n') +
+          (more > 0 ? `\n  ...and ${more} more` : '') +
+          `\nIf any of these belong to the work just committed, the commit did not capture it — ` +
+          `\`git add <dir>\` stages modifications to tracked files only. Verify with ` +
+          `\`git show --stat ${commitHash || 'HEAD'}\` against the expected file list before reporting success.`;
+
+        try {
+          const { trackWarnSignal } = require('./lib/harness-policy-loader.cjs');
+          trackWarnSignal('untracked_after_commit', {
+            commit: commitHash, count: untracked.length, files: untracked.slice(0, 20)
+          });
+        } catch { /* telemetry is best-effort */ }
+      }
+
+      process.stdout.write(JSON.stringify({ additionalContext: context }) + '\n');
+
+      timer.end({ status: untracked.length ? 'untracked_after_commit' : 'ok', exit: 0 });
       process.exit(0);
     } catch (err) {
       timer.end({ status: 'error', error: err.message, exit: 0 });
@@ -79,6 +177,10 @@ try {
   }
   main();
 } catch (e) {
+  // A DispatchExit is this hook's own process.exit() unwinding under bk-dispatch, not a
+  // crash. Logging it here is how a clean run got filed as `status: "crash"`.
+  if (e && e.bkDispatchExit) throw e;
+
   try {
     const fs = require('fs');
     const p = require('path');
