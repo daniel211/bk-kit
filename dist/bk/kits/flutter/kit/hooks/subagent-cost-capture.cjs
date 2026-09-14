@@ -96,7 +96,11 @@ try {
 
       // Read workflow state for effort + workflowId
       const state = readWorkflowState() || {};
-      const workflowId = state.workflowId || state.workflow_id || sessionId || null;
+      // The ledger key must be the one budget-guard derives when it reads back, or the
+      // filter there matches nothing and every entry ever written gets charged to the
+      // current workflow. Both sides go through resolveWorkflowId for that reason.
+      const { resolveWorkflowId } = require('./lib/workflow-identity.cjs');
+      const workflowId = resolveWorkflowId(state, sessionId);
       const effort = state.effort || state.current_effort || 'medium';
       const model = parsed.model || state.model || 'claude-sonnet-4-6';
 
@@ -149,9 +153,23 @@ try {
       // write lock, not from `state` read at the top of this hook: parallel subagents all
       // reach SubagentStop at once, and adding to a stale total silently drops the cost of
       // every agent but the last — which budget-guard then spends.
-      writeWorkflowState((fresh) => ({
-        cumulativeCostUsd: Math.round(((fresh.cumulativeCostUsd || 0) + costUsd) * 1e8) / 1e8
-      }));
+      // Nothing ever reset cumulativeCostUsd, so it was a lifetime total: one field repo
+      // reached $17.94 and budget-guard then refused every dispatch forever. The tally is
+      // now scoped to a workflow and starts over when the workflow changes. The id is
+      // recomputed from `fresh` inside the lock so the comparison and the reset are atomic.
+      writeWorkflowState((fresh) => {
+        const freshId = resolveWorkflowId(fresh, sessionId);
+        if (fresh.workflowId !== freshId) {
+          return {
+            workflowId: freshId,
+            cumulativeCostUsd: Math.round(costUsd * 1e8) / 1e8
+          };
+        }
+        return {
+          workflowId: freshId,
+          cumulativeCostUsd: Math.round(((fresh.cumulativeCostUsd || 0) + costUsd) * 1e8) / 1e8
+        };
+      });
 
       // P1-1: Release any parallel-safety locks owned by this agent.
       // Symmetric pair to acquisition in parallel-safety (PreToolUse Task).

@@ -1,6 +1,5 @@
 {
-  "maxPerWorkflowUsd": 2.00,
-  "maxPerDayUsd": 10.00,
+  "maxPerWorkflowUsd": 20.00,
   "warnThreshold": 0.80,
   "blockThreshold": 0.95,
   "allowOverride": true

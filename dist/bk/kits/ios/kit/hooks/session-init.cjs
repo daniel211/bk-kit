@@ -54,11 +54,18 @@ try {
       if (!platformCtx) platformCtx = readPlatformContext();
 
       // Init workflow state if missing
+      const { resolveWorkflowId } = require('./lib/workflow-identity.cjs');
       const existing = readWorkflowState();
       if (!existing) {
         writeWorkflowState({
           command: null,
           feature: null,
+          // Stamped so the cost tally in state is visibly attributed to a workflow —
+          // subagent-cost-capture owns the value from here on and resets the tally when
+          // it changes. Deliberately NOT resetting cumulativeCostUsd here: this hook also
+          // runs on `resume` and `compact`, and zeroing there would wipe the budget on
+          // every compaction.
+          workflowId: resolveWorkflowId(null, data.session_id || data.sessionId || null),
           current_phase: null,
           platform,
           skills_loaded: [],
@@ -66,8 +73,14 @@ try {
           phase_history: [],
           quality_fix_count: 0
         });
-      } else if (!existing.platform) {
-        writeWorkflowState({ platform });
+      } else {
+        const patch = {};
+        if (!existing.platform) patch.platform = platform;
+        // Migration for state written before workflowId existed.
+        if (!existing.workflowId) {
+          patch.workflowId = resolveWorkflowId(existing, data.session_id || data.sessionId || null);
+        }
+        if (Object.keys(patch).length) writeWorkflowState(patch);
       }
 
       const state = readWorkflowState();
