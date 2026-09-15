@@ -19,6 +19,7 @@
  *   BK_NATIVE_LINT_MOCK_EXIT=...        — mock tool exit code
  *   BK_NATIVE_LINT_FORCE_UNAVAILABLE=1  — force fallback to regex hook
  *   BK_NATIVE_LINT_NO_CACHE=1           — bypass detection cache
+ *   BK_HOOK_TIMEOUT_MS                  — dispatcher per-hook budget (lib/hook-budget.cjs)
  */
 
 'use strict';
@@ -30,6 +31,9 @@ const cp   = require('child_process');
 const libDir = path.join(__dirname, 'lib');
 const { loadHarnessPolicy, trackRedSignal, trackWarnSignal, resolveMetricPath } = require(path.join(libDir, 'harness-policy-loader.cjs'));
 const { detectTool, runTool } = require(path.join(libDir, 'native-lint-runner.cjs'));
+const { toolBudgetMs } = require(path.join(libDir, 'hook-budget.cjs'));
+const { enqueueNative } = require(path.join(libDir, 'native-lint-deferred.cjs'));
+const { createHookTimer } = require(path.join(libDir, 'hook-logger.cjs'));
 const { appendJsonl: rotatorAppend } = require(path.join(libDir, 'jsonl-rotator.cjs'));
 
 const HOOK_NAME   = 'arch-fitness-flutter-native';
@@ -133,8 +137,33 @@ async function main() {
     process.exit(runRegexFallback(stdinData));
   }
 
+  // ─── Defer, unless this platform is configured to BLOCK ───────────────────
+  //
+  // Running the linter here cost 1076ms on average over 84 PostToolUse runs in one
+  // field day (fusionworkomni) — 90.4s, 97% of all PostToolUse hook time — and 4 of
+  // those runs were killed by bk-dispatch at exactly 5000/5001/5002ms, losing their
+  // findings entirely. With `block_on_error: false` (the shipped default) nothing
+  // acts on the result during the tool call, so nothing is gained by paying for it
+  // here: record the path and let native-lint-flush.cjs (Stop) lint the whole turn's
+  // batch in one run. Deferral sits AFTER the detectTool() check on purpose — an
+  // unavailable tool must still fall back to the regex hook inline, as it does today.
+  const blockOnError = flutterCfg.block_on_error === true;
+
+  if (!blockOnError) {
+    const timer = createHookTimer(HOOK_NAME);
+    const event = parsed.event || {};
+    const sessionId = event.session_id || event.sessionId || '';
+    const absFile = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
+    const queued = enqueueNative(projectRoot, sessionId, 'flutter', absFile);
+    timer.end({ status: queued ? 'deferred' : 'warn', file: absFile, exit: 0 });
+    process.exit(0);
+  }
+
   // Run dart analyze
-  const timeoutMs = nativeCfg.timeout_ms || 30000;
+  // The dispatcher caps this whole hook at BK_HOOK_TIMEOUT_MS (5000ms by default).
+  // Handing the tool 30000ms meant the dispatcher, not the hook, ended a slow run —
+  // mid-flight, with nothing recorded. Size the tool from the real budget instead.
+  const timeoutMs = toolBudgetMs(nativeCfg.timeout_ms || 30000);
   let result;
   try {
     result = await runTool('flutter', filePath, { timeoutMs, policy: nativeCfg });
@@ -148,6 +177,14 @@ async function main() {
   // Timeout
   if (exitCode === 124) {
     process.stderr.write(`[${HOOK_NAME}] dart analyze timed out (${timeoutMs}ms) — skipping\n`);
+    // A timeout used to vanish: the run produced no findings, so no signal was written
+    // and nothing anywhere recorded that the check had not actually run. Record it as a
+    // yellow signal — visible, but never weighed by the kill switch.
+    try {
+      trackWarnSignal(SIGNAL_TYPE, {
+        file: filePath, errors: 0, warnings: 0, durationMs, truncated, timedOut: true
+      });
+    } catch { /* fail-open */ }
     process.exit(0);
   }
 
@@ -193,8 +230,8 @@ async function main() {
     process.stderr.write(`  ... and ${findings.length - 20} more\n`);
   }
 
-  // Block only if policy says so AND there are errors
-  const blockOnError = flutterCfg.block_on_error === true;
+  // Block only if policy says so AND there are errors. blockOnError is true here by
+  // construction — the non-blocking case was deferred to native-lint-flush above.
   if (blockOnError && errFindings.length > 0) {
     process.stderr.write(`[${HOOK_NAME}] BLOCKED: ${errFindings.length} dart analyze error(s). Fix before proceeding.\n`);
     process.exit(2);

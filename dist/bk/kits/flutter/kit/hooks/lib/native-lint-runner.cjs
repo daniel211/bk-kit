@@ -3,7 +3,9 @@
  *
  * Exports:
  *   detectTool(platform)         → { name, available, version, path } | { available: false, reason }
- *   runTool(platform, targetPath, opts) → { exitCode, findings, rawOutput, durationMs, truncated }
+ *   runTool(platform, target, opts) → { exitCode, findings, rawOutput, durationMs, truncated }
+ *                                  target is one path or an array of paths (one batched run)
+ *   buildCommand(platform, target, opts) → { cmd, args }
  *   parseSwiftlintJson(raw)      → normalized findings[]
  *   parseDetektXml(raw)          → normalized findings[]
  *   parseDartAnalyzeJson(raw)    → normalized findings[]
@@ -15,6 +17,8 @@
  *   BK_NATIVE_LINT_MOCK_EXIT=0|1|2                        — canned exit code for runTool
  *   BK_NATIVE_LINT_FORCE_UNAVAILABLE=1                    — force detection to fail
  *   BK_NATIVE_LINT_NO_CACHE=1                             — bypass 5-minute TTL cache
+ *   BK_LINT_MOCK_CMD_LOG=<path>                           — append the command that WOULD run,
+ *                                                           one line per invocation
  */
 
 'use strict';
@@ -194,10 +198,13 @@ function detectDart() {
 // ─── runTool ───────────────────────────────────────────────────────────────
 
 /**
- * Run the native lint tool for a given platform on a target file/dir.
+ * Run the native lint tool for a given platform on one path or a batch of paths.
+ *
+ * A batch is ONE process, not one per file: the Stop-time flush exists to turn N
+ * edits into a single analyze run.
  *
  * @param {'ios'|'android'|'flutter'} platform
- * @param {string} targetPath
+ * @param {string|string[]} targetPath
  * @param {{ timeoutMs?: number, policy?: object }} [opts]
  * @returns {Promise<{ exitCode: number, findings: object[], rawOutput: string, durationMs: number, truncated: boolean }>}
  */
@@ -208,6 +215,7 @@ async function runTool(platform, targetPath, opts = {}) {
   const mockOutput = process.env.BK_NATIVE_LINT_MOCK_OUTPUT;
   const mockExit   = process.env.BK_NATIVE_LINT_MOCK_EXIT;
   if (mockOutput !== undefined || mockExit !== undefined) {
+    logMockCommand(platform, targetPath, opts);
     const rawOutput = mockOutput || '';
     const exitCode  = parseInt(mockExit || '0', 10);
     let findings    = parseOutput(platform, rawOutput);
@@ -228,6 +236,7 @@ async function runTool(platform, targetPath, opts = {}) {
 
   const runPromise = new Promise((resolve) => {
     const { args, cmd } = buildCommand(platform, targetPath, opts);
+    logMockCommand(platform, targetPath, opts);
     try {
       child = cp.execFile(cmd, args, { maxBuffer: MAX_OUTPUT_CHARS }, (err, stdout, stderr) => {
         rawOutput = (stdout || '') + (stderr || '');
@@ -296,10 +305,40 @@ function readDetektXmlReport() {
 }
 
 /**
+ * Normalize runTool/buildCommand's target argument to a list of paths.
+ * A plain string stays a one-element list, so every existing caller is unchanged.
+ * @param {string|string[]} targetPath
+ * @returns {string[]}
+ */
+function toTargetList(targetPath) {
+  if (Array.isArray(targetPath)) return targetPath.filter(Boolean).map(String);
+  return targetPath ? [String(targetPath)] : [];
+}
+
+/**
+ * Record the command that would run, for tests that must never shell out to a real
+ * dart/swiftlint. No-op unless BK_LINT_MOCK_CMD_LOG points somewhere.
+ */
+function logMockCommand(platform, targetPath, opts) {
+  const logPath = process.env.BK_LINT_MOCK_CMD_LOG;
+  if (!logPath) return;
+  try {
+    const { cmd, args } = buildCommand(platform, targetPath, opts);
+    fs.appendFileSync(logPath, [cmd, ...args].join(' ') + '\n', 'utf8');
+  } catch { /* diagnostics are best-effort */ }
+}
+
+/**
  * Build the command + args for the given platform.
+ *
+ * @param {'ios'|'android'|'flutter'} platform
+ * @param {string|string[]} targetPath — one path, or a batch of them in one run
+ * @param {{ policy?: object }} [opts]
+ * @returns {{ cmd: string, args: string[] }}
  */
 function buildCommand(platform, targetPath, opts = {}) {
   const policy = opts.policy || {};
+  const targets = toTargetList(targetPath);
   switch (platform) {
     case 'ios': {
       const configPath = (policy.ios && policy.ios.config_path) || '.swiftlint.yml';
@@ -309,16 +348,18 @@ function buildCommand(platform, targetPath, opts = {}) {
       if (fs.existsSync(path.join(root, configPath))) {
         args.push('--config', configPath);
       }
-      args.push(targetPath);
+      // swiftlint takes any number of positional paths.
+      args.push(...targets);
       return { cmd: 'swiftlint', args };
     }
     case 'android': {
       const root = process.env.BK_PROJECT_ROOT || process.cwd();
       const gradlew = path.join(root, 'gradlew');
-      return { cmd: gradlew, args: ['detekt', '--format', 'xml', '--input', targetPath] };
+      // detekt's --input is a comma-separated list, not a repeatable flag.
+      return { cmd: gradlew, args: ['detekt', '--format', 'xml', '--input', targets.join(',')] };
     }
     case 'flutter': {
-      return { cmd: 'dart', args: ['analyze', '--format=json', targetPath] };
+      return { cmd: 'dart', args: ['analyze', '--format=json', ...targets] };
     }
     default:
       throw new Error(`Unknown platform: ${platform}`);
@@ -493,6 +534,7 @@ module.exports = {
   parseSwiftlintJson,
   parseDetektXml,
   parseDartAnalyzeJson,
+  buildCommand,
   withTimeout,
   normalizeSeverity,
   // Internal exports for tests

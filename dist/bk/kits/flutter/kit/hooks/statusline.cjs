@@ -82,6 +82,41 @@ try {
   }
 
   /**
+   * Cumulative spend from cost-ledger.jsonl rows.
+   *
+   * The ledger mixes two row shapes: `type:"subagent"` rows are per-agent deltas, while
+   * `type:"session"` rows (appended by session-cost-rollup.cjs on every Stop) are a running
+   * cumulative snapshot. Summing every row therefore re-adds the whole running total once
+   * per Stop. The field's tail-200 held 53 session snapshots and reported $1966.58 spent
+   * when the true cumulative — the last session snapshot — was $55.19.
+   *
+   * So: take the last session snapshot as the baseline and add only the subagent rows
+   * after it (agents that finished since that Stop). No usable session row in the tail →
+   * fall back to summing subagent rows alone. Rows with neither type, or a non-numeric
+   * costUsd, contribute nothing.
+   *
+   * @param {Array<object>} entries parsed ledger rows, in file order
+   * @returns {number} cumulative cost in USD
+   */
+  function computeCumulativeCost(entries) {
+    const rows = Array.isArray(entries) ? entries : [];
+    const numeric = (v) => (typeof v === 'number' && isFinite(v) ? v : null);
+
+    let baseIdx = -1;
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const e = rows[i];
+      if (e && e.type === 'session' && numeric(e.costUsd) !== null) { baseIdx = i; break; }
+    }
+
+    let total = baseIdx >= 0 ? rows[baseIdx].costUsd : 0;
+    for (let i = baseIdx + 1; i < rows.length; i++) {
+      const e = rows[i];
+      if (e && e.type === 'subagent') total += (numeric(e.costUsd) || 0);
+    }
+    return total;
+  }
+
+  /**
    * Compute current burn rate (tokens/min) from recent entries in the burn window file.
    */
   function computeCurrentBurnRate(burnFile, lookbackMs) {
@@ -497,7 +532,7 @@ try {
         try {
           const ledgerPath = require('path').join(root, '.bk-metrics', 'cost-ledger.jsonl');
           const entries = readJsonlTail(ledgerPath, 200);
-          cumulative_cost_usd = entries.reduce((sum, e) => sum + (e.costUsd || 0), 0);
+          cumulative_cost_usd = computeCumulativeCost(entries);
         } catch { /* fail-open */ }
       }
 

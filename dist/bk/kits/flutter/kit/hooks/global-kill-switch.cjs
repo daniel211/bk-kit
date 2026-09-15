@@ -17,8 +17,21 @@ try {
   } = require('./lib/harness-policy-loader.cjs');
   const { isHookEnabled, readWorkflowState, writeWorkflowState } = require('./lib/bk-config-utils.cjs');
 
-  // Read-only tools always allowed even during halt
-  const READ_ONLY_TOOLS = new Set(['Read', 'Grep', 'Glob', 'LS', 'TodoRead']);
+  /**
+   * Tools that stay available during a halt.
+   *
+   * Mostly read-only inspection, so the user can find out what happened. `AskUserQuestion` is
+   * the exception and belongs here for a different reason: it is the escape route the halt
+   * message itself prescribes ("Hãy dùng AskUserQuestion với options…"). While it was absent
+   * the hook denied the one tool its own message named — the field record shows three
+   * `global-kill-switch.cjs` exit-2 denials in a row, two on Bash and the third on the
+   * AskUserQuestion that was trying to ask the user to lift the halt. A halt that cannot ask
+   * to be lifted is a trap, not a pause. It only puts a question to the user and touches
+   * nothing in the workspace, so allowing it is not a hole in the halt.
+   */
+  const HALT_ALLOWED_TOOLS = new Set([
+    'Read', 'Grep', 'Glob', 'LS', 'TodoRead', 'AskUserQuestion'
+  ]);
 
   /**
    * Severity of one red signal type.
@@ -207,8 +220,8 @@ try {
 
     const toolName = input.tool_name || '';
 
-    // Always allow read-only tools
-    if (READ_ONLY_TOOLS.has(toolName)) process.exit(0);
+    // Always allow inspection and the ask-the-user escape route
+    if (HALT_ALLOWED_TOOLS.has(toolName)) process.exit(0);
 
     // Self-recovery: allow canonical bk-health recovery commands even during halt
     if (toolName === 'Bash') {
@@ -289,9 +302,14 @@ try {
       `Hãy dùng AskUserQuestion với options:\n` +
       `- "Review full report" → Read .bk-metrics/red-signals.jsonl\n` +
       `- "Resume workflow" → run \`node .claude/cli/bk-health/index.cjs --resume --force\`\n` +
-      `- "Abort and commit WIP" → manual git commit with [WIP] prefix\n` +
+      // A git commit is a Bash write and the halt blocks it like any other, so this option
+      // has to route through the override first — naming it bare sent the agent at a Bash
+      // call the same hook then denied.
+      `- "Abort and commit WIP" → ${overrideNote} first, then git commit with a [WIP] prefix\n` +
       `- "Override (emergency)" → ${overrideNote}\n\n` +
-      `Read-only inspection (Read/Grep/Glob) vẫn được phép để user tìm hiểu.`
+      `Vẫn được phép trong lúc halt: Read/Grep/Glob/LS (inspection), AskUserQuestion (hỏi user), ` +
+      `và \`node .claude/cli/bk-health/index.cjs --resume|--reset-counts|--checkpoint|--dashboard\`.\n` +
+      `Mọi tool khác bị chặn cho tới khi halt được gỡ.`
     );
   }
 

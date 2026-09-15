@@ -23,9 +23,15 @@
 const path = require('path');
 const { readPayload, installStdin } = require('./lib/hook-dispatch-stdin.cjs');
 const { mergeStdout, mergeExitCode, mergeStderr } = require('./lib/hook-dispatch-output.cjs');
+const { hookBudgetMs } = require('./lib/hook-budget.cjs');
 
-/** A hung hook must never hang the tool call. Overridable for slow machines. */
-const DEFAULT_TIMEOUT_MS = Number(process.env.BK_HOOK_TIMEOUT_MS) || 5000;
+/**
+ * A hung hook must never hang the tool call. Overridable for slow machines.
+ * Derived from lib/hook-budget.cjs so a hook that spawns a tool sizes that tool's
+ * timeout from the same number this dispatcher enforces — the two used to drift
+ * (5000 here vs 30000 in arch-fitness-*-native), and the gap silently ate findings.
+ */
+const DEFAULT_TIMEOUT_MS = hookBudgetMs();
 
 /** Only basenames are accepted — settings.json must not be able to point the dispatcher at /etc. */
 function resolveHook(name) {

@@ -112,7 +112,8 @@
               "minimum": 1
             },
             "per_agent_caps": {
-              "type": "object"
+              "type": "object",
+              "description": "Per-agent iteration cap, overriding default_cap. The unit is a windowed, fan-out-coalesced ITERATION, not a dispatch, so one concurrent wave of N agents counts as 1 — caps here are deliberately generous relative to the 3-5 waves a large feature needs. The design-* agents are per-screen batch workers rather than implementers looping on one target (the field ran 9 extractor and 16 spec-writer dispatches on a single feature), so they carry caps well above default_cap; leaving them on the default forced operators to hand-patch this file on first real use."
             },
             "bypass_env": {
               "type": "string"

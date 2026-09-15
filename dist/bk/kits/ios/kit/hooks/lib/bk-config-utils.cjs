@@ -84,7 +84,8 @@ const DEFAULT_CONFIG = {
     'property-based-test-suggester': true,
     'subagent-live-tracker': true,
     'post-edit-lint': true,
-    'stop-lint-flush': true
+    'stop-lint-flush': true,
+    'native-lint-flush': true
   },
   platform: 'auto'
 };

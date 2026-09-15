@@ -76,13 +76,48 @@ try {
         skill,
         feature,
         status: agentStatus,
-        complexity_tier: complexityTier
+        complexity_tier: complexityTier,
+        phase: currentPhase
       };
 
       _appendJsonl(tracePath, JSON.stringify(traceEntry) + '\n');
 
       // Check if skill has completed (summary phase)
       const terminalPhases = ['commit', 'escalated', 'completed'];
+
+      /**
+       * True only for the FIRST terminal-phase stop after a non-terminal one.
+       *
+       * The guard below used to ask whether the workflow IS in a terminal phase, not
+       * whether it just ENTERED one. In the field current_phase sat at "commit" for over a
+       * day (8 literal `commit -> commit` self-transitions), so every SubagentStop while
+       * parked there appended another summary: 30 summary rows in one day, each reading
+       * total_agents 1, and insights.md concluding "Avg 1.0 agents/workflow" for a period
+       * that actually ran 33 agents.
+       *
+       * The previous trace row for the same feature+skill is the phase we came from. A row
+       * with no `phase` at all was written by an older kit version — count it as
+       * non-terminal so an upgrade mid-run still yields one summary rather than none.
+       * Deliberately does not consult phase_history: the state file is not guaranteed to
+       * carry it.
+       */
+      function justEnteredTerminalPhase() {
+        const rows = fs.existsSync(tracePath)
+          ? fs.readFileSync(tracePath, 'utf8').split('\n').filter(Boolean)
+            .map(l => { try { return JSON.parse(l); } catch { return null; } })
+            .filter(e => e && e.feature === feature && e.skill === skill)
+          : [];
+        // rows[rows.length - 1] is the entry just appended; its predecessor is the prior stop.
+        const prev = rows[rows.length - 2];
+        if (!prev) return true;
+        return !terminalPhases.includes(prev.phase);
+      }
+
+      if (terminalPhases.includes(currentPhase) && !justEnteredTerminalPhase()) {
+        timer.end({ status: 'already_summarized', agent: agentType, skill, feature, exit: 0 });
+        process.exit(0);
+      }
+
       if (terminalPhases.includes(currentPhase)) {
         // Agents dispatched for THIS workflow — those traced since the previous summary for
         // the same feature and skill.
@@ -122,8 +157,52 @@ try {
           (e.agent || '').toLowerCase().includes('sequential-thinking')
         ).length;
 
-        // Estimate duration (approximate: count agents * avg 120s)
-        const totalDurationEst = totalAgents * 120;
+        // Duration is measured, not fabricated. This used to read
+        //   const totalDurationEst = totalAgents * 120;
+        // — the agent count times a constant, which carries no information `total_agents`
+        // right next to it does not already carry.
+        //
+        // The real figure is already on disk: subagent-live-tracker writes one `stop` row per
+        // agent to .bk-metrics/subagent-live.jsonl with a measured `duration_ms`, keyed by the
+        // same `stable_id` the trace rows carry — both are set from `readStopIdentity(data).id`,
+        // so this is an exact join, not a heuristic.
+        //
+        // Field evidence (fusionworkomni, one day, 33 agents): all 33 agent-trace rows matched
+        // a subagent-live `stop` event exactly on stable_id. Real elapsed total was 5863s
+        // against the constant's 3960s — understated by 48% — and the longest single agent ran
+        // 638s, the actionable number the constant hid completely.
+        //
+        // Never fall back to a fabricated number: when nothing can be measured the summary
+        // carries total_duration_ms: null with duration_source 'unavailable'. The read fails
+        // open exactly like the other file reads in this hook — any error leaves the map empty
+        // and the hook still writes the summary and still exits 0.
+        const stopDurations = new Map();
+        try {
+          const livePath = path.join(metricsDir, 'subagent-live.jsonl');
+          for (const line of fs.readFileSync(livePath, 'utf8').split('\n')) {
+            if (!line.trim()) continue;
+            let row;
+            try { row = JSON.parse(line); } catch { continue; }
+            if (!row || row.event !== 'stop' || !row.stable_id) continue;
+            if (typeof row.duration_ms !== 'number' || !Number.isFinite(row.duration_ms)) continue;
+            // First stop row wins, matching alreadyRecorded()'s first-record-wins rule.
+            if (!stopDurations.has(row.stable_id)) stopDurations.set(row.stable_id, row.duration_ms);
+          }
+        } catch { /* missing or unreadable → duration_source stays 'unavailable' */ }
+
+        let durationMatched = 0;
+        let totalDurationMs = 0;
+        let maxAgentDurationMs = 0;
+        for (const e of featureEntries) {
+          const ms = e && e.stable_id ? stopDurations.get(e.stable_id) : undefined;
+          if (typeof ms !== 'number') continue;
+          durationMatched++;
+          totalDurationMs += ms;
+          if (ms > maxAgentDurationMs) maxAgentDurationMs = ms;
+        }
+        const durationSource = durationMatched === 0
+          ? 'unavailable'
+          : (durationMatched === featureEntries.length ? 'measured' : 'partial');
 
         const summary = {
           ts: new Date().toISOString(),
@@ -132,7 +211,14 @@ try {
           phase: currentPhase,
           complexity_tier: complexityTier,
           total_agents: totalAgents,
-          total_duration_est: totalDurationEst,
+          total_duration_ms: durationMatched ? Math.round(totalDurationMs) : null,
+          max_agent_duration_ms: durationMatched ? Math.round(maxAgentDurationMs) : null,
+          duration_source: durationSource,
+          // On a partial match the shortfall must be legible, not silently folded into a
+          // smaller total.
+          ...(durationSource === 'partial'
+            ? { duration_matched: durationMatched, duration_total: featureEntries.length }
+            : {}),
           fix_loops: fixLoops,
           reactive_signals: reactiveSignals
         };

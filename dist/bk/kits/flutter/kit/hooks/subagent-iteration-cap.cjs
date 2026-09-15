@@ -44,13 +44,19 @@ try {
    * The name pattern is matched against `description` only, never the prompt. A dispatch
    * prompt routinely mentions other agents ("as bk-code-reviewer noted"), and scanning it
    * would charge the dispatch to whichever agent happened to be named first.
+   *
+   * Both shipped agent prefixes are recognised. `bk-` alone predates the `design-*` agents
+   * (design-agy-extractor, design-spec-writer, design-asset-exporter, design-validator)
+   * shipping in the kit, so a description-only dispatch of one of those extracted nothing,
+   * returned null, and ran completely uncapped — the opposite failure from a cap that is too
+   * low, and an invisible one, because an unattributed dispatch is never recorded either.
    */
   function extractAgentType(toolInput) {
     if (!toolInput) return null;
     if (toolInput.subagent_type) return toolInput.subagent_type;
     const text = toolInput.description || '';
     if (!text) return null;
-    const match = text.match(/\b(bk-[a-z][a-z0-9-]+)/i);
+    const match = text.match(/\b((?:bk|design)-[a-z][a-z0-9-]+)/i);
     return match ? match[1] : null;
   }
 
@@ -153,6 +159,16 @@ try {
    * unbroken stream spaced under the threshold stays one iteration; that is not a shape a
    * real loop takes, because each dispatch has to wait for a subagent to finish.
    *
+   * The dispatch being decided is counted too — callers append it to `history` before calling
+   * this. It has to be, and it has to be done for every member of a fan-out wave alike:
+   * `history` is read before the write, so the FIRST dispatch of a wave saw only the previous
+   * waves while its siblings, arriving milliseconds later, already saw its row and counted one
+   * iteration more. The cap then tripped part-way through a wave — the field's
+   * `design-agy-extractor` got wave 1, wave 2, and exactly one dispatch of wave 3 before
+   * `subagent_cap_exceeded` fired on the rest of wave 3. Counting the current dispatch makes
+   * every member of a wave see the same number, and the decision below is `>` rather than
+   * `>=` to match: a cap of N permits N iterations and blocks the N+1th.
+   *
    * @param {Array<{ts:number, agent:string, feature:string}>} history
    * @param {string} agentType
    * @param {string} featureKey
@@ -227,10 +243,19 @@ try {
     // and it is the honest answer to "how much work went into this feature". The *block*
     // decision cannot use it — a tally that only grows is a ratchet, and it was blocking
     // long legitimate features permanently in the field.
+    //
+    // Either way the number INCLUDES the dispatch being decided — `lifetimeCount + 1` is what
+    // the tally will read once this dispatch is written, and the windowed count is taken over
+    // the history with this dispatch appended. The cap is then a limit on iterations that
+    // actually happen, so `>` below lets the Nth through and blocks the N+1th.
     const currentCount = windowMs === 0
-      ? lifetimeCount
+      ? lifetimeCount + 1
       : countWindowedIterations(
-        state.agent_dispatch_history, agentType, featureKey, windowMs, coalesceMs, now);
+        [
+          ...(state.agent_dispatch_history || []),
+          { ts: now, agent: agentType, feature: featureKey }
+        ],
+        agentType, featureKey, windowMs, coalesceMs, now);
 
     // Determine cap
     const perAgentCaps = cfg.per_agent_caps || {};
@@ -249,7 +274,9 @@ try {
     const exemptAgents = Array.isArray(cfg.exempt_agents) ? cfg.exempt_agents : [];
     const isExempt = exemptAgents.includes(agentType);
 
-    if (!isExempt && currentCount >= effectiveCap) {
+    // `>`, not `>=`: `currentCount` already counts this dispatch, so a cap of N permits N
+    // iterations and blocks the N+1th, which is what the policy number says it does.
+    if (!isExempt && currentCount > effectiveCap) {
       // BLOCK
       const history = (state.agent_dispatch_history || []).slice(-10);
       const histTable = history.map(h =>
@@ -264,9 +291,12 @@ try {
 
       // The count is windowed and fan-out-coalesced, so the message has to say so — "3
       // dispatches" and "3 iterations in the last hour" call for very different responses.
+      // `currentCount` counts this dispatch, which is being denied — so the message says
+      // "would be", not "was". Reporting it as work already done sends the reader looking
+      // for a dispatch that never ran.
       const windowNote = windowMs === 0
-        ? `dispatched ${currentCount} times (lifetime count — window_minutes is 0)`
-        : `dispatched ${currentCount} times in the last ${windowMinutes} min ` +
+        ? `would be dispatch ${currentCount} (lifetime count — window_minutes is 0)`
+        : `would be iteration ${currentCount} in the last ${windowMinutes} min ` +
           `(parallel fan-out within ${coalesceMs}ms counts as one)`;
 
       const reason =

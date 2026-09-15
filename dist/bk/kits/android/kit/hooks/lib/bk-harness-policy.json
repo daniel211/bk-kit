@@ -41,7 +41,11 @@
         "bk-problem-solving": 2,
         "bk-debugger": 4,
         "bk-gemini-reviewer": 10,
-        "bk-unit-test-agent": 6
+        "bk-unit-test-agent": 6,
+        "design-spec-writer": 16,
+        "design-agy-extractor": 12,
+        "design-asset-exporter": 12,
+        "design-validator": 8
       },
       "bypass_env": "BK_HARNESS_DISPATCH_OVERRIDE",
       "window_minutes": 60,

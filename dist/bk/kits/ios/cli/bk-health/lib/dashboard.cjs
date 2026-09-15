@@ -221,6 +221,22 @@ function computeHarnessScore({ violations, redSignals, state, ashbyWarns }) {
 
 const BOX_WIDTH = 74;
 
+/**
+ * Render a measured workflow duration (ms) for the WORKFLOWS panel.
+ * Unmeasured (null) renders as an em dash — never as `0s`, which would claim a measurement
+ * that was never taken.
+ */
+function formatWorkflowDuration(ms) {
+  if (typeof ms !== 'number' || !Number.isFinite(ms) || ms < 0) return '—';
+  const total = Math.round(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const sec = total % 60;
+  if (h > 0) return `${h}h ${m}m ${sec}s`;
+  if (m > 0) return `${m}m ${sec}s`;
+  return `${sec}s`;
+}
+
 function boxTop(title) {
   const titleStr = title ? ` ${title} ` : '';
   const totalFill = BOX_WIDTH - 2 - titleStr.length;
@@ -377,7 +393,11 @@ function renderDashboard(data) {
       const feat = w.feature || '?';
       const agents = w.total_agents || 0;
       const fixl   = w.fix_loops || 0;
-      lines.push(boxLine(`  ${feat}: ${agents} agents, ${fixl} fix loops`));
+      // Measured elapsed time, from the summary's total_duration_ms. An unmeasured workflow
+      // shows an em dash rather than 0s — the writer emits null when no agent matched a
+      // subagent-live `stop` row.
+      const dur    = formatWorkflowDuration(w.total_duration_ms);
+      lines.push(boxLine(`  ${feat}: ${agents} agents, ${dur}, ${fixl} fix loops`));
     }
   }
 

@@ -24,11 +24,18 @@
  *   LINTABLE_EXTENSIONS      — map of platform → extensions the linter can read
  *   isLintable(platform, f)  — should this file be queued at all?
  *   sanitizeSessionId(id)    — filesystem-safe session key
- *   resolveQueueFile(root, sessionId)
- *   enqueueFile(queueFile, absFile)
+ *   resolveQueueFile(root, sessionId, namespace?)
+ *   enqueueFile(queueFile, absFile, extra?)
  *   readQueuedFiles(queueFile)   — deduped, order-preserving (does not clear)
- *   takeQueue(queueFile)         — deduped list + clears the queue atomically
+ *   takeQueue(queueFile)         — deduped path list + clears the queue atomically
+ *   takeQueueEntries(queueFile)  — same claim, but whole entry objects
  *   clearQueue(queueFile)
+ *
+ * The optional `namespace` gives a second, independent queue for the same session.
+ * It matters because takeQueue claims by rename: two drainers pointed at one file
+ * means whichever loses the race silently drops that whole batch. The deferred
+ * native lint (lib/native-lint-deferred.cjs) is drained by its own Stop hook, so it
+ * gets its own file — `<session>--native.jsonl` — not a share of this one.
  */
 
 'use strict';
@@ -73,10 +80,12 @@ function sanitizeSessionId(sessionId) {
  * Absolute path of the queue file for one session.
  * @param {string} projectRoot
  * @param {string} sessionId
+ * @param {string} [namespace] — separate queue file for a separate drainer
  * @returns {string}
  */
-function resolveQueueFile(projectRoot, sessionId) {
-  return path.join(projectRoot, '.bk-metrics', 'lint-queue', `${sanitizeSessionId(sessionId)}.jsonl`);
+function resolveQueueFile(projectRoot, sessionId, namespace) {
+  const suffix = namespace ? `--${String(namespace).replace(/[^A-Za-z0-9_-]/g, '-')}` : '';
+  return path.join(projectRoot, '.bk-metrics', 'lint-queue', `${sanitizeSessionId(sessionId)}${suffix}.jsonl`);
 }
 
 /** Create the parent directory of a file path. Fails open. */
@@ -94,13 +103,15 @@ function ensureDir(filePath) {
  * Append one edited file to the queue. Append-only: safe under concurrent writers.
  * @param {string} queueFile
  * @param {string} absFile
+ * @param {object} [extra] — extra fields on the entry (e.g. { platform: 'flutter' })
  * @returns {boolean} true when the line was written
  */
-function enqueueFile(queueFile, absFile) {
+function enqueueFile(queueFile, absFile, extra) {
   if (!queueFile || !absFile) return false;
   try {
     ensureDir(queueFile);
-    fs.appendFileSync(queueFile, JSON.stringify({ ts: Date.now(), file: absFile }) + '\n', 'utf8');
+    const entry = { ts: Date.now(), file: absFile, ...(extra && typeof extra === 'object' ? extra : {}) };
+    fs.appendFileSync(queueFile, JSON.stringify(entry) + '\n', 'utf8');
     return true;
   } catch {
     return false;
@@ -108,14 +119,15 @@ function enqueueFile(queueFile, absFile) {
 }
 
 /**
- * Parse a queue file's contents into a deduped, order-preserving path list.
- * Malformed lines are skipped rather than failing the flush.
+ * Parse a queue file's contents into deduped, order-preserving entry objects.
+ * Dedupe is by `file`: a file edited eight times in a turn appears once, as its
+ * first entry. Malformed lines are skipped rather than failing the flush.
  * @param {string} raw
- * @returns {string[]}
+ * @returns {object[]}
  */
-function parseQueueContent(raw) {
+function parseQueueEntries(raw) {
   const seen = new Set();
-  const files = [];
+  const entries = [];
   for (const line of String(raw || '').split('\n')) {
     const trimmed = line.trim();
     if (!trimmed) continue;
@@ -128,9 +140,18 @@ function parseQueueContent(raw) {
     const file = entry && typeof entry.file === 'string' ? entry.file : '';
     if (!file || seen.has(file)) continue;
     seen.add(file);
-    files.push(file);
+    entries.push(entry);
   }
-  return files;
+  return entries;
+}
+
+/**
+ * Same as parseQueueEntries, reduced to the paths.
+ * @param {string} raw
+ * @returns {string[]}
+ */
+function parseQueueContent(raw) {
+  return parseQueueEntries(raw).map((e) => e.file);
 }
 
 /**
@@ -154,28 +175,47 @@ function readQueuedFiles(queueFile) {
  * Anything appended after the rename lands in a brand-new queue file and is
  * picked up by the next flush instead of being lost.
  * @param {string} queueFile
- * @returns {string[]} deduped file paths
+ * @returns {string} raw file contents ('' when there was nothing to claim)
  */
-function takeQueue(queueFile) {
-  if (!queueFile) return [];
+function claimQueue(queueFile) {
+  if (!queueFile) return '';
   const claim = `${queueFile}.flushing-${process.pid}`;
   try {
-    if (!fs.existsSync(queueFile)) return [];
+    if (!fs.existsSync(queueFile)) return '';
     fs.renameSync(queueFile, claim);
   } catch {
     // Another flusher won the race, or the file vanished — nothing to do.
-    return [];
+    return '';
   }
-  let files = [];
+  let raw = '';
   try {
-    files = parseQueueContent(fs.readFileSync(claim, 'utf8'));
+    raw = fs.readFileSync(claim, 'utf8');
   } catch {
-    files = [];
+    raw = '';
   }
   try {
     fs.unlinkSync(claim);
   } catch { /* fail-open */ }
-  return files;
+  return raw;
+}
+
+/**
+ * Atomically claim the queue and return its deduped file paths.
+ * @param {string} queueFile
+ * @returns {string[]} deduped file paths
+ */
+function takeQueue(queueFile) {
+  return parseQueueContent(claimQueue(queueFile));
+}
+
+/**
+ * Atomically claim the queue and return its deduped entry objects, so a caller
+ * that wrote extra fields (platform, say) gets them back without re-deriving them.
+ * @param {string} queueFile
+ * @returns {object[]} deduped entries
+ */
+function takeQueueEntries(queueFile) {
+  return parseQueueEntries(claimQueue(queueFile));
 }
 
 /**
@@ -201,5 +241,6 @@ module.exports = {
   enqueueFile,
   readQueuedFiles,
   takeQueue,
+  takeQueueEntries,
   clearQueue
 };
