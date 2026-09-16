@@ -18,14 +18,24 @@ import { addKitOption, resolveKitOrExit } from '../lib/kit-resolver.mjs';
  * @param {string|undefined} kitHash — hash in current package's kit-manifest
  * @param {string|undefined} installHash — hash from .bk-version.json (what was installed)
  * @param {string|undefined} currentHash — hash of file currently on disk
- * @returns {"new"|"unchanged"|"safe_update"|"conflict"|"deleted"}
+ * @returns {"new"|"unchanged"|"safe_update"|"conflict"|"user_deleted"|"deleted"}
  */
-function classifyChange(kitHash, installHash, currentHash) {
+export function classifyChange(kitHash, installHash, currentHash) {
   if (!installHash) return 'new';
   if (!kitHash) return 'deleted';
   if (!currentHash && installHash) return 'user_deleted';
   if (kitHash === installHash) return 'unchanged';
   if (currentHash === installHash) return 'safe_update';
+
+  // The recorded hash can be stale while the file on disk is already exactly what the package
+  // ships: `--conflict keep` deliberately leaves the old installHash behind (that is what keeps a
+  // real local edit reported as a conflict next time), so a file kept once and later brought in
+  // line with the package still carries a 0.9.0 hash. Updating fusionworkomni 0.9.0 → 0.9.1,
+  // hooks/lib/bk-harness-policy.json was reported as a conflict while `cmp` showed it
+  // byte-identical to the 0.9.1 package copy — and it would have been reported again on every
+  // future update. Disk == package means there is nothing to update, whatever was recorded.
+  if (currentHash && kitHash && currentHash === kitHash) return 'unchanged';
+
   return 'conflict';
 }
 
@@ -144,7 +154,11 @@ export function registerUpdate(program) {
 
         switch (state) {
           case 'unchanged':
-            // Nothing to do
+            // No file to copy, but the record may be the stale one that made this look like a
+            // conflict (see classifyChange). Refreshing it here is what stops the phantom
+            // conflict from coming back on every subsequent update; it is a no-op whenever the
+            // recorded hash already agrees with the package.
+            installedFiles[relPath] = kitHash;
             break;
 
           case 'new': {
