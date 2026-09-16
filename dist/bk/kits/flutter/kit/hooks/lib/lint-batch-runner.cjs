@@ -27,8 +27,10 @@
  *   BK_LINT_MOCK_OUTPUT=<text>   — pretend this was its combined output
  *
  * Exports:
- *   DEFAULT_LINT_COMMANDS, MAX_PER_FILE_RUNS
- *   quotePath(p), buildBatchCommands(opts), runLintCommand(cmd, opts)
+ *   DEFAULT_LINT_COMMANDS, PATH_TAKING_PLATFORMS, NATIVE_SUPERSET_PLATFORMS,
+ *   NATIVE_LINT_BINARIES, MAX_PER_FILE_RUNS
+ *   quotePath(p), usesSameBinaryAsNative(platform, cmd), buildBatchCommands(opts),
+ *   runLintCommand(cmd, opts)
  */
 
 'use strict';
@@ -52,6 +54,50 @@ const DEFAULT_LINT_COMMANDS = {
  * Android is absent on purpose: its lint is a whole-project gradle task.
  */
 const PATH_TAKING_PLATFORMS = ['ios', 'flutter'];
+
+/**
+ * Platforms where a file already queued for the Stop-time native lint does NOT also
+ * need the batch lint above — because the native run covers it completely.
+ *
+ * The test a platform has to pass, both halves required:
+ *   1. same binary — the two paths drive the same tool, not two tools that happen
+ *      to both be called "lint";
+ *   2. no weaker in severity — the native command must not drop a flag that changes
+ *      how findings are CLASSIFIED. Severity is not cosmetic here: with the shipped
+ *      `red_on_error_only: true`, an error becomes a red signal the kill switch
+ *      weighs, and a warning becomes a yellow one it does not. Deferring a batch to
+ *      a command that reports the same problems at a lower severity silently moves
+ *      when the harness halts.
+ *
+ * flutter passes. Shipped `dart analyze` (platform-context.flutter.json) vs native
+ * `dart analyze --format=json`: same binary, and --format only changes the encoding
+ * of the output, never the severity of a diagnostic.
+ *
+ * ios FAILS the second half and is deliberately absent — do not "helpfully" add it
+ * back. Shipped `swiftlint lint --strict` vs native
+ * `swiftlint lint --quiet --reporter json [--config <cfg>]`: same binary, but the
+ * native side has no --strict, and --strict is exactly what escalates swiftlint
+ * warnings to errors. Deferring an ios batch would therefore downgrade every
+ * swiftlint warning from red to yellow. Restoring ios means making the native ios
+ * command carry --strict first.
+ *
+ * android FAILS the first half: `./gradlew ktlintCheck` (formatting/style) and
+ * `./gradlew detekt --format xml --input <paths>` (static analysis) are different
+ * tools checking different things. Deduping there would silently drop all ktlint
+ * coverage. android must keep running both.
+ */
+const NATIVE_SUPERSET_PLATFORMS = ['flutter'];
+
+/**
+ * The binary native-lint-runner.cjs's buildCommand() actually invokes per platform.
+ * Kept here so the "same binary" half of the test above can be checked against a
+ * project's configured lint command instead of assumed.
+ */
+const NATIVE_LINT_BINARIES = {
+  ios:     'swiftlint',
+  android: 'gradlew',
+  flutter: 'dart'
+};
 
 /** Upper bound on runs when a custom command is declared per-file only. */
 const MAX_PER_FILE_RUNS = 20;
@@ -114,6 +160,29 @@ function buildBatchCommands(opts) {
 }
 
 /**
+ * Does this project's configured lint command invoke the same binary the native
+ * lint path would? A leading-token comparison, deliberately not a parser.
+ *
+ * Without it, a user who points `lint_command` at something else entirely on a
+ * NATIVE_SUPERSET_PLATFORMS platform (a formatter, a wrapper script) would have that
+ * command silently skipped in favour of a `dart analyze` that never ran it.
+ *
+ * @param {string} platform
+ * @param {string} [lintCommand] — the template-injected command, if any
+ * @returns {boolean}
+ */
+function usesSameBinaryAsNative(platform, lintCommand) {
+  const expected = NATIVE_LINT_BINARIES[platform];
+  if (!expected) return false;
+  const builder = DEFAULT_LINT_COMMANDS[platform];
+  // No custom command means the default above runs — compare that instead.
+  const effective = hasCustomCommand(lintCommand) ? lintCommand : (builder ? builder('') : '');
+  const leading = String(effective).trim().split(/\s+/)[0] || '';
+  // `./gradlew` and `/usr/bin/dart` are the same binaries as `gradlew` and `dart`.
+  return leading.split('/').pop() === expected;
+}
+
+/**
  * Run one lint command. Never throws: a non-zero exit, a missing binary and a
  * timeout all come back as a result object.
  *
@@ -150,9 +219,12 @@ function runLintCommand(cmd, opts = {}) {
 module.exports = {
   DEFAULT_LINT_COMMANDS,
   PATH_TAKING_PLATFORMS,
+  NATIVE_SUPERSET_PLATFORMS,
+  NATIVE_LINT_BINARIES,
   MAX_PER_FILE_RUNS,
   quotePath,
   hasCustomCommand,
+  usesSameBinaryAsNative,
   buildBatchCommands,
   runLintCommand
 };

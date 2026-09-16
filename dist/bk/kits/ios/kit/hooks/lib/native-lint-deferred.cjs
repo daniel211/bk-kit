@@ -21,7 +21,7 @@
  * Every function fails open. No lint bookkeeping may block a tool call.
  *
  * Exports:
- *   NATIVE_QUEUE_NAMESPACE, MAX_BATCH_FILES
+ *   NATIVE_QUEUE_NAMESPACE, MAX_BATCH_FILES, MAX_REPORTED_FINDINGS
  *   resolveNativeQueueFile(projectRoot, sessionId)
  *   enqueueNative(projectRoot, sessionId, platform, absFile)
  *   takeNativeQueue(projectRoot, sessionId)
@@ -43,6 +43,17 @@ const NATIVE_QUEUE_NAMESPACE = 'native';
 
 /** Upper bound on one batched run. Beyond this the batch is marked truncated. */
 const MAX_BATCH_FILES = 50;
+
+/**
+ * How many individual findings runNativeLintBatch hands back for printing.
+ *
+ * The Stop-time [NATIVE-LINT] line is now the ONLY human-readable report for a
+ * file that stop-lint-flush deferred here (see NATIVE_SUPERSET_PLATFORMS in
+ * lint-batch-runner.cjs), so a bare count would leave the user with less than the
+ * [LINT] block used to give them. 20 is the same order as the 2000-char cap the
+ * [LINT] path truncated its raw linter output to.
+ */
+const MAX_REPORTED_FINDINGS = 20;
 
 /**
  * Queue file for one session's deferred native lint.
@@ -137,14 +148,16 @@ function groupByFile(findings) {
  *
  * @param {{ projectRoot: string, platform: string, files: string[], policy?: object, timeoutMs?: number }} opts
  * @returns {Promise<{ ran: boolean, files: number, findings: number, filesWithFindings: number,
- *                     red: number, yellow: number, truncated: boolean, timedOut: boolean, durationMs: number }>}
+ *                     red: number, yellow: number, truncated: boolean, timedOut: boolean,
+ *                     durationMs: number, reported: object[] }>}
+ *          `reported` is up to MAX_REPORTED_FINDINGS findings, for the caller to print.
  */
 async function runNativeLintBatch(opts = {}) {
   const { projectRoot, platform, policy = {}, timeoutMs } = opts;
   const queued = Array.isArray(opts.files) ? opts.files.filter(Boolean) : [];
   const empty = {
     ran: false, files: 0, findings: 0, filesWithFindings: 0,
-    red: 0, yellow: 0, truncated: false, timedOut: false, durationMs: 0
+    red: 0, yellow: 0, truncated: false, timedOut: false, durationMs: 0, reported: []
   };
   if (!platform || queued.length === 0) return empty;
 
@@ -206,13 +219,15 @@ async function runNativeLintBatch(opts = {}) {
     yellow,
     truncated,
     timedOut: false,
-    durationMs
+    durationMs,
+    reported: findings.slice(0, MAX_REPORTED_FINDINGS)
   };
 }
 
 module.exports = {
   NATIVE_QUEUE_NAMESPACE,
   MAX_BATCH_FILES,
+  MAX_REPORTED_FINDINGS,
   resolveNativeQueueFile,
   enqueueNative,
   takeNativeQueue,

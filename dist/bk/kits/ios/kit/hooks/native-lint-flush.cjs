@@ -79,6 +79,7 @@ try {
       let totalRed = 0;
       let totalYellow = 0;
       let timedOut = 0;
+      let reportedAny = false;
 
       for (const [platform, files] of byPlatform) {
         const result = await runNativeLintBatch({
@@ -104,8 +105,26 @@ try {
           process.stderr.write(
             `[NATIVE-LINT] ${platform}: ${result.findings} finding(s) across ${result.filesWithFindings} file(s) — ${shown}${extra}\n`
           );
+          // The findings themselves, not just a count. On ios/flutter stop-lint-flush
+          // now defers its batch to this hook (NATIVE_SUPERSET_PLATFORMS), so this is
+          // the only lint report the user sees for those files — a headline count
+          // would be strictly less than the [LINT] block it replaced, which printed
+          // the linter's own file:line messages.
+          for (const f of result.reported || []) {
+            const where = `${path.basename((f && f.file) || '')}:${(f && f.line) || 0}`;
+            const sev = String((f && f.severity) || 'info').toUpperCase();
+            process.stderr.write(`  ${sev}: ${where} [${(f && f.rule) || '?'}] ${(f && f.message) || ''}\n`);
+          }
+          if (result.findings > (result.reported || []).length) {
+            process.stderr.write(`  …and ${result.findings - (result.reported || []).length} more finding(s)\n`);
+          }
+          reportedAny = true;
         }
       }
+
+      // Same sign-off the [LINT] block carried, for the same reason: findings at Stop
+      // are advisory, the turn is not blocked, and the user has to act before committing.
+      if (reportedAny) process.stderr.write('[NATIVE-LINT] Continuing — fix lint issues before committing.\n');
 
       const status = (timedOut > 0 || totalRed > 0) ? 'warn' : 'ok';
       timer.end({
