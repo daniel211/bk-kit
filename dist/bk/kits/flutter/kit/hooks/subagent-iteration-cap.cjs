@@ -5,6 +5,8 @@
 // The unit being capped is a loop *iteration*, not a dispatch, and it is counted inside a
 // sliding window (`window_minutes`) rather than for the lifetime of the project. Concurrent
 // fan-out of the same agent for the same feature (`batch_coalesce_ms`) is one iteration.
+// Iterations are further scoped to a progress signature (`progress_scoped`), so only tries
+// that committed nothing and completed no batch accumulate against the cap.
 // Orchestration agents (`exempt_agents`) are not capped at all — they are dispatched once
 // per commit or per doc, which a loop cap has nothing useful to say about.
 //
@@ -107,6 +109,32 @@ try {
   }
 
   /**
+   * What "no progress since" means, as a single comparable string.
+   *
+   * Time alone cannot tell a retry from a step forward. The field measurement is
+   * unambiguous: a fan-out wave is 2-15 s apart and legitimate batch-to-batch progression is
+   * 80 s to 8 min, so the two distributions touch and no threshold separates them — the
+   * shipped 5 s coalesce missed real waves, and raising it far enough to cover a wave starts
+   * swallowing genuine retries. Progress is the thing that actually differs: a conductor that
+   * moved on has committed something, or finished a batch, or advanced the batch number; a
+   * conductor stuck in a loop has done none of the three.
+   *
+   * `current_phase` is deliberately NOT part of this. A coding↔review ping-pong changes the
+   * phase on every lap while producing nothing, and that is exactly the loop the cap must
+   * still catch — including it would hand such a loop a fresh budget every lap.
+   *
+   * @param {object} state
+   * @returns {string}
+   */
+  function progressSignature(state) {
+    const s = state || {};
+    const commit = s.last_commit_hash || '-';
+    const done = Array.isArray(s.completed_batches) ? s.completed_batches.length : 0;
+    const batch = s.batch ?? '-';
+    return `${commit}|${done}|${batch}`;
+  }
+
+  /**
    * How much dispatch history to keep.
    *
    * The block decision is now a windowed count read out of `agent_dispatch_history`, so the
@@ -169,20 +197,41 @@ try {
    * every member of a wave see the same number, and the decision below is `>` rather than
    * `>=` to match: a cap of N permits N iterations and blocks the N+1th.
    *
-   * @param {Array<{ts:number, agent:string, feature:string}>} history
+   * 3. It is scoped to the current progress signature. Windowing and coalescing still could
+   *    not tell "retried the same batch three times" from "worked through three batches" —
+   *    the field's bk-flutter-developer was denied its 4th dispatch while the state file
+   *    showed batch 2 of 4, a growing `completed_batches` and a changing `last_commit_hash`
+   *    between every one of them. Only rows carrying the CURRENT signature count, so a
+   *    conductor that commits or completes a batch starts the next one with a fresh budget.
+   *
+   *    This is safe because a genuine retry loop produces no progress by definition: its
+   *    signature never changes, every one of its rows keeps counting, and the tally still
+   *    climbs to the cap exactly as before. The oscillation shapes that do change something
+   *    trivially between laps are covered by the other deadloop hooks —
+   *    tool-repetition-detector, no-progress-detector and phase-recurrence.
+   *
+   *    Rows with no `sig` key at all were written by an earlier kit version and are ignored
+   *    rather than treated as matching. Their progress context cannot be reconstructed after
+   *    the fact, so counting them would block an upgrade on a signature they never had. This
+   *    is the same one-time upgrade amnesty `readCounts` above already applies to the legacy
+   *    flat count shape.
+   *
+   * @param {Array<{ts:number, agent:string, feature:string, sig?:string}>} history
    * @param {string} agentType
    * @param {string} featureKey
    * @param {number} windowMs  0 = lifetime (no cutoff)
    * @param {number} coalesceMs
    * @param {number} now
+   * @param {string|null} sig  current progress signature; null disables progress scoping
    * @returns {number}
    */
-  function countWindowedIterations(history, agentType, featureKey, windowMs, coalesceMs, now) {
+  function countWindowedIterations(history, agentType, featureKey, windowMs, coalesceMs, now, sig) {
     const cutoff = windowMs > 0 ? now - windowMs : 0;
     const stamps = (history || [])
       .filter((h) =>
         h && typeof h.ts === 'number' && h.ts >= cutoff &&
-        h.agent === agentType && (h.feature || 'unscoped') === featureKey)
+        h.agent === agentType && (h.feature || 'unscoped') === featureKey &&
+        (sig === null || h.sig === sig))
       .map((h) => h.ts)
       .sort((a, b) => a - b);
 
@@ -232,7 +281,16 @@ try {
     const now = Date.now();
     const windowMinutes = Number.isInteger(cfg.window_minutes) ? cfg.window_minutes : 60;
     const windowMs = Math.max(0, windowMinutes) * 60 * 1000;
-    const coalesceMs = Number.isInteger(cfg.batch_coalesce_ms) ? cfg.batch_coalesce_ms : 5000;
+    // 30s, not the 5s this shipped with: the field's fan-out waves span up to ~15 s between
+    // members, so 5 s split a single wave into several "iterations" and burned the cap on one
+    // batch. Progress scoping below is what keeps the wider span from hiding a real loop.
+    const coalesceMs = Number.isInteger(cfg.batch_coalesce_ms) ? cfg.batch_coalesce_ms : 30000;
+
+    // Default on when the policy is silent, so an existing project gets the fix without
+    // editing its policy file. `window_minutes: 0` (legacy lifetime mode) ignores it, the
+    // same way it ignores windowing and coalescing.
+    const progressScoped = cfg.progress_scoped !== false;
+    const currentSig = progressSignature(state);
 
     // `window_minutes: 0` is the legacy escape hatch: no window, no coalescing, decide on
     // the lifetime counter exactly as this hook always did. Everything else decides on the
@@ -253,9 +311,10 @@ try {
       : countWindowedIterations(
         [
           ...(state.agent_dispatch_history || []),
-          { ts: now, agent: agentType, feature: featureKey }
+          { ts: now, agent: agentType, feature: featureKey, sig: currentSig }
         ],
-        agentType, featureKey, windowMs, coalesceMs, now);
+        agentType, featureKey, windowMs, coalesceMs, now,
+        progressScoped ? currentSig : null);
 
     // Determine cap
     const perAgentCaps = cfg.per_agent_caps || {};
@@ -299,10 +358,22 @@ try {
         : `would be iteration ${currentCount} in the last ${windowMinutes} min ` +
           `(parallel fan-out within ${coalesceMs}ms counts as one)`;
 
+      // Without this the number reads as "N units of work", and a conductor part-way through
+      // a multi-batch plan concludes the cap is wrong. Scoped to the signature, the count
+      // says something much narrower and much more actionable.
+      const progressNote = (windowMs !== 0 && progressScoped)
+        ? `\nThe count is scoped to the current progress signature ` +
+          `(commit|completed_batches|batch = ${currentSig}): these are ${currentCount} tries ` +
+          `with nothing committed, no batch completed and no batch advanced in between — ` +
+          `not ${currentCount} units of work. Committing or finishing a batch starts a fresh ` +
+          `budget.\n`
+        : '';
+
       const reason =
         `AGENT DISPATCH CAP EXCEEDED — "${agentType}" ${windowNote} ` +
         `for feature "${featureKey}".\n` +
-        `Limit (policy): ${effectiveCap}\n\n` +
+        `Limit (policy): ${effectiveCap}\n` +
+        progressNote + `\n` +
         scopeNote +
         `Nếu đây thực sự là vòng lặp, nguyên nhân thường là:\n` +
         `1. Conductor đang retry mù thay vì escalate\n` +
@@ -315,9 +386,13 @@ try {
         `  • "Escalate to human review" — stop, ask specific question\n` +
         `  • "Reset the count" — RARELY the right answer now: the count decays on its own, ` +
         `so waiting out the window clears it. Only reset when the history below is stale ` +
-        `noise: node .claude/cli/bk-health/index.cjs --reset-counts --agent ${agentType} ` +
+        `noise. This clears BOTH the tally and the matching history rows, so it does unblock: ` +
+        `node .claude/cli/bk-health/index.cjs --reset-counts --agent ${agentType} ` +
         `--force\n` +
-        `  • "Override cap (+5 dispatches)" — set BK_HARNESS_DISPATCH_OVERRIDE=${agentType}=${currentCount + 5}\n\n` +
+        `  • "Override cap (+5 dispatches)" — set ` +
+        `BK_HARNESS_DISPATCH_OVERRIDE=${agentType}=${currentCount + 5}. This only takes ` +
+        `effect in a NEW session: hooks inherit the environment of the CLI process that is ` +
+        `already running, so exporting it here changes nothing until that process restarts.\n\n` +
         `Dispatch history (last 10, all features):\n${histTable || '  (none)'}`;
 
       process.stderr.write(`[subagent-iteration-cap] BLOCK: ${agentType} at count=${currentCount} (cap=${effectiveCap})\n`);
@@ -365,9 +440,13 @@ try {
         // Every dispatch is recorded individually even when it coalesces into an existing
         // iteration — coalescing is a read/decide-time grouping, never a suppressed write.
         // Collapsing writes would hide real fan-out from the dashboard and the audit trail.
+        // The signature is taken from `fresh`, not from the pre-read copy: a commit or a
+        // batch completion can land between the read above and this write, and stamping the
+        // stale signature would file this dispatch under progress it no longer belongs to.
+        const freshSig = progressSignature(fresh);
         const freshHistory = pruneHistory([
           ...(fresh.agent_dispatch_history || []),
-          { ts: now, agent: agentType, feature: featureKey }
+          { ts: now, agent: agentType, feature: featureKey, sig: freshSig }
         ], windowMs, now);
         return {
           agent_dispatch_count: { ...freshAll, [featureKey]: freshCounts },

@@ -126,7 +126,12 @@
             "batch_coalesce_ms": {
               "type": "integer",
               "minimum": 0,
-              "description": "Dispatches of the same agent+feature within this span count as one iteration"
+              "description": "Dispatches of the same agent+feature within this span count as one iteration. Measured field fan-out waves span up to ~15s between members, so the original 5000 split one wave into several iterations."
+            },
+            "progress_scoped": {
+              "type": "boolean",
+              "default": true,
+              "description": "Count only iterations that share the current progress signature (last_commit_hash | completed_batches length | batch), so a conductor that commits or completes a batch gets a fresh budget and only no-progress retries accumulate. Defaults to true when absent; ignored when window_minutes is 0."
             },
             "exempt_agents": {
               "type": "array",

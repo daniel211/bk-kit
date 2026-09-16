@@ -49,7 +49,8 @@
       },
       "bypass_env": "BK_HARNESS_DISPATCH_OVERRIDE",
       "window_minutes": 60,
-      "batch_coalesce_ms": 5000,
+      "batch_coalesce_ms": 30000,
+    "progress_scoped": true,
       "exempt_agents": [
         "bk-git-manager",
         "bk-project-manager",

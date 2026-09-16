@@ -174,11 +174,13 @@ async function resetCounts(opts = {}) {
 
   const targetAgent = opts.agent || null;
   const targetFeature = opts.feature || null;
+  // The description names the history too, because that is what the cap actually decides on
+  // — a user told only that "counts" were reset has no way to know the block will lift.
   const descr = targetAgent
-    ? `agent dispatch count for "${targetAgent}"${targetFeature ? ` in feature "${targetFeature}"` : ' (all features)'}`
+    ? `agent dispatch count + history for "${targetAgent}"${targetFeature ? ` in feature "${targetFeature}"` : ' (all features)'}`
     : targetFeature
-      ? `agent dispatch counts for feature "${targetFeature}"`
-      : 'all phase_recurrence_count + agent_dispatch_count';
+      ? `agent dispatch counts + history for feature "${targetFeature}"`
+      : 'all phase_recurrence_count + agent_dispatch_count + agent_dispatch_history';
 
   if (!opts.force) {
     const confirmed = await askConfirm(`This will reset ${descr}. Confirm?`);
@@ -197,6 +199,33 @@ async function resetCounts(opts = {}) {
 }
 
 /**
+ * Prune the dispatch history the same way the counts are pruned.
+ *
+ * The cap hook decides from `agent_dispatch_history`, not from `agent_dispatch_count`, so a
+ * reset that cleared only the tally left the block exactly where it was. That is not a
+ * cosmetic gap: the block message prints this command as its own remedy, the field ran it,
+ * and was denied again seconds later. The escape hatch has to touch what the decision reads.
+ *
+ * @param {Array} history
+ * @param {string|null} targetAgent
+ * @param {string|null} targetFeature
+ * @returns {Array} rows to keep
+ */
+function pruneDispatchHistory(history, targetAgent, targetFeature) {
+  if (!Array.isArray(history)) return [];
+  // No target at all means "reset everything", which is the whole history.
+  if (!targetAgent && !targetFeature) return [];
+  return history.filter((row) => {
+    if (!row || typeof row !== 'object') return false;
+    // A row is dropped only when it matches every target that was given — `--agent X
+    // --feature Y` must not also clear agent X's rows in other features.
+    if (targetAgent && row.agent !== targetAgent) return true;
+    if (targetFeature && (row.feature || 'unscoped') !== targetFeature) return true;
+    return false;
+  });
+}
+
+/**
  * Build the count-reset patch from the state as read under the write lock.
  *
  * @param {object} state - Fresh workflow state
@@ -206,6 +235,9 @@ async function resetCounts(opts = {}) {
  */
 function buildCountReset(state, targetAgent, targetFeature) {
   const updated = {};
+
+  updated.agent_dispatch_history = pruneDispatchHistory(
+    state.agent_dispatch_history, targetAgent, targetFeature);
 
   if (targetAgent || targetFeature) {
     const counts = state.agent_dispatch_count || {};
