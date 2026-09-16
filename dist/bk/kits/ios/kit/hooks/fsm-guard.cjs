@@ -87,21 +87,50 @@ try {
    * so without this every workflow after the first is refused with exit 2 and the only way
    * out is deleting the state file by hand.
    *
-   * A new episode is exactly: currently in a terminal phase, and the incoming phase is an
-   * opening phase (`TRANSITIONS[type].null`) of the workflow being written. Anything else
-   * out of a terminal phase stays blocked — resuming a committed workflow at `review` is
-   * still a bug, not a restart.
+   * A new episode is either:
+   *   (i)  currently in a terminal phase, and the incoming phase is an opening phase
+   *        (`TRANSITIONS[type].null`) of the workflow being written; or
+   *   (ii) currently in a terminal phase, and the write declares a DIFFERENT feature (or
+   *        workflowId) than the one on disk — whatever phase it names.
+   *
+   * Case (ii) exists because of the iOS field repo: `bk-code:critical-fixes` finished at
+   * `commit`, then the next feature's writes kept `current_phase: "commit"` and only changed
+   * `feature`/`workflowId`. Those writes matched the `currentPhase === newPhase` fast path and
+   * never reached case (i), so no episode ever reset: `phase_history`,
+   * `phase_recurrence_count` and `previous_episode` all went on describing `critical-fixes`
+   * while the injected plan path had already moved to `security-hardening`. The state file was
+   * stuck at a terminal phase forever. This check therefore has to run BEFORE that fast path.
+   *
+   * Anything else out of a terminal phase stays blocked — resuming the SAME committed feature
+   * at `review` is still a bug, not a restart.
    *
    * @param {string|null} currentPhase - Phase on disk
    * @param {string} newPhase - Phase being written
    * @param {string|null} startType - Workflow type the new write declares, else the one on disk
+   * @param {{current: object, feature: string|null, workflowId: string|null}} identity
    * @returns {boolean}
    */
-  function startsNewEpisode(currentPhase, newPhase, startType) {
+  function startsNewEpisode(currentPhase, newPhase, startType, identity) {
     if (!currentPhase || !TERMINAL_PHASES.has(currentPhase)) return false;
     const table = startType && TRANSITIONS[startType];
-    if (!table) return false;
-    return (table.null || []).includes(newPhase);
+    if (table && (table.null || []).includes(newPhase)) return true;
+    return declaresDifferentWorkflow(identity);
+  }
+
+  /**
+   * Does the incoming write name a different feature/workflowId than the state on disk?
+   * A field the write does not declare says nothing — only a declared value that differs
+   * counts, so a partial Edit that touches neither field never looks like a new feature.
+   *
+   * @param {{current: object, feature: string|null, workflowId: string|null}} identity
+   * @returns {boolean}
+   */
+  function declaresDifferentWorkflow(identity) {
+    if (!identity || !identity.current) return false;
+    const { current, feature, workflowId } = identity;
+    if (feature && current.feature && feature !== current.feature) return true;
+    if (workflowId && current.workflowId && workflowId !== current.workflowId) return true;
+    return false;
   }
 
   /**
@@ -226,18 +255,19 @@ try {
       // of an in-flight workflow still goes by what is on disk.
       const newWorkflowType =
         extractStringField(newContent, 'workflow_type') || extractStringField(newContent, 'command');
-
-      // If phase not changing, pass through
-      if (currentPhase === newPhase) {
-        timer.end({ status: 'same_phase', exit: 0 });
-        process.exit(0);
-      }
+      // What the write claims to be working on. A terminal phase plus a different feature is
+      // the next workflow starting, even when the phase string has not moved.
+      const newFeature = extractStringField(newContent, 'feature');
+      const newWorkflowId = extractStringField(newContent, 'workflowId');
 
       // A finished workflow is not a dead end — starting the next one is allowed, and starts
       // its counters at zero so the previous episode's history cannot halt it.
+      // This runs BEFORE the same-phase fast path: a commit→commit write for a NEW feature is
+      // exactly the case the field repo got stuck on, and it would be unreachable below.
       const startType =
         (newWorkflowType && TRANSITIONS[newWorkflowType]) ? newWorkflowType : workflowType;
-      if (startsNewEpisode(currentPhase, newPhase, startType)) {
+      const identity = { current: currentState, feature: newFeature, workflowId: newWorkflowId };
+      if (startsNewEpisode(currentPhase, newPhase, startType, identity)) {
         try {
           writeWorkflowState({
             workflow_episode: (currentState.workflow_episode || 1) + 1,
@@ -247,6 +277,10 @@ try {
               ended_phase: currentPhase,
               ended_at: currentState.updated_at || null
             },
+            // The new episode owns the state now — record what it declares, so the reset does
+            // not leave the finished feature's name attached to fresh counters.
+            ...(newFeature ? { feature: newFeature } : {}),
+            ...(newWorkflowId ? { workflowId: newWorkflowId } : {}),
             phase_history: [{
               phase: newPhase,
               ts: Date.now(),
@@ -257,6 +291,12 @@ try {
           });
         } catch { /* fail-open on write */ }
         timer.end({ status: 'new_episode', from: currentPhase, to: newPhase, exit: 0 });
+        process.exit(0);
+      }
+
+      // Ordinary case: same phase, same feature — nothing to validate.
+      if (currentPhase === newPhase) {
+        timer.end({ status: 'same_phase', exit: 0 });
         process.exit(0);
       }
 

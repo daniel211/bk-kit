@@ -1,9 +1,9 @@
 {
   "kit": "beer-kit",
   "platform": "ios",
-  "version": "0.9.0",
-  "commit": "9ee114a03195143e9c8f274662b56ce94d7d6801",
-  "builtAt": "2026-09-15T10:58:57.512Z",
+  "version": "0.9.1",
+  "commit": "92fb5ee0c763ba25a86e0070a3c62b13ea76d17a",
+  "builtAt": "2026-09-16T04:40:42.122Z",
   "nodeVersion": "v22.15.0",
   "stats": {
     "agents": 22,

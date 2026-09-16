@@ -10,9 +10,25 @@ try {
   const { createHookTimer } = require('./lib/hook-logger.cjs');
   const { execFileSync } = require('child_process');
 
-  /** Run a git command safely, return trimmed output or null */
+  /**
+   * Run a git command safely, return trimmed output or null.
+   *
+   * stderr is discarded, not inherited. Without `stdio` the child wrote straight to the
+   * user's terminal: in a directory that is not a git repo (a Syncthing-synced checkout
+   * with .git excluded) every Stop event printed three raw
+   * `fatal: not a git repository (or any of the parent directories): .git` lines. The hook
+   * was already fine — it exits 0 and records null git fields — the noise was the whole
+   * bug. Every other exec call site in this directory (lib/git-info-cache.cjs,
+   * lib/project-detector.cjs, post-commit.cjs) already sets stdio; this one did not.
+   */
   function gitSafe(...args) {
-    try { return execFileSync('git', args, { encoding: 'utf8', timeout: 5000 }).trim(); } catch { return null; }
+    try {
+      return execFileSync('git', args, {
+        encoding: 'utf8',
+        timeout: 5000,
+        stdio: ['ignore', 'pipe', 'ignore']
+      }).trim();
+    } catch { return null; }
   }
 
   async function main() {

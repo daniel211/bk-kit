@@ -87,6 +87,27 @@ try {
 
       // Detect foundation, active plan, LSP
       const cwd = resolveProjectRoot();
+
+      // Close out subagents left open by a previous session. A spawn whose SubagentStop
+      // never fired (interrupted agent, killed CLI) can never stop now, and an unreaped one
+      // was still rendering as `🤖 bk-git-manager(8100s)` two hours later while skewing
+      // every cost rollup. SessionStart is the one moment where "left over from before" is
+      // unambiguous. Wrapped: a reaper failure must never break session start.
+      try {
+        const { reapOrphanedSubagents } = require('./lib/subagent-live-reaper.cjs');
+        reapOrphanedSubagents(cwd);
+      } catch { /* fail-open — reaping is housekeeping, not a precondition */ }
+
+      // Same bug class, other file: a lint queue is opened on PostToolUse and drained at
+      // Stop, so a session that dies first leaves its .bk-metrics/lint-queue/<id>.jsonl
+      // behind with nothing anywhere to clean it up (fusionworkomni still held one two days
+      // after that session ended). The current session id is passed so its own queue — and
+      // its --native sibling — is never swept out from under it.
+      try {
+        const { reapStaleQueues } = require('./lib/lint-queue.cjs');
+        reapStaleQueues(cwd, { currentSessionId: data.session_id || data.sessionId || null });
+      } catch { /* fail-open — reaping is housekeeping, not a precondition */ }
+
       const hasFoundation = fs.existsSync(path.join(cwd, 'docs', 'foundation', 'overview.md'));
       const hasLSP = process.env.ENABLE_LSP_TOOL === '1';
 

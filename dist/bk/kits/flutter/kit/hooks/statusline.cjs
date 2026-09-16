@@ -19,6 +19,8 @@ try {
   const { getGitInfo } = require('./lib/git-info-cache.cjs');
   const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');
   const { loadHarnessPolicy, readRecentRedSignals } = require('./lib/harness-policy-loader.cjs');
+  // Shared with the reaper so display and data agree on what counts as an abandoned spawn.
+  const { SUBAGENT_STALE_TTL_MS } = require('./lib/subagent-live-reaper.cjs');
 
   // ─── Harness statusline helpers ──────────────────────────────────────────
 
@@ -177,9 +179,23 @@ try {
       }).filter(Boolean);
 
       // Build map of spawn events keyed by subagent_id
-      // For stop events (subagent_id null), match by name + recent spawn
-      const spawnMap = new Map(); // subagent_id → {name, spawnTs, tokensIn, cost}
-      const stopNames = new Set(); // names that have a stop event
+      const spawnMap = new Map(); // subagent_id → {name, spawnTs, stopTs, tokensIn, cost}
+
+      const claimStop = (entry) => {
+        // subagent-live-tracker.cjs stamps every stop with the subagent_id of the spawn it
+        // matched, so that id is the identity — matching on name alone paired the wrong one
+        // whenever two agents of the same name ran concurrently. Name matching stays only
+        // as a fallback for older records written before the id was recorded.
+        if (entry.subagent_id && spawnMap.has(entry.subagent_id)) {
+          return spawnMap.get(entry.subagent_id);
+        }
+        if (entry.subagent_id) return null; // id present but unknown here — not ours to guess
+        const name = entry.name || 'unknown';
+        for (const [, spawn] of [...spawnMap].reverse()) {
+          if (spawn.name === name && !spawn.stopTs) return spawn;
+        }
+        return null;
+      };
 
       for (const entry of tail) {
         if (entry.event === 'spawn' && entry.subagent_id) {
@@ -191,29 +207,25 @@ try {
             cost: 0
           });
         } else if (entry.event === 'stop') {
-          // Match by name — mark most recent spawn with same name as stopped
-          const name = entry.name || 'unknown';
-          stopNames.add(name);
-          // Find and update most recent spawn with this name
-          let matched = false;
-          for (const [id, spawn] of [...spawnMap].reverse()) {
-            if (spawn.name === name && !spawn.stopTs) {
-              spawn.stopTs = entry.ts;
-              spawn.tokensIn = entry.tokens_in || 0;
-              spawn.cost = entry.cost_usd || 0;
-              matched = true;
-              break;
-            }
+          const spawn = claimStop(entry);
+          if (spawn && !spawn.stopTs) {
+            spawn.stopTs = entry.ts;
+            spawn.tokensIn = entry.tokens_in || 0;
+            spawn.cost = entry.cost_usd || 0;
           }
         }
       }
 
-      // Active = spawn entries without a matching stop
+      // Active = spawn entries without a matching stop, and young enough to still be
+      // plausibly running. An interrupted agent never emits SubagentStop, and without this
+      // cutoff its spawn was rendered as live forever — the field case showed
+      // `🤖 bk-git-manager(8100s)` for an agent that had been dead for over two hours.
       const now = Date.now();
       const active = [];
       for (const [, spawn] of spawnMap) {
         if (!spawn.stopTs) {
           const spawnMs = spawn.spawnTs ? new Date(spawn.spawnTs).getTime() : now;
+          if (!Number.isNaN(spawnMs) && now - spawnMs > SUBAGENT_STALE_TTL_MS) continue; // stale
           const elapsedSec = Math.round((now - spawnMs) / 1000);
           const tokensK = spawn.tokensIn > 0 ? Math.round(spawn.tokensIn / 1000) : null;
           active.push({ name: spawn.name, elapsedSec, tokensK });

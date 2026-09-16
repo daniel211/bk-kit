@@ -136,14 +136,25 @@ try {
 
       // Append to the history read under the write lock — a hook that lands between the read
       // above and this write would otherwise have its entry dropped.
-      writeWorkflowState((fresh) => ({
-        current_phase: 'commit',
-        phase_history: [
-          ...(Array.isArray(fresh.phase_history) ? fresh.phase_history : []),
-          { from: fresh.current_phase || null, to: 'commit', timestamp: new Date().toISOString() }
-        ].slice(-20),  // cap to prevent unbounded growth
-        ...(commitHash ? { last_commit_hash: commitHash } : {})
-      }));
+      //
+      // Only a real phase CHANGE earns a history entry. Batched commits are normal — a session
+      // in the iOS field repo made four in a row while already in `commit` — and the previous
+      // version appended a `commit -> commit` no-op for each one. Those four meaningless
+      // entries filled phase_history and then fed fsm-guard's phase-recurrence ladder as if
+      // they were a genuine dead-loop, which is how `critical-fixes` ended up wedged at commit.
+      writeWorkflowState((fresh) => {
+        const alreadyCommitted = fresh.current_phase === 'commit';
+        return {
+          current_phase: 'commit',
+          ...(alreadyCommitted ? {} : {
+            phase_history: [
+              ...(Array.isArray(fresh.phase_history) ? fresh.phase_history : []),
+              { from: fresh.current_phase || null, to: 'commit', timestamp: new Date().toISOString() }
+            ].slice(-20)  // cap to prevent unbounded growth
+          }),
+          ...(commitHash ? { last_commit_hash: commitHash } : {})
+        };
+      });
 
       let context = `[POST-COMMIT] Workflow phase updated to "committed"${commitHash ? ` (${commitHash})` : ''}. Feature "${state.feature || 'unknown'}" committed successfully.`;
 

@@ -30,6 +30,7 @@
  *   takeQueue(queueFile)         — deduped path list + clears the queue atomically
  *   takeQueueEntries(queueFile)  — same claim, but whole entry objects
  *   clearQueue(queueFile)
+ *   reapStaleQueues(root, opts)  — delete queues orphaned by sessions that never hit Stop
  *
  * The optional `namespace` gives a second, independent queue for the same session.
  * It matters because takeQueue claims by rename: two drainers pointed at one file
@@ -219,6 +220,83 @@ function takeQueueEntries(queueFile) {
 }
 
 /**
+ * How long a queue file must sit untouched before it is considered abandoned.
+ *
+ * 24 hours, deliberately generous. The queue directory is shared by every session in the
+ * repo, and a second Claude session can be running concurrently with a live queue of its
+ * own: deleting that file silently drops that turn's whole lint batch, with no error and
+ * nothing to notice it by. A file whose mtime has not moved in 24 hours cannot belong to a
+ * live turn, so the reap is unambiguous there; anything shorter is a guess about someone
+ * else's session and is not safe.
+ *
+ * Contrast the 45-minute TTL in subagent-live-reaper.cjs: reaping a still-live subagent
+ * there only suppresses a statusline entry and is backed by a synthetic stop row, so an
+ * aggressive TTL costs nothing. Here it costs a lint pass the user asked for.
+ */
+const LINT_QUEUE_STALE_TTL_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Delete queue files left behind by sessions that died before their Stop hook ran.
+ *
+ * takeQueue only ever runs at Stop. A session that is interrupted, killed, or crashes never
+ * drains its queue, and nothing else ever looks at the file again — the field case was
+ * fusionworkomni still holding a 2026-09-14 session's `<uuid>.jsonl` two days later. Called
+ * at SessionStart, where "left over from a previous session" is unambiguous.
+ *
+ * The current session's own files are never touched, whatever their mtime: a resumed session
+ * can legitimately own a queue older than the TTL, and its `--native` sibling (drained by a
+ * separate Stop hook) must survive with it.
+ *
+ * @param {string} projectRoot — directory holding .bk-metrics/
+ * @param {{ ttlMs?: number, now?: number, currentSessionId?: string }} [options]
+ * @returns {number} how many queue files were removed (0 on any failure)
+ */
+function reapStaleQueues(projectRoot, options = {}) {
+  try {
+    if (!projectRoot || typeof projectRoot !== 'string') return 0;
+    const ttlMs = typeof options.ttlMs === 'number' ? options.ttlMs : LINT_QUEUE_STALE_TTL_MS;
+    const nowMs = typeof options.now === 'number' ? options.now : Date.now();
+
+    const queueDir = path.join(projectRoot, '.bk-metrics', 'lint-queue');
+    let entries;
+    try {
+      entries = fs.readdirSync(queueDir, { withFileTypes: true });
+    } catch {
+      return 0; // no queue directory yet — nothing to reap
+    }
+
+    // Sanitized, because that is how the filenames were built: comparing the raw session id
+    // would miss a queue whose id contained characters resolveQueueFile had to replace.
+    const own = options.currentSessionId ? sanitizeSessionId(options.currentSessionId) : null;
+
+    let removed = 0;
+    for (const entry of entries) {
+      try {
+        if (!entry.isFile()) continue;              // subdirectories are not ours
+        const name = entry.name;
+        if (!name.endsWith('.jsonl')) continue;     // leaves .flushing-<pid> claims alone
+
+        // Protect both this session's queues: `<id>.jsonl` and `<id>--native.jsonl`.
+        if (own) {
+          const base = name.slice(0, -'.jsonl'.length);
+          if (base === own || base.startsWith(`${own}--`)) continue;
+        }
+
+        const full = path.join(queueDir, name);
+        const mtimeMs = fs.statSync(full).mtimeMs;
+        if (nowMs - mtimeMs < ttlMs) continue;      // may still belong to a live session
+
+        fs.unlinkSync(full);
+        removed += 1;
+      } catch { /* one bad entry must not stop the sweep */ }
+    }
+    return removed;
+  } catch {
+    return 0; // fail-open — reaping is housekeeping, never a precondition
+  }
+}
+
+/**
  * Remove a session's queue file.
  * @param {string} queueFile
  * @returns {boolean}
@@ -242,5 +320,7 @@ module.exports = {
   readQueuedFiles,
   takeQueue,
   takeQueueEntries,
-  clearQueue
+  clearQueue,
+  reapStaleQueues,
+  LINT_QUEUE_STALE_TTL_MS
 };

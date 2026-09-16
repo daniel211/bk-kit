@@ -37,14 +37,50 @@ try {
 
       const overviewContent = fs.readFileSync(overviewPath, 'utf8');
 
-      // Detect platform from keywords
+      // Detect platform. Filesystem signals are authoritative; doc keywords are only a
+      // fallback, and this order is the one core-rules.md and CLAUDE.md.tmpl already
+      // document (pubspec.yaml -> flutter, xcodeproj -> ios, ios/+android/ -> monorepo,
+      // build.gradle -> android).
+      //
+      // Keyword order alone misread EVERY Flutter repo as ios: a Flutter overview
+      // legitimately names "iOS Keychain" and carries an `ios/` build-target row, and the
+      // iOS keyword test ran first. fusionworkomni hit this and had to hand-patch its own
+      // copy of this hook to get `flutter` back.
+      const hasEntry = (...segments) => {
+        try {
+          return fs.existsSync(path.join(root, ...segments));
+        } catch (_) {
+          return false;
+        }
+      };
+      // readdirSync throws on a missing/unreadable dir — swallow it, this hook is fail-open.
+      const dirHasEntry = (dir, re) => {
+        try {
+          return fs.readdirSync(path.join(root, dir)).some((f) => re.test(f));
+        } catch (_) {
+          return false;
+        }
+      };
+      const XCODE_PROJECT = /\.xc(workspace|odeproj)$/;
+
       let platform = 'unknown';
-      if (/iOS|Swift|UIKit|SwiftUI|Xcode/i.test(overviewContent)) {
-        platform = 'ios';
-      } else if (/Android|Kotlin|Jetpack|Gradle/i.test(overviewContent)) {
+      if (hasEntry('pubspec.yaml')) {
+        platform = 'flutter';
+      } else if (dirHasEntry('ios', XCODE_PROJECT) || dirHasEntry('.', XCODE_PROJECT)) {
+        // Both ios/ and android/ present without a pubspec.yaml is the documented
+        // `monorepo` value, not a new one.
+        platform = hasEntry('android') ? 'monorepo' : 'ios';
+      } else if (
+        hasEntry('android', 'build.gradle') || hasEntry('android', 'build.gradle.kts')
+        || hasEntry('build.gradle') || hasEntry('build.gradle.kts')
+      ) {
         platform = 'android';
       } else if (/Flutter|Dart|pubspec/i.test(overviewContent)) {
         platform = 'flutter';
+      } else if (/iOS|Swift|UIKit|SwiftUI|Xcode/i.test(overviewContent)) {
+        platform = 'ios';
+      } else if (/Android|Kotlin|Jetpack|Gradle/i.test(overviewContent)) {
+        platform = 'android';
       }
 
       // Count source file references (rough estimate of project size)
