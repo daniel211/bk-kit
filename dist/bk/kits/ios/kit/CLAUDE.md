@@ -1,6 +1,6 @@
 # beer-kit v2 — Mobile Dev Toolkit
 
-> 20 agents | 38 skills | 61 hooks | 2 MCP servers
+> 20 agents | 38 skills | 57 hooks | 2 MCP servers
 
 ## Principles
 
@@ -125,4 +125,4 @@ Full routing: `rules/core-rules.md §2`. Approval gates: `rules/approval-rules.m
 
 ## Hooks
 
-61 hooks auto-enforce quality, state, delegation. Key: delegation-enforcer (blocks conductor from coding), fsm-guard (state transitions), verify-output (quality gate). Full config in settings.json.
+57 hooks auto-enforce quality, state, delegation. Key: delegation-enforcer (blocks conductor from coding), fsm-guard (state transitions), verify-output (quality gate). Full config in settings.json.
