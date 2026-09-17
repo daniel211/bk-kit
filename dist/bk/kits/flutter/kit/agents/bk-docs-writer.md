@@ -9,7 +9,7 @@ permissionMode: default
 memory: project
 mcpServers: []
 executionMode: background
-skills: [bk-repomix]
+skills: []
 ---
 
 # Docs Writer
@@ -59,6 +59,8 @@ Keeps project documentation accurate and current after code changes. Updates roa
 ## Tool Integration
 - **Codebase summary:** When initializing docs or `bk/docs/codebase-summary.md` is missing, use `/bk-repomix` to generate codebase compaction, then create summary from it.
 
+**Not preloaded — load on demand only:** `bk-repomix`.
+
 ## Update Triggers
 - Feature complete → update roadmap status + changelog
 - Architecture change → update system-architecture
@@ -67,11 +69,7 @@ Keeps project documentation accurate and current after code changes. Updates roa
 
 ## Agent Memory
 
-**On start:** Read `MEMORY.md` from the system-provided agent memory directory if it exists. Never derive the memory path from the current working directory.
-
-**On finish:** If you discovered something new about this project that future runs should know, append to `MEMORY.md` in that same system-provided directory. Only save durable facts (not task-specific details).
-
-**Path rule:** This agent uses `memory: project`. Use the exact memory directory supplied in your system prompt — it is the folder named `bk-docs-writer/`. Never read or write another agent's memory folder. If that path is relative, resolve it against the project root — never against your current working directory. **If you are working inside a git worktree, the project root is still the main repository, not the worktree**: a worktree has its own `.claude/` directory and looks like a project root, but memory written there is invisible to every other worktree and will be blocked. Do not create a second `.claude/agent-memory` folder anywhere else.
+Protocol: `rules/agent-protocols/agent-memory.md` — memory dir `bk-docs-writer/` (`memory: project`).
 
 **What to save:** doc file locations, changelog format, roadmap phase structure, version numbering scheme.
 
@@ -81,20 +79,9 @@ Keeps project documentation accurate and current after code changes. Updates roa
 - "Roadmap phases: numbered P1-P6, each with status (planned/in-progress/completed) and target date"
 - "Architecture doc includes Mermaid diagrams — use ```mermaid blocks for flow charts"
 
-**Format:**
-```markdown
-## {date} — {one-line summary}
-- {fact learned}
-```
-
 ## Team Mode
-When operating as teammate:
-1. On start: check `TaskList`, claim assigned or next unblocked task via `TaskUpdate`
-2. Read full task via `TaskGet` before starting
-3. Write and update documentation within assigned scope
-4. When done: `TaskUpdate(status: "completed")` then `SendMessage` summary to lead
-5. When receiving `shutdown_request`: approve via `SendMessage(type: "shutdown_response")` unless mid-critical-operation
-6. Communicate with peers via `SendMessage(type: "message")` when coordination needed
+Protocol: `rules/agent-protocols/team-mode.md` — role class: **Operator**.
+Report to lead: summary of docs written/updated.
 
 ## When NOT to Use
 - Writing code or implementing features — use platform dev agents instead

@@ -69,3 +69,52 @@ Never skip levels — if Serena unavailable, try LSP before falling to Grep.
 
 Foreground sub-agents inherit MCP config. Background/parallel agents may not.
 For parallel workflows, always implement P3/P4 fallback path.
+
+## Step 6: Enrich Serena Memory (bk-bootstrap, if SERENA_AVAILABLE)
+
+After the foundation docs are written, update Serena memories with the enriched data. This lets
+bk-planner and the dev agents read Serena memories for quick context.
+
+```
+IF SERENA_AVAILABLE:
+  TaskUpdate(taskId=T5, status="in_progress")
+
+  Read key data from foundation docs:
+  1. bk/docs/foundation/architecture.md → extract: architecture pattern, layers, state management, DI, navigation
+  2. bk/docs/foundation/code-guidelines.md → extract: naming, file organization, error handling, test patterns
+  3. bk/docs/foundation/design-system.md → extract: colors, typography, spacing, key components
+
+  serena.write_memory("foundation_architecture", "
+    Architecture: {pattern}
+    Layers: {layer structure}
+    State management: {pattern}
+    DI: {pattern}
+    Navigation: {pattern}
+  ")
+
+  serena.write_memory("foundation_conventions", "
+    Naming: {conventions}
+    File organization: {pattern}
+    Error handling: {pattern}
+    Test patterns: {pattern}
+  ")
+
+  serena.write_memory("foundation_design_tokens", "
+    Colors: {primary, secondary, accent — hex values}
+    Typography: {heading, body, caption — font + size}
+    Spacing: {scale values}
+    Components: {list key components}
+  ")
+
+  TaskUpdate(taskId=T5, status="completed")
+```
+
+## Serena Onboarding (bk-bootstrap Step 1)
+
+1. Check whether Serena MCP tools are available in the session (look for `serena` tools such as
+   `check_onboarding_performed`)
+2. IF available → call `check_onboarding_performed()`
+3. IF not onboarded → call `activate_project(project: "{project-root}")` then `onboarding()`
+4. Set `SERENA_AVAILABLE = true`
+5. IF Serena tools are not in the session → set `SERENA_AVAILABLE = false`, continue with
+   Grep/Glob only

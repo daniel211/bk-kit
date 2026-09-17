@@ -116,3 +116,133 @@ test('auth login updates state', () async {
   expect(state.value, isA<User>());
 });
 ```
+
+## BLoC & Riverpod Patterns — full examples
+
+### BLoC Pattern
+```dart
+// Events
+sealed class UserEvent {}
+class FetchUser extends UserEvent {
+  final String id;
+  FetchUser(this.id);
+}
+class RefreshUser extends UserEvent {}
+
+// States
+sealed class UserState {}
+class UserInitial extends UserState {}
+class UserLoading extends UserState {}
+class UserLoaded extends UserState {
+  final User user;
+  UserLoaded(this.user);
+}
+class UserError extends UserState {
+  final String message;
+  UserError(this.message);
+}
+
+// BLoC
+class UserBloc extends Bloc<UserEvent, UserState> {
+  final UserRepository repository;
+
+  UserBloc({required this.repository}) : super(UserInitial()) {
+    on<FetchUser>(_onFetch);
+    on<RefreshUser>(_onRefresh);
+  }
+
+  Future<void> _onFetch(FetchUser event, Emitter<UserState> emit) async {
+    emit(UserLoading());
+    try {
+      final user = await repository.fetchUser(event.id);
+      emit(UserLoaded(user));
+    } catch (e) {
+      emit(UserError(e.toString()));
+    }
+  }
+
+  Future<void> _onRefresh(RefreshUser event, Emitter<UserState> emit) async {
+    // Re-fetch without loading state for pull-to-refresh
+    try {
+      final user = await repository.fetchUser((state as UserLoaded).user.id);
+      emit(UserLoaded(user));
+    } catch (e) {
+      emit(UserError(e.toString()));
+    }
+  }
+}
+```
+
+### BLoC in Widget
+```dart
+class UserScreen extends StatelessWidget {
+  final String userId;
+  const UserScreen({super.key, required this.userId});
+
+  @override
+  Widget build(BuildContext context) {
+    return BlocProvider(
+      create: (context) => UserBloc(repository: context.read<UserRepository>())
+        ..add(FetchUser(userId)),
+      child: BlocBuilder<UserBloc, UserState>(
+        builder: (context, state) => switch (state) {
+          UserInitial() || UserLoading() => const CircularProgressIndicator(),
+          UserLoaded(:final user) => UserContent(user: user),
+          UserError(:final message) => ErrorWidget(message: message),
+        },
+      ),
+    );
+  }
+}
+```
+
+### Riverpod Pattern
+```dart
+// Provider
+final userRepositoryProvider = Provider<UserRepository>((ref) {
+  return UserRepositoryImpl(api: ref.read(apiClientProvider));
+});
+
+final userProvider = FutureProvider.family<User, String>((ref, userId) async {
+  final repo = ref.read(userRepositoryProvider);
+  return repo.fetchUser(userId);
+});
+
+// AsyncNotifier (for mutable state)
+final userNotifierProvider = AsyncNotifierProvider<UserNotifier, User>(UserNotifier.new);
+
+class UserNotifier extends AsyncNotifier<User> {
+  @override
+  Future<User> build() async {
+    final repo = ref.read(userRepositoryProvider);
+    return repo.fetchCurrentUser();
+  }
+
+  Future<void> updateName(String name) async {
+    state = const AsyncLoading();
+    state = await AsyncValue.guard(() async {
+      final repo = ref.read(userRepositoryProvider);
+      return repo.updateName(name);
+    });
+  }
+}
+```
+
+### Riverpod in Widget
+```dart
+class UserScreen extends ConsumerWidget {
+  final String userId;
+  const UserScreen({super.key, required this.userId});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final userAsync = ref.watch(userProvider(userId));
+
+    return userAsync.when(
+      data: (user) => UserContent(user: user),
+      loading: () => const CircularProgressIndicator(),
+      error: (error, stack) => ErrorWidget(message: error.toString()),
+    );
+  }
+}
+```

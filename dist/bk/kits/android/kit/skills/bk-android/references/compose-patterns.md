@@ -101,3 +101,96 @@ LaunchedEffect(userId) { vm.load(userId) }      // Run suspend on composition
 DisposableEffect(key) { onDispose { cleanup() } } // Lifecycle-aware cleanup
 SideEffect { analytics.trackScreen("profile") }   // After every recomposition
 ```
+
+## Jetpack Compose Patterns — full examples
+
+### Composable with State Hoisting
+```kotlin
+@Composable
+fun UserProfileScreen(
+    viewModel: UserProfileViewModel = hiltViewModel()
+) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+
+    UserProfileContent(
+        state = uiState,
+        onRefresh = viewModel::refresh,
+        onEditClick = viewModel::onEditClick
+    )
+}
+
+@Composable
+private fun UserProfileContent(
+    state: UserProfileUiState,
+    onRefresh: () -> Unit,
+    onEditClick: () -> Unit
+) {
+    when (state) {
+        is UiState.Loading -> LoadingIndicator()
+        is UiState.Success -> ProfileBody(state.user, onEditClick)
+        is UiState.Error -> ErrorMessage(state.message, onRetry = onRefresh)
+    }
+}
+```
+
+### ViewModel with StateFlow
+```kotlin
+@HiltViewModel
+class UserProfileViewModel @Inject constructor(
+    private val repository: UserRepository,
+    savedStateHandle: SavedStateHandle
+) : ViewModel() {
+
+    private val userId: String = savedStateHandle["userId"]!!
+
+    private val _uiState = MutableStateFlow<UiState<User>>(UiState.Loading)
+    val uiState: StateFlow<UiState<User>> = _uiState.asStateFlow()
+
+    init { refresh() }
+
+    fun refresh() {
+        viewModelScope.launch {
+            _uiState.value = UiState.Loading
+            try {
+                val user = repository.fetchUser(userId)
+                _uiState.value = UiState.Success(user)
+            } catch (e: Exception) {
+                _uiState.value = UiState.Error(e.message ?: "Unknown error")
+            }
+        }
+    }
+}
+
+sealed interface UiState<out T> {
+    data object Loading : UiState<Nothing>
+    data class Success<T>(val data: T) : UiState<T>
+    data class Error(val message: String) : UiState<Nothing>
+}
+```
+
+### Preview
+```kotlin
+@Preview(showBackground = true)
+@Composable
+private fun UserProfilePreview() {
+    AppTheme {
+        UserProfileContent(
+            state = UiState.Success(User(id = "1", name = "Preview User")),
+            onRefresh = {},
+            onEditClick = {}
+        )
+    }
+}
+```
+
+### Navigation (Compose Navigation)
+```kotlin
+@Composable
+fun AppNavHost(navController: NavHostController = rememberNavController()) {
+    NavHost(navController, startDestination = "home") {
+        composable("home") { HomeScreen(onUserClick = { navController.navigate("profile/$it") }) }
+        composable("profile/{userId}") { UserProfileScreen() }
+        composable("settings") { SettingsScreen() }
+    }
+}
+```

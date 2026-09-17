@@ -9,8 +9,6 @@ allowed-tools: "Read Glob Grep"
 
 > SOLID, Clean Architecture, MVVM, Repository Pattern, DI for mobile platforms
 
----
-
 ## Core Principles: SOLID
 
 | Principle | iOS | Android | Flutter |
@@ -21,22 +19,12 @@ allowed-tools: "Read Glob Grep"
 | **I**nterface Segregation | Small protocols | Small interfaces | Small abstract classes |
 | **D**ependency Inversion | Protocol injection | Hilt/Koin DI | get_it / Riverpod |
 
----
-
 ## Clean Architecture Layers
 
 ```
-┌─────────────────────────────────────┐
-│         Presentation Layer          │
-│    (Views, ViewModels, UI State)    │
-├─────────────────────────────────────┤
-│           Domain Layer              │
-│  (UseCases, Entities, Repositories) │
-│         NO DEPENDENCIES             │
-├─────────────────────────────────────┤
-│            Data Layer               │
-│ (RepositoryImpl, DataSources, API)  │
-└─────────────────────────────────────┘
+Presentation (Views, ViewModels, UI State)
+Domain       (UseCases, Entities, Repository abstractions) — NO DEPENDENCIES
+Data         (RepositoryImpl, DataSources, API)
 ```
 
 ### Dependency Flow (MANDATORY)
@@ -48,143 +36,15 @@ Presentation → Domain ← Data
 
 Domain MUST NOT depend on Presentation or Data.
 
----
+## Patterns per Platform
 
-## MVVM Pattern
+| Pattern | iOS | Android | Flutter |
+|---------|-----|---------|---------|
+| MVVM | `@Observable` ViewModel + Coordinator, injected use case, `@MainActor` async methods | `@HiltViewModel` + MVI intents + `StateFlow` | ViewModel/Notifier + Riverpod or Bloc |
+| Repository | `protocol AuthRepository` + `AuthRepositoryImpl` over API + local store | `interface AuthRepository` + `@Inject` impl returning `Result<T>` | abstract repository + impl, mapped to domain entities |
+| DI | manual container / Swinject, `lazy var` services | Hilt `@Module` + `@Provides @Singleton` | `get_it` singletons + factories |
 
-### iOS — MVVM + Coordinator
-
-```swift
-// ViewModel: @Observable, injected use case
-@Observable
-final class LoginViewModel {
-    private let authUseCase: AuthenticatingUseCase
-    var state: LoginState = .idle
-
-    init(authUseCase: AuthenticatingUseCase) {
-        self.authUseCase = authUseCase
-    }
-
-    @MainActor
-    func login(email: String, password: String) async {
-        state = .loading
-        do {
-            let user = try await authUseCase.execute(email: email, password: password)
-            state = .success(user)
-        } catch {
-            state = .error(error.localizedDescription)
-        }
-    }
-}
-```
-
-### Android — MVVM + MVI + StateFlow
-
-```kotlin
-@HiltViewModel
-class LoginViewModel @Inject constructor(
-    private val loginUseCase: LoginUseCase
-) : ViewModel() {
-    private val _state = MutableStateFlow(LoginState())
-    val state: StateFlow<LoginState> = _state.asStateFlow()
-
-    fun processIntent(intent: LoginIntent) {
-        when (intent) {
-            is LoginIntent.Login -> login(intent.email, intent.password)
-        }
-    }
-}
-```
-
----
-
-## Repository Pattern
-
-### iOS
-
-```swift
-protocol AuthRepository {
-    func login(email: String, password: String) async throws -> User
-}
-
-final class AuthRepositoryImpl: AuthRepository {
-    private let api: AuthAPI
-    private let localStore: AuthLocalStore
-
-    func login(email: String, password: String) async throws -> User {
-        let response = try await api.login(email: email, password: password)
-        try await localStore.saveToken(response.token)
-        return response.user
-    }
-}
-```
-
-### Android
-
-```kotlin
-interface AuthRepository {
-    suspend fun login(email: String, password: String): Result<User>
-}
-
-class AuthRepositoryImpl @Inject constructor(
-    private val api: AuthApi,
-    private val localDataSource: AuthLocalDataSource
-) : AuthRepository {
-    override suspend fun login(email: String, password: String): Result<User> =
-        runCatching {
-            val response = api.login(LoginRequest(email, password))
-            localDataSource.saveToken(response.token)
-            response.user.toDomain()
-        }
-}
-```
-
----
-
-## Dependency Injection
-
-### iOS (Manual / Swinject)
-
-```swift
-protocol DependencyContainer {
-    var authService: Authenticating { get }
-    var userRepository: UserRepositoryProtocol { get }
-}
-
-final class AppContainer: DependencyContainer {
-    lazy var authService: Authenticating = AuthService()
-    lazy var userRepository: UserRepositoryProtocol = UserRepository()
-}
-```
-
-### Android (Hilt)
-
-```kotlin
-@Module
-@InstallIn(SingletonComponent::class)
-object AuthModule {
-    @Provides @Singleton
-    fun provideAuthRepository(
-        api: AuthApi,
-        localDataSource: AuthLocalDataSource
-    ): AuthRepository = AuthRepositoryImpl(api, localDataSource)
-}
-```
-
-### Flutter (get_it)
-
-```dart
-final getIt = GetIt.instance;
-
-void setupDI() {
-    getIt.registerSingleton<AuthRepository>(AuthRepositoryImpl());
-    getIt.registerFactory<LoginViewModel>(
-        () => LoginViewModel(getIt<AuthRepository>())
-    );
-}
-```
-
----
+Copy-paste implementations for all three platforms: `references/code-patterns.md`
 
 ## Modular Architecture Rules
 
@@ -194,8 +54,6 @@ void setupDI() {
 | MOD-002 | Core modules have minimal dependencies |
 | MOD-003 | Domain modules MUST NOT depend on data/presentation |
 | MOD-004 | Keep module interface minimal |
-
----
 
 ## State Management: Unidirectional Data Flow (UDF)
 

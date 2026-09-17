@@ -52,6 +52,7 @@ Agent extracts ONE screen per call:
 | visual-compare.md | Screenshot vs spec verification |
 | figma-data-guide.md | How both engines read Figma: CLI commands, output files, and field reference |
 | error-handling.md | Timeout, MCP failures, degradation |
+| agy-engine-setup.md | agy PATH, auth and allow-rules for the agy engine |
 
 ## Engines
 
@@ -67,41 +68,21 @@ so nothing downstream is told which one ran.
 
 Select with `--engine`, `BK_DESIGN_ENGINE`, or `designEngine` in platform-context.json.
 
-`auto` runs the preflight below **once per flow** and then behaves exactly like `agy` or
-exactly like `claude` — it is a choice about which of the two to use, not a third behaviour.
-It differs from typing `--engine agy` only in volume: on a machine that cannot run agy, `auto`
-says one line and moves on, because that user never asked for agy and has nothing to fix,
+`auto` runs the agy preflight **once per flow** and then behaves exactly like `agy` or exactly
+like `claude` — it is a choice between the two, not a third behaviour. It differs from typing
+`--engine agy` only in volume: on a machine that cannot run agy, `auto` says one line and moves on,
 while `--engine agy` prints the reason, the remedy and the allow-rule snippet. Check a machine
 ahead of time with `bk doctor --design-engine`.
 
-**The Iron Laws and this Self-Check apply identically to both engines.** The agy runner is
-handed this file and the references verbatim rather than a restatement of them, and it
-verifies files on disk — not the model's account of its work — before reporting success.
+**The Iron Laws and the Self-Check apply identically to both engines.** The agy runner is handed
+this file and the references verbatim rather than a restatement of them, and it verifies files on
+disk — not the model's account of its work — before reporting success.
 
-### Running the agy engine
-
-Figma is read the same way on both engines — over REST, by `figma-cli.mjs`, before any model
-is involved. So the agy engine needs no MCP server and no Figma setup beyond the token every
-engine needs. What it does need:
-
-1. `agy` on PATH, authenticated once by running it.
-2. Narrow allow-rules in `~/.gemini/antigravity-cli/settings.json`, because headless agy
-   cannot prompt for tool approval and auto-denies anything unapproved:
-   ```json
-   { "permissions": { "allow": [
-       "read_file(*)", "write_file(/absolute/path/to/repo/bk/**)" ] } }
-   ```
-   The write rule is scoped to the repo's whole `bk/` tree, not to one flow: a rule that has
-   to be re-added for every feature is a rule nobody keeps, which would make `auto` pick
-   claude forever.
-   The write rule must be an **absolute** path: agy checks permissions against the absolute
-   path it resolved, and it resolves relative paths against its own workspace rather than the
-   calling shell's directory. The runner prints the exact rule to add.
-
-The kit prints these and never writes that file itself — it is shared with every other agy
-session on the machine. `--dangerously-skip-permissions` is never used: it would auto-approve
-every tool, shell commands included, on the user's repo. A run that cannot get permission
-falls back to the claude engine.
+Running the agy engine needs `agy` on PATH (authenticated once) plus narrow allow-rules in
+`~/.gemini/antigravity-cli/settings.json`, since headless agy cannot prompt and auto-denies
+anything unapproved. `--dangerously-skip-permissions` is never used. A run that cannot get
+permission falls back to the claude engine. Exact rules and rationale:
+`references/agy-engine-setup.md`
 
 ## Downstream Consumers
 

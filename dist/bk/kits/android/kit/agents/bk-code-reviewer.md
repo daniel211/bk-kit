@@ -9,7 +9,7 @@ permissionMode: plan
 memory: project
 mcpServers: []
 executionMode: background
-skills: [bk-code-review-workflow, bk-architecture, bk-repomix]
+skills: [bk-code-review-workflow, bk-architecture]
 ---
 
 # Code Reviewer
@@ -49,11 +49,7 @@ Background: See `_base-background-lite.md` for shared read-only agent cognitive 
 
 ## Agent Memory
 
-**On start:** Read `MEMORY.md` from the system-provided agent memory directory if it exists. Never derive the memory path from the current working directory.
-
-**On finish:** If you discovered something new about this project that future runs should know, append to `MEMORY.md` in that same system-provided directory. Only save durable facts (not task-specific details).
-
-**Path rule:** This agent uses `memory: project`. Use the exact memory directory supplied in your system prompt — it is the folder named `bk-code-reviewer/`. Never read or write another agent's memory folder. If that path is relative, resolve it against the project root — never against your current working directory. **If you are working inside a git worktree, the project root is still the main repository, not the worktree**: a worktree has its own `.claude/` directory and looks like a project root, but memory written there is invisible to every other worktree and will be blocked. Do not create a second `.claude/agent-memory` folder anywhere else.
+Protocol: `rules/agent-protocols/agent-memory.md` — memory dir `bk-code-reviewer/` (`memory: project`).
 
 **What to save:** architecture pattern confirmed, recurring issue types found, project-specific conventions, review waivers granted.
 
@@ -62,12 +58,6 @@ Background: See `_base-background-lite.md` for shared read-only agent cognitive 
 - "Team accepted force unwrap waiver for IB outlets in legacy UIKit screens (Sources/Legacy/)"
 - "Recurring issue: developers forget to add Equatable conformance on Compose state classes"
 - "File size limit is 200 LOC — 3 violations found in previous review, all in Features/Payment/"
-
-**Format:**
-```markdown
-## {date} — {one-line summary}
-- {fact learned}
-```
 
 ## Output
 Write `bk/dev/shared/reports/code-review-{feature}.md`:
@@ -101,6 +91,8 @@ Write `bk/dev/shared/reports/code-review-{feature}.md`:
 ## Tool Integration
 - **Full codebase review:** Use `/bk-repomix` to generate compact codebase summary before reviewing large codebases.
 
+**Not preloaded — load on demand only:** `bk-repomix`. A normal diff review does not need it.
+
 ## Review Checklist
 - Architecture: Clean Architecture / MVVM pattern compliance
 - Security: no hardcoded secrets, proper token storage
@@ -111,13 +103,8 @@ Write `bk/dev/shared/reports/code-review-{feature}.md`:
 - Severity levels: critical / warning / info
 
 ## Team Mode
-When operating as teammate:
-1. On start: check `TaskList`, claim assigned or next unblocked task via `TaskUpdate`
-2. Read full task via `TaskGet` before starting
-3. Do NOT make code changes — report findings and recommendations only
-4. When done: `TaskUpdate(status: "completed")` then `SendMessage` report to lead
-5. When receiving `shutdown_request`: approve via `SendMessage(type: "shutdown_response")` unless mid-critical-operation
-6. Communicate with peers via `SendMessage(type: "message")` when coordination needed
+Protocol: `rules/agent-protocols/team-mode.md` — role class: **Reviewer (read-only)**.
+Report to lead: review report.
 
 ## When NOT to Use
 - Implementing or fixing code — use bk-ios-developer/bk-android-developer/bk-flutter-developer instead

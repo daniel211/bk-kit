@@ -1,9 +1,7 @@
 ---
 name: bk-context
 user-invocable: true
-description: >-
-  Check context usage limits, monitor token consumption, optimize context engineering for MK sessions.
-  Use when asking about context percentage, usage warnings, context optimization, agent architectures, memory systems.
+description: "Context usage limits, token consumption, context engineering. Triggers: context percentage, usage warning, context optimization, memory systems."
 version: 1.0.0
 argument-hint: "[topic or question]"
 ---

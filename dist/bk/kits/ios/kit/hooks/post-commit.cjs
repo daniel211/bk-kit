@@ -156,18 +156,18 @@ try {
         };
       });
 
-      let context = `[POST-COMMIT] Workflow phase updated to "committed"${commitHash ? ` (${commitHash})` : ''}. Feature "${state.feature || 'unknown'}" committed successfully.`;
+      let context = `[POST-COMMIT] Phase → commit${commitHash ? ` (${commitHash})` : ''}. Feature "${state.feature || 'unknown'}".`;
 
       const untracked = untrackedFiles(data.cwd);
       if (untracked.length) {
-        const shown = untracked.slice(0, 20);
+        // Eight names are enough to recognise the deliverable; `git status` has the rest.
+        const shown = untracked.slice(0, 8);
         const more = untracked.length - shown.length;
         context += `\n[POST-COMMIT] WARNING: ${untracked.length} file(s) are still untracked after this commit:\n` +
           shown.map((f) => `  ?? ${f}`).join('\n') +
           (more > 0 ? `\n  ...and ${more} more` : '') +
-          `\nIf any of these belong to the work just committed, the commit did not capture it — ` +
-          `\`git add <dir>\` stages modifications to tracked files only. Verify with ` +
-          `\`git show --stat ${commitHash || 'HEAD'}\` against the expected file list before reporting success.`;
+          `\nIf any belong to this commit it did not capture them (\`git add <dir>\` skips new files). ` +
+          `Verify: git show --stat ${commitHash || 'HEAD'}`;
 
         try {
           const { trackWarnSignal } = require('./lib/harness-policy-loader.cjs');
@@ -177,7 +177,17 @@ try {
         } catch { /* telemetry is best-effort */ }
       }
 
-      process.stdout.write(JSON.stringify({ additionalContext: context }) + '\n');
+      // Advisory context is subject to the shared injection budget (cap + dedupe). Optional:
+      // if the lib is absent the text goes out unchanged.
+      let text = context;
+      try {
+        const injectionBudget = require('./lib/injection-budget.cjs');
+        text = injectionBudget.prepareInjection('post-commit', context, {
+          sessionId: injectionBudget.sessionIdFrom(data)
+        });
+      } catch { /* optional lib — keep the full text */ }
+
+      if (text) process.stdout.write(JSON.stringify({ additionalContext: text }) + '\n');
 
       timer.end({ status: untracked.length ? 'untracked_after_commit' : 'ok', exit: 0 });
       process.exit(0);

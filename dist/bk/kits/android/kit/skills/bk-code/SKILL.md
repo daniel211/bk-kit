@@ -7,8 +7,8 @@ argument-hint: "[plan-dir/plan.md or sub-task-XX-*.md] [--fast|--no-review|--par
 
 # Implement: $ARGUMENTS
 
-Execute bk-plan output through agent dispatch, dual tracking, and quality gates.
-Auto-chain execution: implement → test → review per batch, no manual intervention needed.
+Execute bk-plan output through agent dispatch, dual tracking, and quality gates. Auto-chain:
+implement → test → review per batch, no manual intervention needed.
 
 <Use_When>
 - User says "implement", "build", "develop", "code this plan"
@@ -17,195 +17,134 @@ Auto-chain execution: implement → test → review per batch, no manual interve
 </Use_When>
 
 <Do_Not_Use_When>
-- No plan exists — use /bk-plan first
+- No plan exists, or plan only — use /bk-plan
 - Bug fix needed — use /bk-debug
-- Plan only — use /bk-plan
 - Code review only — use /bk-review
 </Do_Not_Use_When>
 
 ## Inline Rules (no cross-reference needed)
 
 ### FSM Transitions (bk-code)
-(none)→plan→coding→testing→review→commit
-- review→coding: on critical findings (max 2 fix loops)
-- Terminal: commit (success) | escalated (fix-loop exceeded) | aborted
+`(none)→plan→coding→testing→review→commit`; `review→coding` on critical findings (max 2 fix
+loops). Terminal: commit (success) | escalated (fix-loop exceeded) | aborted.
 
 **Every transition writes BOTH state files** — `bk/dev/shared/.workflow-state.json`
 (`current_phase` + `workflow_type: "bk-code"`) and `{plan-dir}/.plan-state.json`.
-`.plan-state.json` alone leaves `fsm-guard` inert: no transition validation, no
-phase-recurrence ladder, nothing for `compact-recovery` to restore.
-Load: `references/workflow-state.md`
+`.plan-state.json` alone leaves `fsm-guard` inert: no transition validation, no phase-recurrence
+ladder, nothing for `compact-recovery` to restore. Load: `references/workflow-state.md`
 
 ### Approval Gates
-- Trivial: auto-approve, skip review
-- Standard: ask before commit
-- Complex: ask before plan + dispatch + commit
-- Auto-approve condition: critical==0 AND warning<3 AND test_pass_rate>90%
+Trivial: auto-approve, skip review. Standard: ask before commit. Complex: ask before plan +
+dispatch + commit. Auto-approve when `critical==0 AND warning<3 AND test_pass_rate>90%`.
 
 ### Reactive Signals (check after every agent return)
-| Signal | Action |
-|--------|--------|
-| agent_stuck | → bk-brainstormer → bk-problem-solving → AskUser |
-| unknown_api | → bk-docs-seeker → WebSearch → AskUser |
-| confidence_low | → bk-sequential-thinking → AskUser |
-| fix_loop_stuck | → bk-problem-solving → bk-brainstormer → AskUser |
-
+`agent_stuck` → bk-brainstormer → bk-problem-solving → AskUser ·
+`unknown_api` → bk-docs-seeker → WebSearch → AskUser ·
+`confidence_low` → bk-sequential-thinking → AskUser ·
+`fix_loop_stuck` → bk-problem-solving → bk-brainstormer → AskUser.
 Max 2 reactive dispatches per signal.
 
 ### Adaptive Finalize
-| Tier | Agents |
-|------|--------|
-| Trivial | bk-git-manager |
-| Standard | bk-project-manager + bk-git-manager |
-| Complex | bk-project-manager + bk-docs-writer + bk-git-manager |
+Trivial → bk-git-manager. Standard → + bk-project-manager. Complex → + bk-docs-writer.
 
 ## Workflow Modes
 
-Default: full pipeline. Override with flags.
-
-| Flag | Mode | Test | Review | Use Case |
-|------|------|------|--------|----------|
-| (none) | full | Yes | Yes | Standard feature implementation |
-| `--fast` | fast | Skip | Skip | Quick fix, hotfix, trivial change |
-| `--no-review` | no-review | Yes | Skip | Trusted code, time pressure |
-| `--parallel` | parallel | Yes | Yes | Force parallel sub-task execution within batch |
-| `--sequential` | sequential | Yes | Yes | Force sequential (overrides sub-task parallel-with) |
-
+Default: full pipeline (test + review). `--fast` skips both (hotfix / trivial); `--no-review`
+keeps tests, skips review; `--parallel` forces parallel sub-task execution within a batch;
+`--sequential` forces sequential (overrides sub-task `parallel-with`).
 Load: `references/intent-detection.md`
 
 ## Workflow
 
-```
-[1. Parse & Resume] → [2. Hydrate Sub-Tasks] → [3. Execute Batches (implement → test → review per batch)] → [4. Finalize]
-```
+`[1. Parse & Resume] → [2. Hydrate Sub-Tasks] → [3. Execute Batches] → [4. Finalize]`
 
-Test + Review happen WITHIN each batch (Step 3), not as separate steps.
-Code-Step-4 (Finalize) always runs. Test/Review skipped per mode within each batch.
+Test + Review happen WITHIN each batch (Step 3), not as separate steps. Step 4 always runs;
+test/review are skipped per mode inside each batch.
 
 ### Code-Step-1: Parse & Resume
 Load: `references/intent-detection.md` + `references/plan-consumption.md`
 
-- Parse $ARGUMENTS for plan.md or sub-task file path
-- Read `.plan-state.json` if exists → resume from last incomplete batch/sub-task
-  - `.plan-state.json` present but `.workflow-state.json` missing → the plan came from
-    another machine or developer. Re-derive the phase from `completedSteps` instead of
-    starting over (`references/plan-consumption.md`)
-- **Foundation check**: Read `bk/docs/foundation/architecture.md` → extract architecture pattern, state management
-  - IF missing → warn: "Foundation docs missing. Code quality may be reduced. Consider running `/bk-bootstrap`."
-  - IF exists → include architecture pattern + state management + naming conventions in agent dispatch prompt
-- Detect platform from plan.md YAML `platforms` field
-- Load `platform-context.json` for platform conventions
-- Read `## Execution Batches` table from plan.md → build batch queue
-- **FSM:** write `.workflow-state.json` → `current_phase: "plan"`, plus `workflow_type: "bk-code"`,
+- Parse `$ARGUMENTS` for the plan.md or sub-task path; read `.plan-state.json` to resume the last
+  incomplete batch (state present but `.workflow-state.json` missing → re-derive the phase from
+  `completedSteps`, never start over)
+- **Foundation check**: `bk/docs/foundation/architecture.md` → architecture pattern + state
+  management + naming conventions go into every dispatch prompt. Missing → warn "Foundation docs
+  missing. Code quality may be reduced. Consider running `/bk-bootstrap`." and continue
+- Detect platform from plan.md YAML `platforms`, load `platform-context.json`
+- Read `## Execution Batches` from plan.md → build the batch queue
+- **FSM:** write `.workflow-state.json` → `current_phase: "plan"` + `workflow_type: "bk-code"`,
   `feature`, `plan_dir`, `platform`, `complexity_tier`, `total_batches`
-  (`references/workflow-state.md`)
 
 ### Code-Step-2: Hydrate Sub-Tasks
 Load: `references/plan-consumption.md`
 
-- Read all `sub-task-{NN}-*.md` files, build dependency graph from YAML `depends`
-- Each unchecked `[ ]` in the sub-task's `## Tasks` section → TaskCreate with `addBlockedBy` chain
-  - `## Tasks` is the ONLY hydration source. `## Edge Cases & Risks`, `## Success Criteria`
-    and `## Review Checklist` are plain bullets — never hydrate or tick them
-  - Sub-task file with no `## Tasks` section → pre-0.6.0 plan. Create ONE task for the whole
-    sub-task, warn once per plan dir, continue. Never hydrate the other sections' checkboxes.
-    Sunset 0.8.0 — see `references/plan-consumption.md` §Legacy plans
-- Skip if < 3 sub-tasks (3-task rule)
-- Skip if tasks already exist (TaskList check)
-- Group sub-tasks by batch (from plan.md `## Execution Batches` table)
+- Read all `sub-task-{NN}-*.md`, build the dependency graph from YAML `depends`
+- Each unchecked `[ ]` in `## Tasks` → TaskCreate with an `addBlockedBy` chain.
+  **`## Tasks` is the ONLY hydration source** — `## Edge Cases & Risks`, `## Success Criteria` and
+  `## Review Checklist` are plain bullets, never hydrated or ticked
+- No `## Tasks` section → pre-0.6.0 plan: ONE task for the whole sub-task, warn once per plan dir
+  (sunset 0.8.0 — `references/plan-consumption.md` §Legacy plans)
+- Skip if < 3 sub-tasks (3-task rule) or tasks already exist (TaskList check)
+- Group sub-tasks by batch (plan.md `## Execution Batches`)
 
 ### Code-Step-3: Execute Batches
-Load: `references/batch-execution.md` + `references/sub-task-execution.md` + `references/workflow-state.md`
+Load: `references/batch-execution.md` (complete copy-paste dispatch syntax)
++ `references/sub-task-execution.md` + `references/workflow-state.md`
 
-For each batch in plan.md `## Execution Batches` table (top → bottom):
+For each batch in the `## Execution Batches` table (top → bottom):
 
-**3a. Implement** — Dispatch `bk-{platform}-developer` per sub-task in batch
-  - **FSM:** `current_phase: "coding"` + `batch: N` before the first dispatch of the batch
-  - Agent reads sub-task file: Scope, Expected Code, Edge Cases, Input References
-  - Sub-tasks with `parallel-with:` dispatch concurrently (`run_in_background: true`)
-  - Sub-tasks with `depends:` dispatch after dependency completes
-  - After each sub-task: checkpoint status + TaskUpdate
+| Phase | Action | FSM write before dispatch |
+|-------|--------|---------------------------|
+| **3a. Implement** | `bk-{platform}-developer` per sub-task (`parallel-with:` → concurrent background, `depends:` → after dependency) | `current_phase: "coding"` + `batch: N` |
+| **3b. Test** | `bk-unit-test-agent` over the batch's `## Test Plan` sections; failures → `bk-debugger` → fix → re-test (max 2 cycles) | `current_phase: "testing"` |
+| **3c. Review** | `bk-code-reviewer` over the batch's `## Review Checklist` (+ `bk-security-auditor` if the batch touches auth/security); critical findings → fix → re-test → re-review (max 2 cycles) | `current_phase: "review"`; on a fix loop back, `current_phase: "coding"` + `quality_fix_count += 1` |
 
-**3b. Test** — Dispatch `bk-unit-test-agent` with Test Plan from batch's sub-tasks
-  - **FSM:** `current_phase: "testing"` before dispatch
-  - Agent reads `## Test Plan` sections from all sub-tasks in batch
-  - Writes + runs tests, reports pass/fail per test case
-  - If tests fail: dispatch `bk-debugger` → fix → re-test (max 2 cycles)
+Models: developer opus, unit-test haiku, debugger/reviewer/auditor sonnet, docs-writer sonnet,
+git-manager haiku. Full dispatch table with triggers and inputs:
+`references/batch-execution.md` § Agent Dispatch Table.
 
-**3c. Review** — Dispatch `bk-code-reviewer` with Review Checklist from batch's sub-tasks
-  - **FSM:** `current_phase: "review"` before dispatch; on a fix loop back to implement,
-    `current_phase: "coding"` + `quality_fix_count += 1`
-  - Agent reads `## Review Checklist` from all sub-tasks in batch
-  - Architecture + Security + Requirements coverage checks
-  - If critical findings: fix → re-test → re-review (max 2 cycles) (see Inline Rules above)
-
-**3d. Batch Complete** — All sub-tasks: implement ✓ + test ✓ + review ✓
-  - Mark the sub-task's `## Tasks` checkboxes `[x]`, TaskUpdate(completed), update `.plan-state.json`
-  - **FSM:** write `batch: N+1` and `phase_recurrence_count: {}` — leave `current_phase`
-    unchanged. A multi-batch plan re-enters `coding` once per batch; without this reset the
-    recurrence ladder blocks batch 3 as if it were a fix loop. Reset on batch *progress* only,
-    never to escape a fix loop.
-  - Proceed to next batch
-
-See `references/batch-execution.md` for complete dispatch syntax (copy-paste ready).
+**3d. Batch Complete** — all sub-tasks implement ✓ + test ✓ + review ✓ → tick `## Tasks` `[x]`,
+TaskUpdate(completed), update `.plan-state.json`. **FSM:** write `batch: N+1` and
+`phase_recurrence_count: {}`, leaving `current_phase` unchanged. A multi-batch plan re-enters
+`coding` once per batch; without this reset the recurrence ladder blocks batch 3 as if it were a
+fix loop. Reset on batch *progress* only, never to escape a fix loop.
 
 ### Code-Step-4: Finalize
 Load: `references/finalize.md`
 
-1. Full sync-back: sweep ALL sub-task files, mark completed `[x]`, update plan.md statuses
-2. Dispatch `bk-docs-writer` (background) → update `bk/docs/` if needed
-3. **FSM:** `current_phase: "commit"`, then dispatch `bk-git-manager` → stage + commit
-4. Write final `.plan-state.json` with status: complete
-
-Finalize agent selection by complexity tier (see Inline Rules above).
-
-## Agent Dispatch Table (Auto-Chain)
-
-| Step | Agent | Model | Trigger | Input |
-|------|-------|-------|---------|-------|
-| Implement (3a) | `bk-{platform}-developer` | opus | Per sub-task in batch | Sub-task file: Scope, Expected Code, Edge Cases |
-| Test (3b) | `bk-unit-test-agent` | haiku | After batch implement | Test Plan sections from batch sub-tasks |
-| Debug (3b) | `bk-debugger` | sonnet | If tests fail | Test report + sub-task files |
-| Review (3c) | `bk-code-reviewer` | sonnet | After batch tests pass | Review Checklist from batch sub-tasks |
-| Security (3c) | `bk-security-auditor` | sonnet | If batch touches auth/security | Changed files + sub-task scope |
-| Fix (3c) | `bk-{platform}-developer` | opus | If review has critical findings | Review report + sub-task files |
-| Docs (4) | `bk-docs-writer` | sonnet | All batches done | Feature description, changed files |
-| Git (4) | `bk-git-manager` | haiku | All batches done | Feature name, files changed |
+Full sync-back (sweep ALL sub-task files, mark `[x]`, update plan.md statuses) → `bk-docs-writer`
+(background) updates `bk/docs/` if needed → **FSM** `current_phase: "commit"` → `bk-git-manager`
+stages + commits → write final `.plan-state.json` with `status: complete`. Agent set by complexity
+tier (see Inline Rules).
 
 ## Dual Tracking Contract
 
 | Layer | Tool | Purpose | Persists? |
-|-------|------|---------|-----------| 
-| Session | ClaudeTask (TaskCreate/Update/List) | Orchestration, dependency tracking | No (session-scoped) |
-| Progress | `{plan-dir}/.plan-state.json` + `## Tasks` checkboxes | Status line, reports, crash recovery | Yes (disk) |
-| FSM | `bk/dev/shared/.workflow-state.json` | Phase validation, recurrence ladder, compaction recovery | Yes (disk) |
+|-------|------|---------|-----------|
+| Session | ClaudeTask (TaskCreate/Update/List) | Orchestration, dependency tracking | No |
+| Progress | `{plan-dir}/.plan-state.json` + `## Tasks` checkboxes | Status line, reports, crash recovery | Yes |
+| FSM | `bk/dev/shared/.workflow-state.json` | Phase validation, recurrence ladder, compaction recovery | Yes |
 
-**Sync rule:** Every task completion → all three layers updated simultaneously.
-- TaskUpdate(completed) + checkbox `[ ]→[x]` + `.plan-state.json` stepResults
-- Every phase change → `.workflow-state.json` `current_phase` (see `references/workflow-state.md`)
+**Sync rule:** every task completion updates all three at once — TaskUpdate(completed) + checkbox
+`[ ]→[x]` + `.plan-state.json` stepResults; every phase change writes `.workflow-state.json`
+`current_phase` (`references/workflow-state.md`).
 
 ## Tool Integration
-- **Codebase context:** Use `/bk-repomix` when dispatched agents need full codebase understanding.
-- **Library docs:** Use `/bk-docs-seeker` when implementation requires external library APIs.
-- **Parallel dev isolation:** Use `/bk-worktree` when `--parallel` mode has >2 devs to avoid file conflicts.
-- **When stuck:** Load the `bk-problem-solving` or `bk-sequential-thinking` skill for complex implementation decisions.
+`/bk-repomix` when agents need full codebase context · `/bk-docs-seeker` for external library APIs
+· `/bk-worktree` when `--parallel` has >2 devs (file-conflict isolation) · `bk-problem-solving` /
+`bk-sequential-thinking` when stuck on an implementation decision.
 
 ## Constraints
 
-- Fix loop max: 2 iterations (then escalate to user — write `current_phase: "escalated"`)
-- Build failure max: 3 retries (then escalate)
+- Fix loop max 2, build failure max 3 — then escalate (`current_phase: "escalated"`)
 - File ownership: respect `owns` YAML — only edit files within scope
 - Localization: never hardcode UI text — use Strings table keys
 - Single sub-task file argument: execute only that sub-task (skip batch flow)
-- Agent names: use canonical bk-* names (e.g. bk-ios-developer, bk-unit-test-agent)
+- Agent names: canonical bk-* names (e.g. bk-ios-developer, bk-unit-test-agent)
 
 ## Reactive Orchestration Reminder
 
-This skill operates within the reactive orchestration framework.
-After each agent dispatch and return, check output for reactive signals (see Inline Rules above).
-
-**Helper skills available for dispatch at any point in this workflow:**
-- **bk-brainstormer** — agent stuck on approach, architecture concern
-- **bk-docs-seeker** — unknown API/framework error
-- **bk-sequential-thinking** — complex decomposition, conflicting data
-- **bk-problem-solving** — creative breakthrough needed, fix loops
+After each agent dispatch returns, check its output for reactive signals (see Inline Rules above).
+Helper skills dispatchable at any point: **bk-brainstormer** (stuck on approach / architecture
+concern), **bk-docs-seeker** (unknown API or framework error), **bk-sequential-thinking** (complex
+decomposition, conflicting data), **bk-problem-solving** (fix loops, breakthrough needed).

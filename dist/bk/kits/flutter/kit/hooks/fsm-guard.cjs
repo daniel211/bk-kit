@@ -46,6 +46,24 @@ try {
     }
   };
 
+  // Advisory context is subject to the shared injection budget (cap + dedupe). The deny paths
+  // below (`permissionDecision: "deny"` + exit 2) deliberately do NOT go through it — a block
+  // reason must always reach the model. Optional lib: absent → text goes out unchanged.
+  let injectionBudget = null;
+  try { injectionBudget = require('./lib/injection-budget.cjs'); } catch { /* optional */ }
+
+  /** @returns {string|null} the text to inject, or null when the budget says stay quiet. */
+  function budgetedContext(text, input) {
+    if (!injectionBudget) return text;
+    try {
+      return injectionBudget.prepareInjection('fsm-guard', text, {
+        sessionId: injectionBudget.sessionIdFrom(input)
+      });
+    } catch {
+      return text;
+    }
+  }
+
   // Phases a workflow ends in. They have no outgoing edges *within* an episode — the only
   // move out of one is starting a new workflow, handled by startsNewEpisode() below.
   const TERMINAL_PHASES = new Set(['commit', 'aborted']);
@@ -161,20 +179,19 @@ try {
     const recurrenceCount = (currentState.phase_recurrence_count || {})[newPhase] || 0;
     const newRecurrenceCount = recurrenceCount + 1;
 
+    // Counts as one compact line — the pretty-printed dump grew with the workflow and said
+    // nothing the phase name and the count did not already say.
+    const counts = JSON.stringify(currentState.phase_recurrence_count || {}).slice(0, 120);
+
     if (totalCount >= haltCount || newRecurrenceCount >= haltCount) {
       return {
         action: 'halt',
         exitCode: 2,
         newRecurrenceCount,
         message:
-          `FSM HARD BLOCK — phase "${newPhase}" entered ${newRecurrenceCount} times.\n\n` +
-          `Workflow đã pause. Phase recurrence count: ${JSON.stringify(currentState.phase_recurrence_count || {}, null, 2)}\n\n` +
-          `Conductor MUST use AskUserQuestion với options:\n` +
-          `- "Resume and continue same approach" — set resume_token, reset recurrence counter\n` +
-          `- "Abort and escalate" — mark workflow failed, run bk-commit with WIP tag\n` +
-          `- "Reset phase and try different agent" — clear current_phase, force replan\n\n` +
-          `Hoặc user chạy CLI: node .claude/cli/bk-health/index.cjs --resume --force\n` +
-          `Override: set ${bypassEnv}=1`
+          `FSM HARD BLOCK — phase "${newPhase}" entered ${newRecurrenceCount} times. Workflow paused. Counts: ${counts}\n` +
+          `AskUserQuestion with: resume same approach (resets counter) | abort + escalate (commit WIP) | reset phase, different agent.\n` +
+          `Or: node .claude/cli/bk-health/index.cjs --resume --force — Override: ${bypassEnv}=1`
       };
     }
 
@@ -184,13 +201,10 @@ try {
         exitCode: 2,
         newRecurrenceCount,
         message:
-          `FSM RECURRENCE BLOCK — phase "${newPhase}" entered ${newRecurrenceCount} times (limit: ${blockCount}).\n\n` +
-          `[REACTIVE-SIGNAL: fix_loop_stuck] (HIGH)\n` +
-          `Phase "${newPhase}" repeated too many times. Consider:\n` +
-          `1. Dispatch bk-problem-solving for creative breakthrough\n` +
-          `2. Dispatch bk-brainstormer for different approach\n` +
-          `3. AskUserQuestion if automated approaches fail\n\n` +
-          `Override: set ${bypassEnv}=1`
+          `FSM RECURRENCE BLOCK — phase "${newPhase}" entered ${newRecurrenceCount} times (limit: ${blockCount}).\n` +
+          `[REACTIVE-SIGNAL: fix_loop_stuck] (HIGH) Task(bk-problem-solving), else bk-brainstormer; ` +
+          `AskUserQuestion if both fail. Detail: rules/reactive-orchestration.md §3.\n` +
+          `Override: ${bypassEnv}=1`
       };
     }
 
@@ -199,9 +213,7 @@ try {
         action: 'warn',
         exitCode: 0,
         newRecurrenceCount,
-        message:
-          `[FSM-RECURRENCE-WARN] Phase "${newPhase}" entered ${newRecurrenceCount} times. ` +
-          `Consider if this phase-cycle is expected or indicates a fix loop.`
+        message: `[FSM-RECURRENCE-WARN] Phase "${newPhase}" entered ${newRecurrenceCount} times — expected cycle, or a fix loop?`
       };
     }
 
@@ -434,9 +446,10 @@ try {
         } catch { /* fail-open */ }
 
         process.stderr.write(`[FSM-GUARD] WARN: ${recurrenceResult.message}\n`);
-        process.stdout.write(JSON.stringify({
-          additionalContext: recurrenceResult.message
-        }) + '\n');
+        const warnText = budgetedContext(recurrenceResult.message, input);
+        if (warnText) {
+          process.stdout.write(JSON.stringify({ additionalContext: warnText }) + '\n');
+        }
         timer.end({ status: 'recurrence_warn', phase: newPhase, count: recurrenceResult.newRecurrenceCount, exit: 0 });
         process.exit(0);
       }
@@ -455,16 +468,13 @@ try {
       const currentPhaseCount = recentPhases.filter(p => p === newPhase).length;
 
       if (currentPhaseCount >= 3 && recurrenceResult.action === 'pass') {
-        const signal = '[REACTIVE-SIGNAL: fix_loop_stuck] (HIGH)\n' +
-          `Phase "${newPhase}" entered ${currentPhaseCount} times. ` +
-          'This suggests a fix loop. Consider:\n' +
-          '1. Dispatch bk-problem-solving for creative breakthrough\n' +
-          '2. Dispatch bk-brainstormer for different approach\n' +
-          '3. AskUserQuestion if automated approaches fail\n' +
-          'See rules/reactive-orchestration.md §3.\n';
-        process.stdout.write(JSON.stringify({
-          additionalContext: signal
-        }) + '\n');
+        const signal = `[REACTIVE-SIGNAL: fix_loop_stuck] (HIGH) Phase "${newPhase}" entered ${currentPhaseCount} times — fix loop. ` +
+          'Task(bk-problem-solving), else bk-brainstormer; AskUserQuestion if both fail. ' +
+          'Detail: rules/reactive-orchestration.md §3.';
+        const signalText = budgetedContext(signal, input);
+        if (signalText) {
+          process.stdout.write(JSON.stringify({ additionalContext: signalText }) + '\n');
+        }
         timer.end({ status: 'ok_with_signal', from: currentPhase, to: newPhase, loopCount: currentPhaseCount, exit: 0 });
         process.exit(0);
       }

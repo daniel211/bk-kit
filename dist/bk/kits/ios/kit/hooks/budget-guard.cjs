@@ -141,13 +141,25 @@ function firstNumber(...values) {
   return 0;
 }
 
-// Emit advisory via stdout JSON (additionalContext for Claude)
-function emitAdvisory(msg) {
+// Advisory context is subject to the shared injection budget (cap + dedupe). Optional:
+// if the lib is absent the advisory goes out unchanged.
+let injectionBudget = null;
+try { injectionBudget = require('./lib/injection-budget.cjs'); } catch { /* optional */ }
+
+// Emit advisory via stdout JSON (additionalContext for Claude).
+// The hard block below does NOT go through here — a deny is never budgeted.
+function emitAdvisory(msg, hookInput) {
   try {
+    const text = injectionBudget
+      ? injectionBudget.prepareInjection('budget-guard', msg, {
+          sessionId: injectionBudget.sessionIdFrom(hookInput)
+        })
+      : msg;
+    if (!text) return;
     process.stdout.write(JSON.stringify({
       hookSpecificOutput: {
         hookEventName: 'PreToolUse',
-        additionalContext: msg
+        additionalContext: text
       }
     }) + '\n');
   } catch { /* ignore */ }
@@ -236,18 +248,18 @@ function main() {
 
   // Warn zone (between warn and block threshold) — advisory under every enforcement mode.
   if (ratio < blockThreshold) {
-    emitAdvisory(warnMessage(pct, spent, maxPerWorkflow, settings.enforcement));
+    emitAdvisory(warnMessage(pct, spent, maxPerWorkflow, settings.enforcement), hookInput);
     process.exit(0);
   }
 
   // Block zone — what happens here is the only thing enforcement changes.
   if (settings.enforcement !== 'block') {
-    emitAdvisory([
-      `BUDGET EXCEEDED: ${pct}% of $${maxPerWorkflow.toFixed(2)} workflow budget used ($${spent}).`,
-      `Dispatches are not blocked (cost_budget.enforcement = "warn").`,
-      `Consider downgrading effort, or set cost_budget.enforcement = "block" in`,
-      `.claude/bk-harness-policy.json to stop dispatches at this point.`
-    ].join('\n'));
+    emitAdvisory(
+      `BUDGET EXCEEDED: ${pct}% of $${maxPerWorkflow.toFixed(2)} workflow budget used ($${spent}). ` +
+      `Not blocked (cost_budget.enforcement="warn"). Downgrade effort, or set enforcement="block" ` +
+      `in .claude/bk-harness-policy.json.`,
+      hookInput
+    );
     process.exit(0);
   }
 
@@ -273,19 +285,15 @@ function main() {
   process.exit(2);
 }
 
-/** Advisory text for the warn zone. */
+/** Advisory text for the warn zone. One line: it repeats on every dispatch in the zone. */
 function warnMessage(pct, spent, maxPerWorkflow, enforcement) {
-  const lines = [
-    `BUDGET WARN: ${pct}% of $${maxPerWorkflow.toFixed(2)} workflow budget used ($${spent}).`,
-    `Recommended effort downgrade for remaining Task() spawns:`,
-    `  xhigh → high`,
-    `  high  → medium`,
-    `  max   → xhigh`
-  ];
+  let msg =
+    `BUDGET WARN: ${pct}% of $${maxPerWorkflow.toFixed(2)} workflow budget used ($${spent}). ` +
+    `Downgrade effort on remaining Task() spawns: max→xhigh, xhigh→high, high→medium.`;
   if (enforcement === 'block') {
-    lines.push(`To override budget block: set env BK_BUDGET_OVERRIDE=1 and retry.`);
+    msg += ` Override: BK_BUDGET_OVERRIDE=1.`;
   }
-  return lines.join('\n');
+  return msg;
 }
 
 main();

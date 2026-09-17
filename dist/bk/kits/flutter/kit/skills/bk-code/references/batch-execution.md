@@ -418,3 +418,16 @@ Record per-batch metrics:
 { "agent": "bk-unit-test-agent", "task": "test batch {N}", "batch": N, "durationMs": 0 }
 { "agent": "bk-code-reviewer", "task": "review batch {N}", "batch": N, "durationMs": 0 }
 ```
+
+## Agent Dispatch Table (Auto-Chain)
+
+| Step | Agent | Model | Trigger | Input |
+|------|-------|-------|---------|-------|
+| Implement (3a) | `bk-{platform}-developer` | opus | Per sub-task in batch | Sub-task file: Scope, Expected Code, Edge Cases |
+| Test (3b) | `bk-unit-test-agent` | haiku | After batch implement | Test Plan sections from batch sub-tasks |
+| Debug (3b) | `bk-debugger` | sonnet | If tests fail | Test report + sub-task files |
+| Review (3c) | `bk-code-reviewer` | sonnet | After batch tests pass | Review Checklist from batch sub-tasks |
+| Security (3c) | `bk-security-auditor` | sonnet | If batch touches auth/security | Changed files + sub-task scope |
+| Fix (3c) | `bk-{platform}-developer` | opus | If review has critical findings | Review report + sub-task files |
+| Docs (4) | `bk-docs-writer` | sonnet | All batches done | Feature description, changed files |
+| Git (4) | `bk-git-manager` | haiku | All batches done | Feature name, files changed |

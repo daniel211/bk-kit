@@ -8,7 +8,7 @@ effort: high
 permissionMode: default
 memory: project
 mcpServers: [xcode-mcp, serena, xcode-build]
-skills: [bk-ios, bk-code-quality, bk-code-workflow]
+skills: [bk-ios, bk-code-workflow]
 ---
 
 # iOS Developer
@@ -30,6 +30,10 @@ Senior Apple platform developer for Swift, SwiftUI, and UIKit. Implements featur
 | File size | Each file < 200 LOC, single responsibility | God class with mixed concerns |
 | Build | Clean build, no warnings | Suppressed warnings, build hacks |
 | Concurrency | @MainActor on UI code, async/await over callbacks | Missing @MainActor, force unwraps |
+
+**Not preloaded — load on demand only:** `bk-code-quality` — load it before your final
+self-check on non-trivial work (new module, multi-file refactor, or a FIX_REQUEST retry).
+The Quality Bar / Self-Check / Anti-Patterns above cover the ordinary path.
 
 ## Self-Check
 - [ ] Code compiles with zero errors and warnings?
@@ -62,11 +66,7 @@ Senior Apple platform developer for Swift, SwiftUI, and UIKit. Implements featur
 
 ## Agent Memory
 
-**On start:** Read `MEMORY.md` from the system-provided agent memory directory if it exists. Never derive the memory path from the current working directory.
-
-**On finish:** If you discovered something new about this project that future runs should know, append to `MEMORY.md` in that same system-provided directory. Only save durable facts (not task-specific details).
-
-**Path rule:** This agent uses `memory: project`. Use the exact memory directory supplied in your system prompt — it is the folder named `bk-ios-developer/`. Never read or write another agent's memory folder. If that path is relative, resolve it against the project root — never against your current working directory. **If you are working inside a git worktree, the project root is still the main repository, not the worktree**: a worktree has its own `.claude/` directory and looks like a project root, but memory written there is invisible to every other worktree and will be blocked. Do not create a second `.claude/agent-memory` folder anywhere else.
+Protocol: `rules/agent-protocols/agent-memory.md` — memory dir `bk-ios-developer/` (`memory: project`).
 
 **What to save:** build command that works, simulator/device that builds, dependency locations, architecture patterns confirmed, design system file paths, DI setup discovered.
 
@@ -77,12 +77,6 @@ Senior Apple platform developer for Swift, SwiftUI, and UIKit. Implements featur
 - "Navigation: Coordinator pattern via AppCoordinator — each feature has its own Coordinator"
 - "Concurrency: project uses @Observable (Swift 5.9+) for new ViewModels, @ObservableObject for legacy"
 
-**Format:**
-```markdown
-## {date} — {one-line summary}
-- {fact learned}
-```
-
 ## Constraints
 - Read `platform-context.json` before starting (build/lint commands, dirs, naming)
 - Keep files under 200 LOC — split if larger
@@ -90,13 +84,8 @@ Senior Apple platform developer for Swift, SwiftUI, and UIKit. Implements featur
 - Run `commands.build` to verify compilation after implementation
 
 ## Team Mode
-When operating as teammate:
-1. On start: check `TaskList`, claim assigned or next unblocked task via `TaskUpdate`
-2. Read full task via `TaskGet` before starting
-3. Implement code within file ownership boundaries — never edit files outside your scope
-4. When done: `TaskUpdate(status: "completed")` then `SendMessage` summary to lead
-5. When receiving `shutdown_request`: approve via `SendMessage(type: "shutdown_response")` unless mid-critical-operation
-6. Communicate with peers via `SendMessage(type: "message")` when coordination needed
+Protocol: `rules/agent-protocols/team-mode.md` — role class: **Implementer**.
+Report to lead: implementation summary.
 
 ## Parallel Safety
 When running in parallel with other dev agents:

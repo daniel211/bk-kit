@@ -1,6 +1,6 @@
 ---
 name: bk-review
-description: "Code review workflow — the review command for beer-kit (there is no /bk-code-review). Dispatches bk-gemini-reviewer (default) or bk-code-reviewer in background, plus bk-security-auditor for security-sensitive changes. Use when the user says review, code review, check my code, audit, inspect. Output: review report."
+description: "Review local/uncommitted changes via bk-gemini-reviewer or bk-code-reviewer (+ security auditor). Triggers: review, code review, check my code, audit, inspect."
 user-invocable: true
 argument-hint: "[feature or files to review]"
 ---
@@ -62,53 +62,19 @@ Detect if changes are security-sensitive:
 
 ### Step 2: Dispatch Review Agents
 
-**Review Engine Selection (Default: Gemini Reviewer)**:
-- **Default (Gemini)**: Dispatch `bk-gemini-reviewer`. Preferred whenever Antigravity CLI is
-  installed — probe with `command -v agy` (`where agy` on Windows). The reviewer is named
-  for the model it uses, not the CLI: `agy` replaced the retired `gemini` CLI in kit 0.2.0.
-- **Fallback (Claude)**: If `agy` is not found or `--engine claude` is requested, dispatch
-  `bk-code-reviewer` (sonnet). This path needs no external CLI.
-- **Dual Mode (`--engine dual`)**: Dispatch BOTH `bk-gemini-reviewer` and `bk-code-reviewer` in parallel for multi-model consensus. They write to distinct report paths (`code-review-gemini-{feature}.md` vs `code-review-{feature}.md`) — never point both at the same file, or the slower agent silently overwrites the other.
+**Engine selection** — default `bk-gemini-reviewer` whenever the Antigravity CLI is installed
+(probe `command -v agy`; `where agy` on Windows). Fallback `bk-code-reviewer` (sonnet) when `agy`
+is missing or `--engine claude` is requested — no external CLI needed. `--engine dual` dispatches
+BOTH in parallel for multi-model consensus, writing to **distinct** report paths
+(`code-review-gemini-{feature}.md` vs `code-review-{feature}.md`) — never point both at one file
+or the slower agent silently overwrites the other.
 
-**Tool boundaries differ per engine** — `bk-gemini-reviewer` needs `Bash` to invoke the review harness (`agy`); `bk-code-reviewer` does not. Use the exact TOOL RESTRICTION line shown in each dispatch block below; do not copy one engine's restriction onto the other.
+**Tool boundaries differ per engine**: `bk-gemini-reviewer` needs `Bash` to invoke the review
+harness (`agy`); `bk-code-reviewer` and `bk-security-auditor` get no Bash at all. Copy the exact
+TOOL RESTRICTION line for the engine you are dispatching — never the other one's.
 
-Dispatch review agent(s) in ONE message (background):
-
-**Primary Reviewer (Default: bk-gemini-reviewer):**
-```
-Task(subagent_type: "bk-gemini-reviewer", model: "sonnet", run_in_background: true, prompt: "
-  Task: Code review for feature {feature_name}
-  Platform: {platform}
-  Files: {file_list from impl reports, or git diff}
-  TOOL RESTRICTION: You are a READ-ONLY agent for project code. Do NOT use Edit tool. Use Bash strictly to invoke gemini review harness.
-  Architecture rules: .claude/rules/{platform}-rules.md
-  Model: gemini-3.1-pro-high
-  Output: bk/dev/shared/reports/code-review-gemini-{feature}.md (+ .json)
-")
-```
-
-*(Fallback if `agy` is not available, or when `--engine claude` is requested)*:
-```
-Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true, prompt: "
-  Task: Code review for feature {feature_name}
-  Platform: {platform}
-  Files: {file_list from impl reports, or git diff}
-  TOOL RESTRICTION: You are a READ-ONLY agent. Do NOT use Edit, Bash, or Task tools.
-  Architecture rules: .claude/rules/{platform}-rules.md
-  Output: bk/dev/shared/reports/code-review-{feature}.md (+ .json)
-")
-```
-
-**Optional — security-sensitive changes:**
-```
-Task(subagent_type: "bk-security-auditor", model: "sonnet", run_in_background: true, prompt: "
-  Task: Security audit for feature {feature_name}
-  Platform: {platform}
-  Files: {file_list from impl reports, or git diff}
-  TOOL RESTRICTION: You are a READ-ONLY agent. Do NOT use Edit, Bash, or Task tools.
-  Output: bk/dev/shared/reports/security-{feature}.json
-")
-```
+Dispatch all review agents in ONE message (background). Copy-paste prompts for all three agents:
+`references/review-dispatch.md`
 
 ### Step 3: Collect and Report
 
@@ -152,14 +118,9 @@ pass or a fail; fix the tooling and re-run.
 
 ## Reactive Orchestration Reminder
 
-This skill operates within the reactive orchestration framework.
-After each agent dispatch and return, check output for reactive signals.
+After each agent dispatch returns, check its output for reactive signals. Helper skills
+dispatchable at any point: **bk-brainstormer** (stuck on approach / architecture concern),
+**bk-docs-seeker** (unknown API or framework error), **bk-sequential-thinking** (complex
+decomposition, conflicting data), **bk-problem-solving** (fix loops, breakthrough needed).
 
-**Helper skills available for dispatch at any point in this workflow:**
-- **bk-brainstormer** — agent stuck on approach, architecture concern
-- **bk-docs-seeker** — unknown API/framework error
-- **bk-sequential-thinking** — complex decomposition, conflicting data
-- **bk-problem-solving** — creative breakthrough needed, fix loops
-
-**Decision tables:** `rules/reactive-orchestration.md`
-**User interaction:** `rules/user-interaction-protocol.md`
+**Decision tables:** `rules/reactive-orchestration.md` — **User interaction:** `rules/user-interaction-protocol.md`

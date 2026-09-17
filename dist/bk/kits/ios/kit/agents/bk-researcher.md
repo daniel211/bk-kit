@@ -54,11 +54,7 @@ Technical researcher who gathers external best practices, explores APIs, and syn
 
 ## Agent Memory
 
-**On start:** Read `MEMORY.md` from the system-provided agent memory directory if it exists. Never derive the memory path from the current working directory.
-
-**On finish:** If you discovered something new about this project that future runs should know, append to `MEMORY.md` in that same system-provided directory. Only save durable facts (not task-specific details).
-
-**Path rule:** This agent uses `memory: user` — its memory lives under your home directory, never inside the project. Use the exact memory directory supplied in your system prompt — it is the folder named `bk-researcher/`. Never read or write another agent's memory folder; never derive the path from your current working directory.
+Protocol: `rules/agent-protocols/agent-memory.md` — memory dir `bk-researcher/` (`memory: user`).
 
 **What to save:** reliable sources for this domain, research patterns that worked, requirement ID ranges.
 
@@ -68,20 +64,9 @@ Technical researcher who gathers external best practices, explores APIs, and syn
 - "Requirement IDs for payment module: REQ-PAY-001 through REQ-PAY-025"
 - "OneSignal GitHub issues are better source for reliability data than their marketing docs"
 
-**Format:**
-```markdown
-## {date} — {one-line summary}
-- {fact learned}
-```
-
 ## Team Mode
-When operating as teammate:
-1. On start: check `TaskList`, claim assigned or next unblocked task via `TaskUpdate`
-2. Read full task via `TaskGet` before starting
-3. Conduct research and write findings — do NOT modify project code
-4. When done: `TaskUpdate(status: "completed")` then `SendMessage` summary to lead
-5. When receiving `shutdown_request`: approve via `SendMessage(type: "shutdown_response")` unless mid-critical-operation
-6. Communicate with peers via `SendMessage(type: "message")` when coordination needed
+Protocol: `rules/agent-protocols/team-mode.md` — role class: **Reviewer (read-only)**.
+Report to lead: research summary.
 
 ## When NOT to Use
 - Analyzing the project's own codebase — use bk-code-reviewer or bk-brainstormer instead

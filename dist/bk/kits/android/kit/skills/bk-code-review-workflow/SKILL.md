@@ -8,36 +8,29 @@ user-invocable: false
 
 > Your job is to find what's wrong, not confirm what's right. Every finding you miss is a bug that ships. Every false blocker wastes a fix loop.
 
----
+## Operating Rules
 
-## Agent Operational Quality
+- **Read the actual source** of every changed file — function bodies, error paths, logic branches.
+  Never review from the impl report alone.
+- **Cross-validate every impl report claim**: are `files_changed` accurate? Are
+  `requirements_satisfied` really implemented? Did the build actually run if `build_verified: true`?
+- **Review only CHANGED code.** Flag a pre-existing issue only if this change made it worse.
+- **Stay in your lane**: correctness, architecture, safety. Test coverage belongs to the test
+  agent; deep security sweeps to bk-security-auditor.
+- **Every finding carries file:line + the actual code.** If you cannot locate it, say "unknown" —
+  never fabricate a line number.
+- **Every finding has all 5 elements**: what is wrong, why it matters, how to fix it, severity,
+  file:line.
+- **Trace data flow**, don't pattern-match: what happens on null / empty / error?
+- **Check against THIS project's manifest**, not textbook best practice.
+- **Spend depth where risk is** — auth, payment, data mutation over display-only views.
+- **Spec-index present** → verify sections read, edge cases addressed, anti-patterns avoided, and
+  include `spec_compliance` in the output.
+- **TODOs**: linked to a REQ and out of scope → info; vague `// TODO: fix later` → minor;
+  `// TODO: validate auth` → blocker.
 
-| Dimension | Good | Bad |
-|-----------|------|-----|
-| **Code inspection depth** | Read every changed file's actual source code — function bodies, error paths, logic branches. Cross-reference between files. | Read the impl report and trust it. Skim headers only. "The code looks fine." |
-| **Cross-validation discipline** | Verify EVERY impl report claim: are `files_changed` accurate? Are `requirements_satisfied` actually implemented? Did the build really run if `build_verified: true`? | Trust the frontmatter. "The report says it's done, so it's done." |
-| **Severity calibration** | Blocker = crash/data loss/security. Major = significant bug/architecture violation. Minor = readability/naming. | Everything is a blocker. Or everything is minor. Inflation wastes fix loops. Deflation ships bugs. |
-| **Signal-to-noise ratio** | Every finding is actionable: what is wrong, why it matters, how to fix it. | Vague "could be improved." Style nits as majors. Laundry list of 20 minor items. |
-| **Scope discipline** | Review only CHANGED code. Flag pre-existing issues only if the change made them worse. | Review the entire codebase. Flag issues in unchanged files. |
-| **Pipeline awareness** | Focus on correctness, architecture, safety. Test coverage is the test agent's job. | Comment on test coverage. Duplicate what security-auditor will check. |
-| **Evidence precision** | File path and line number for every finding. Show the actual code. | "Somewhere in the file..." Fabricated line numbers. Findings without location. |
-
----
-
-## Review Craftsmanship Quality
-
-| Dimension | Good | Bad |
-|-----------|------|-----|
-| **Finding structure** | Each finding: (1) what is wrong, (2) why it matters, (3) how to fix it, (4) severity, (5) file:line | Missing any of these 5 elements. |
-| **Correctness focus** | Trace data flow. Check logic. What happens with null/empty/error? Follow the execution path. | Surface-level pattern matching only. |
-| **Architecture alignment** | Check against THIS project's manifest — not generic best practices. | Apply textbook patterns that don't match this codebase. |
-| **Safety awareness** | Check for injection, auth bypass, data exposure, crash-inducing edge cases. | Assume security is someone else's job. Skip error paths. |
-| **Impl-result fidelity** | Compare each claim to actual code. Flag discrepancies. | Accept all claims at face value. |
-| **Spec compliance** | When spec-index exists: verify sections read, edge cases addressed, anti-patterns avoided. Include `spec_compliance` in output. | Ignore spec-index. |
-| **Proportional depth** | Spend more time on critical paths (auth, payment, data mutation) than display-only views. | Equal time on every file regardless of risk. |
-| **TODO evaluation** | Linked to REQ and out-of-scope → informational. Vague `// TODO: fix later` → minor. Critical `// TODO: validate auth` → blocker. | Blindly flag all TODOs. Or ignore all TODOs. |
-
----
+Full rubric (each dimension's good vs. bad form) + the review anti-pattern catalogue:
+`references/quality-dimensions.md`
 
 ## Severity Reference
 
@@ -48,7 +41,7 @@ user-invocable: false
 | **minor** | Readability, naming, style inconsistency | Informational only |
 | **info** | Suggestion, future consideration | No action required |
 
----
+Severity inflation wastes fix loops; deflation ships bugs. Calibrate deliberately.
 
 ## Review Depth by Complexity Tier
 
@@ -57,8 +50,6 @@ user-invocable: false
 | **Simple** | Changed files + direct callers |
 | **Standard** | Changed files + callers + domain layer |
 | **Complex** | Full call chain, cross-module impact, architecture alignment |
-
----
 
 ## Self-Check (Before Returning)
 
@@ -69,16 +60,3 @@ user-invocable: false
 5. Are my severities calibrated? (Blocker really would crash/corrupt/expose?)
 6. Is the output file written with all required fields?
 7. When TRACE CONTEXT provided, did I verify requirements at each `@trace` marker?
-
----
-
-## Anti-Patterns
-
-- **The Metadata Reviewer** — Reading the impl report's frontmatter and trusting it without inspecting actual source. Always read the code.
-- **The Nit-Picker** — Style preferences disguised as majors. Import ordering is not a bug.
-- **The Scope Creeper** — Reviewing unchanged code. You're reviewing THIS change.
-- **The Vague Critic** — "This could be improved" without saying what, why, or how.
-- **The Line Fabricator** — Can't find the exact line, guesses a number. Say "unknown" instead.
-- **The Rubber Stamper** — "LGTM" without reading code. Every file, every function body.
-- **The Test Commenter** — Flagging test coverage gaps — that's the test agent's job.
-- **The Blocker Inflater** — Every finding is a blocker. Severity inflation causes unnecessary fix loops.

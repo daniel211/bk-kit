@@ -49,13 +49,14 @@ function readJson(filePath) {
 /**
  * Build peer list from team config, excluding the current agent
  */
-function buildPeerList(config, currentAgentId) {
+function buildPeerList(config, currentAgentId, max = 8) {
   if (!config?.members?.length) return '';
-  const peers = config.members
+  const all = config.members
     .filter(m => m.agentId !== currentAgentId)
-    .map(m => `${m.name} (${m.agentType})`)
-    .join(', ');
-  return peers || 'none';
+    .map(m => `${m.name} (${m.agentType})`);
+  if (!all.length) return 'none';
+  const shown = all.slice(0, max).join(', ');
+  return all.length > max ? `${shown} (+${all.length - max} more)` : shown;
 }
 
 /**
@@ -140,13 +141,24 @@ function main() {
       lines.push(...ckCtx);
     }
 
-    lines.push('');
-    lines.push('Remember: Check TaskList, claim tasks, respect file ownership, use SendMessage to communicate.');
+    lines.push('Claim tasks from TaskList, respect file ownership, coordinate via SendMessage.');
+
+    // Advisory context is subject to the shared injection budget (cap + dedupe). Optional:
+    // if the lib is absent the text goes out unchanged.
+    let text = lines.join('\n');
+    try {
+      const injectionBudget = require('./lib/injection-budget.cjs');
+      text = injectionBudget.prepareInjection('team-context-inject', text, {
+        sessionId: injectionBudget.sessionIdFrom(payload)
+      });
+    } catch { /* optional lib — keep the full text */ }
+
+    if (!text) process.exit(0);
 
     const output = {
       hookSpecificOutput: {
         hookEventName: "SubagentStart",
-        additionalContext: lines.join('\n')
+        additionalContext: text
       }
     };
 

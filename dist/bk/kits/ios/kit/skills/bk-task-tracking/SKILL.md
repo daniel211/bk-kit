@@ -1,6 +1,6 @@
 ---
 name: bk-task-tracking
-description: "REQUIRED before dispatching agents. Provides plan JSON parsing, task status lifecycle, checkpoint structure, skill loading tracker, and resume protocol. Load at the start of any plan-driven workflow."
+description: "REQUIRED before dispatching agents: task status lifecycle, checkpoints, resume protocol. Load at the start of any plan-driven workflow."
 user-invocable: false
 ---
 

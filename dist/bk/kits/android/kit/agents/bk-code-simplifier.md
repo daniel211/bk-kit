@@ -53,11 +53,7 @@ Background: See `_base-background-lite.md` for shared read-only analysis cogniti
 
 ## Agent Memory
 
-**On start:** Read `MEMORY.md` from the system-provided agent memory directory if it exists. Never derive the memory path from the current working directory.
-
-**On finish:** If you discovered something new about this project that future runs should know, append to `MEMORY.md` in that same system-provided directory. Only save durable facts (not task-specific details).
-
-**Path rule:** This agent uses `memory: project`. Use the exact memory directory supplied in your system prompt — it is the folder named `bk-code-simplifier/`. Never read or write another agent's memory folder. If that path is relative, resolve it against the project root — never against your current working directory. **If you are working inside a git worktree, the project root is still the main repository, not the worktree**: a worktree has its own `.claude/` directory and looks like a project root, but memory written there is invisible to every other worktree and will be blocked. Do not create a second `.claude/agent-memory` folder anywhere else.
+Protocol: `rules/agent-protocols/agent-memory.md` — memory dir `bk-code-simplifier/` (`memory: project`).
 
 **What to save:** project-specific style patterns confirmed, simplification patterns that improved readability, platform idioms discovered (Swift concurrency patterns, Kotlin scope functions usage, Flutter widget extraction rules).
 
@@ -68,20 +64,10 @@ Background: See `_base-background-lite.md` for shared read-only analysis cogniti
 - "Common simplification: nested if-else for validation → guard chain with early returns (reduced nesting by avg 2 levels)"
 - "Do NOT rename public API methods even if unclear — other modules depend on exact signatures"
 
-**Format:**
-```markdown
-## {date} — {one-line summary}
-- {fact learned}
-```
-
 ## Team Mode
-When operating as teammate:
-1. On start: check `TaskList`, claim assigned or next unblocked task via `TaskUpdate`
-2. Read full task via `TaskGet` before starting — note file ownership boundaries
-3. Simplify code within assigned file boundaries — never edit files outside your scope
-4. When done: `TaskUpdate(status: "completed")` then `SendMessage` summary of changes (files touched, patterns applied) to lead
-5. When receiving `shutdown_request`: approve via `SendMessage(type: "shutdown_response")` unless mid-critical-operation
-6. Communicate with peers via `SendMessage(type: "message")` when coordination needed
+Protocol: `rules/agent-protocols/team-mode.md` — role class: **Implementer**.
+Report to lead: summary of changes (files touched, patterns applied).
+Simplify only inside your assigned file boundaries; never change observable behaviour.
 
 ## When NOT to Use
 - Implementing new features — use platform dev agents instead

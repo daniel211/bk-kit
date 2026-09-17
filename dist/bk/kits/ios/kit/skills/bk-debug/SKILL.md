@@ -45,16 +45,9 @@ Determine tier. Detect platform. Detect issue type and route to specialized work
 Trivial shortcut: dispatch bk-{platform}-developer directly (skip analyze and review).
 
 ### Foundation Context Loading
-Before dispatching the dev agent, load foundation context:
-1. Read `bk/docs/foundation/architecture.md` — extract architecture patterns, layer structure
-2. Read `bk/docs/foundation/code-guidelines.md` — extract naming conventions, DI patterns
-3. Include foundation summary in dev agent dispatch prompt:
-   ```
-   Foundation Context:
-   - Architecture: {summary from architecture.md}
-   - Naming: {summary from code-guidelines.md}
-   - Ensure fix follows existing project conventions.
-   ```
+Before dispatching the dev agent, read `bk/docs/foundation/architecture.md` (patterns, layer
+structure) and `code-guidelines.md` (naming, DI), and put a `Foundation Context:` summary of both
+in the dispatch prompt with "Ensure fix follows existing project conventions."
 
 **Issue Type Routing:**
 
@@ -70,69 +63,19 @@ Load specialized workflow reference alongside standard phases — it augments, n
 
 ### Xcode MCP Build Error Shortcut
 
-If bug report contains Xcode build error output (from xcode-mcp or xcode-build MCP):
-1. Parse error type from diagnostics:
-   - Syntax error → route to `workflow-build.md`
-   - Type mismatch → route to `workflow-build.md`  
-   - Missing import → route to `workflow-build.md`
-   - Linking error → route to `workflow-build.md`
-2. Skip full classify scoring — use build error classification directly
-3. Set tier based on error scope:
-   - Single file error → Trivial
-   - Multi-file / dependency error → Standard
-   - Framework-level / linking → Complex
-
-> This shortcut saves ~30% classify time for build errors with clear diagnostics.
+Bug report carries Xcode build error output (xcode-mcp / xcode-build MCP) → skip full classify
+scoring, route straight to `references/workflow-build.md`, and set the tier by error scope
+(single file → Trivial, multi-file/dependency → Standard, framework/linking → Complex).
+Detail: `references/build-error-shortcut.md`
 
 ### Complex Tier: Scientific Debate Pattern
 
-For bugs classified as **Complex** (multiple possible root causes, unclear reproduction):
-
-**Instead of sequential investigation, use parallel hypothesis testing:**
-
-1. **Generate Hypotheses** (conductor analyzes symptoms)
-   - List 2-3 possible root causes based on error evidence
-   - Each hypothesis should be testable and falsifiable
-
-2. **Dispatch Hypothesis Agents** (parallel, in ONE message)
-   - Agent A: Investigate hypothesis 1 — e.g., "Root cause is threading race condition in X"
-   - Agent B: Investigate hypothesis 2 — e.g., "Root cause is state corruption in Y"  
-   - Agent C (optional): Investigate hypothesis 3
-   
-   Each agent's prompt:
-   ```
-   Task: Investigate hypothesis: "{hypothesis}"
-   
-   Instructions:
-   1. Gather evidence FOR this hypothesis
-   2. Gather evidence AGAINST this hypothesis
-   3. Rate confidence: high/medium/low
-   4. If confidence is high, propose specific fix
-   
-   Output: bk/dev/shared/reports/debug-hypothesis-{N}-{feature}.md
-   
-   Format:
-   ## Hypothesis: {hypothesis}
-   ### Evidence FOR
-   - {evidence with file:line}
-   ### Evidence AGAINST
-   - {evidence with file:line}
-   ### Confidence: {high|medium|low}
-   ### Proposed Fix (if high confidence)
-   - {specific fix with file:line:change}
-   ```
-
-3. **Evaluate Results** (conductor synthesizes)
-   - Compare evidence from all agents
-   - Select hypothesis with strongest evidence
-   - If no clear winner, combine insights and run targeted follow-up
-   
-4. **Dispatch Fix** based on winning hypothesis
-
-> This pattern avoids anchoring bias from sequential investigation.
-> Multiple agents actively trying to disprove each other produces higher-quality diagnosis.
-> Per Anthropic Claude Deep Dive: "Scientific Debate Pattern — spawn multiple agents with
-> different hypotheses and have them actively try to disprove each other."
+For Complex bugs (several possible root causes, unclear reproduction), do NOT investigate
+sequentially. Generate 2-3 testable, falsifiable hypotheses, dispatch one agent per hypothesis in
+ONE message (each gathers evidence FOR and AGAINST, rates confidence, proposes a fix when
+confident), then synthesize: pick the strongest-evidenced hypothesis, or combine insights and run
+a targeted follow-up. This avoids the anchoring bias of sequential investigation.
+Prompt template + output format: `references/scientific-debate.md`
 
 ### Phase 2: Analyze (Standard/Complex)
 Dispatch bk-debugger (foreground) + 2-3 Explore scouts (parallel background).
@@ -184,14 +127,9 @@ Skip for: Trivial tier (< 3 steps, overhead exceeds benefit).
 
 ## Reactive Orchestration Reminder
 
-This skill operates within the reactive orchestration framework.
-After each agent dispatch and return, check output for reactive signals.
+After each agent dispatch returns, check its output for reactive signals. Helper skills
+dispatchable at any point: **bk-brainstormer** (stuck on approach / architecture concern),
+**bk-docs-seeker** (unknown API or framework error), **bk-sequential-thinking** (complex
+decomposition, conflicting data), **bk-problem-solving** (fix loops, breakthrough needed).
 
-**Helper skills available for dispatch at any point in this workflow:**
-- **bk-brainstormer** — agent stuck on approach, architecture concern
-- **bk-docs-seeker** — unknown API/framework error
-- **bk-sequential-thinking** — complex decomposition, conflicting data
-- **bk-problem-solving** — creative breakthrough needed, fix loops
-
-**Decision tables:** `rules/reactive-orchestration.md`
-**User interaction:** `rules/user-interaction-protocol.md`
+**Decision tables:** `rules/reactive-orchestration.md` — **User interaction:** `rules/user-interaction-protocol.md`

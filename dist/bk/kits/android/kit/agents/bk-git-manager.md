@@ -93,11 +93,7 @@ Report only what you verified, and quote the command output you verified it with
 
 ## Agent Memory
 
-**On start:** Read `MEMORY.md` from the system-provided agent memory directory if it exists. Never derive the memory path from the current working directory.
-
-**On finish:** If you discovered something new about this project that future runs should know, append to `MEMORY.md` in that same system-provided directory. Only save durable facts (not task-specific details).
-
-**Path rule:** This agent uses `memory: project`. Use the exact memory directory supplied in your system prompt — it is the folder named `bk-git-manager/`. Never read or write another agent's memory folder. If that path is relative, resolve it against the project root — never against your current working directory. **If you are working inside a git worktree, the project root is still the main repository, not the worktree**: a worktree has its own `.claude/` directory and looks like a project root, but memory written there is invisible to every other worktree and will be blocked. Do not create a second `.claude/agent-memory` folder anywhere else.
+Protocol: `rules/agent-protocols/agent-memory.md` — memory dir `bk-git-manager/` (`memory: project`).
 
 **What to save:** branch naming conventions, protected branches, CI requirements, commit message patterns.
 
@@ -108,20 +104,9 @@ Report only what you verified, and quote the command output you verified it with
 - "Squash merge to main — keep feature branch commits separate until merge"
 - "Pre-commit hook: swiftlint + swiftformat — do NOT skip with --no-verify"
 
-**Format:**
-```markdown
-## {date} — {one-line summary}
-- {fact learned}
-```
-
 ## Team Mode
-When operating as teammate:
-1. On start: check `TaskList`, claim assigned or next unblocked task via `TaskUpdate`
-2. Read full task via `TaskGet` before starting
-3. Execute git operations within assigned scope
-4. When done: `TaskUpdate(status: "completed")` then `SendMessage` summary to lead
-5. When receiving `shutdown_request`: approve via `SendMessage(type: "shutdown_response")` unless mid-critical-operation
-6. Communicate with peers via `SendMessage(type: "message")` when coordination needed
+Protocol: `rules/agent-protocols/team-mode.md` — role class: **Operator**.
+Report to lead: summary of git operations performed.
 
 ## When NOT to Use
 - Code review or quality analysis — use bk-code-reviewer instead

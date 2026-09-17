@@ -81,7 +81,10 @@ function main() {
       lines.push(`Tasks: ${taskInfo.completed}/${taskInfo.total} done. ${remaining} remaining.`);
 
       if (taskInfo.unblocked.length > 0) {
-        lines.push(`Unblocked & unassigned: ${taskInfo.unblocked.map(t => `#${t.id} "${t.subject}"`).join(', ')}`);
+        // Six candidates are plenty to assign from; TaskList holds the rest.
+        const shown = taskInfo.unblocked.slice(0, 6).map(t => `#${t.id} "${t.subject}"`).join(', ');
+        const more = taskInfo.unblocked.length - Math.min(6, taskInfo.unblocked.length);
+        lines.push(`Unblocked & unassigned: ${shown}${more > 0 ? ` (+${more} more)` : ''}`);
         lines.push(`Consider assigning work to ${teammate_name} or waking them with a message.`);
       } else if (remaining === 0) {
         lines.push(`No remaining tasks. Consider shutting down ${teammate_name}.`);
@@ -90,10 +93,22 @@ function main() {
       }
     }
 
+    // Advisory context is subject to the shared injection budget (cap + dedupe). Optional:
+    // if the lib is absent the text goes out unchanged.
+    let text = lines.join('\n');
+    try {
+      const injectionBudget = require('./lib/injection-budget.cjs');
+      text = injectionBudget.prepareInjection('teammate-idle-handler', text, {
+        sessionId: injectionBudget.sessionIdFrom(payload)
+      });
+    } catch { /* optional lib — keep the full text */ }
+
+    if (!text) process.exit(0);
+
     const output = {
       hookSpecificOutput: {
         hookEventName: 'TeammateIdle',
-        additionalContext: lines.join('\n')
+        additionalContext: text
       }
     };
     console.log(JSON.stringify(output));

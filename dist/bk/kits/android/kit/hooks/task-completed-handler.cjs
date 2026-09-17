@@ -88,10 +88,22 @@ function main() {
       }
     }
 
+    // Advisory context is subject to the shared injection budget (cap + dedupe). Optional:
+    // if the lib is absent the text goes out unchanged.
+    let text = lines.join('\n');
+    try {
+      const injectionBudget = require('./lib/injection-budget.cjs');
+      text = injectionBudget.prepareInjection('task-completed-handler', text, {
+        sessionId: injectionBudget.sessionIdFrom(payload)
+      });
+    } catch { /* optional lib — keep the full text */ }
+
+    if (!text) process.exit(0);
+
     const output = {
       hookSpecificOutput: {
         hookEventName: 'TaskCompleted',
-        additionalContext: lines.join('\n')
+        additionalContext: text
       }
     };
     console.log(JSON.stringify(output));

@@ -1,6 +1,6 @@
 ---
 name: bk-spec
-description: "Collect and validate feature inputs (URD, API docs, Figma) into a standardized spec package. Use when starting a new feature, preparing for /bk-plan, or when user says 'spec', 'prepare feature', 'collect requirements'."
+description: "Collect and validate feature inputs (URD, API docs, Figma) into a spec package. Triggers: 'spec', 'prepare feature', 'collect requirements', before /bk-plan."
 user-invocable: true
 argument-hint: "[--srs|--design|--validate] [--engine claude|agy|dual|auto] [feature-name] [urd-path] [figma-url]"
 ---

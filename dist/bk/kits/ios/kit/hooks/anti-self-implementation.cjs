@@ -124,19 +124,28 @@ try {
           const { readWorkflowState } = require('./lib/bk-config-utils.cjs');
           const state = readWorkflowState() || {};
           if (state.signal_count > 0 && state.last_signal) {
-            reactiveNote = ` [CRITICAL] Reactive signals active (${state.last_signal.type} ×${state.signal_count}). Dispatch helper agent FIRST, do NOT implement directly.`;
+            reactiveNote = ` [CRITICAL] Signals active (${state.last_signal.type} ×${state.signal_count}) — dispatch the helper first.`;
           }
         } catch { /* best-effort */ }
 
         const warning =
-          `[DIVISION-OF-LABOR] You are writing ${normalizedPath} directly. ` +
-          `This should be delegated to ${match.agent}. ` +
-          `Use Task(subagent_type="${match.agent.split(' ')[0]}", ...) instead.` +
+          `[DIVISION-OF-LABOR] ${normalizedPath} belongs to ${match.agent} — ` +
+          `use Task(subagent_type="${match.agent.split(' ')[0]}", ...) instead of writing it here.` +
           reactiveNote;
 
-        process.stdout.write(JSON.stringify({
-          additionalContext: warning
-        }) + '\n');
+        // Advisory context is subject to the shared injection budget (cap + dedupe).
+        // Optional lib: if absent the warning goes out unchanged.
+        let text = warning;
+        try {
+          const injectionBudget = require('./lib/injection-budget.cjs');
+          text = injectionBudget.prepareInjection('anti-self-implementation', warning, {
+            sessionId: injectionBudget.sessionIdFrom(data)
+          });
+        } catch { /* optional lib — keep the full text */ }
+
+        if (text) {
+          process.stdout.write(JSON.stringify({ additionalContext: text }) + '\n');
+        }
 
         trackViolation({ hook: 'anti-self-implementation', violation_type: 'division_of_labor', tool: getToolName(data) || 'Write', target: filePath, blocked: false, severity: 'warning', context: { agent: match.agent } });
         timer.end({ status: 'warned', path: normalizedPath, agent: match.agent, exit: 0 });

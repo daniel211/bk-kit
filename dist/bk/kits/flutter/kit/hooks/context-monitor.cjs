@@ -50,9 +50,18 @@ async function main() {
     const advisory = buildAdvisory(pct);
     if (!advisory) process.exit(0);
 
-    // Output as Claude hook additionalContext
-    const result = { additionalContext: `[context-monitor] ${advisory}` };
-    process.stdout.write(JSON.stringify(result) + '\n');
+    // Output as Claude hook additionalContext, subject to the shared injection budget
+    // (cap + dedupe). Optional lib: if absent the advisory goes out unchanged.
+    let text = `[context-monitor] ${advisory}`;
+    try {
+      const injectionBudget = require('./lib/injection-budget.cjs');
+      // This hook never reads stdin, so there is no payload session id to key state on: the
+      // budget only caps the block here. It fires once per prompt and emits <100 B, so there
+      // is nothing for dedupe to save anyway.
+      text = injectionBudget.prepareInjection('context-monitor', text, { sessionId: null });
+    } catch { /* optional lib — keep the full text */ }
+
+    if (text) process.stdout.write(JSON.stringify({ additionalContext: text }) + '\n');
   } catch {
     // Fail-open
   }

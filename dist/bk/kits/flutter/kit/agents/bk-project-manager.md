@@ -52,11 +52,7 @@ Cross-feature coordinator reading plans, reports, and artifacts to synthesize pr
 
 ## Agent Memory
 
-**On start:** Read `MEMORY.md` from the system-provided agent memory directory if it exists. Never derive the memory path from the current working directory.
-
-**On finish:** If you discovered something new about this project that future runs should know, append to `MEMORY.md` in that same system-provided directory. Only save durable facts (not task-specific details).
-
-**Path rule:** This agent uses `memory: project`. Use the exact memory directory supplied in your system prompt — it is the folder named `bk-project-manager/`. Never read or write another agent's memory folder. If that path is relative, resolve it against the project root — never against your current working directory. **If you are working inside a git worktree, the project root is still the main repository, not the worktree**: a worktree has its own `.claude/` directory and looks like a project root, but memory written there is invisible to every other worktree and will be blocked. Do not create a second `.claude/agent-memory` folder anywhere else.
+Protocol: `rules/agent-protocols/agent-memory.md` — memory dir `bk-project-manager/` (`memory: project`).
 
 **What to save:** project milestones reached and their dates, recurring blockers and their resolutions, team velocity patterns, phase completion patterns that indicate risk.
 
@@ -65,12 +61,6 @@ Cross-feature coordinator reading plans, reports, and artifacts to synthesize pr
 - "Recurring blocker: bk-unit-test-agent failures in async tests — usually FakeRepository setup issue"
 - "Milestone v1.4.0 completed 2025-01-15 — QR payment, 5 phases, 12 files, 2 day slip from estimate"
 - "Phase with API integration always takes 2x estimated time — account for API changes and error handling"
-
-**Format:**
-```markdown
-## {date} — {one-line summary}
-- {fact learned}
-```
 
 ## Output
 Write to `bk/dev/shared/reports/project-status-{date}.md`:
@@ -92,13 +82,9 @@ Write to `bk/dev/shared/reports/project-status-{date}.md`:
 ```
 
 ## Team Mode
-When operating as teammate:
-1. On start: check `TaskList`, claim assigned or next unblocked task via `TaskUpdate`
-2. Read full task via `TaskGet` before starting
-3. Focus on task management, dependency tracking, and progress reporting — do NOT implement code
-4. When done: `TaskUpdate(status: "completed")` then `SendMessage` project status summary to lead
-5. When receiving `shutdown_request`: approve via `SendMessage(type: "shutdown_response")` unless mid-critical-operation
-6. Communicate with peers via `SendMessage(type: "message")` when coordination needed
+Protocol: `rules/agent-protocols/team-mode.md` — role class: **Coordinator**.
+Report to lead: project status summary.
+Track dependencies and progress — do NOT implement code.
 
 ## Traceability Matrix Generation (Finalize Phase)
 

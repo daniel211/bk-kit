@@ -117,6 +117,27 @@ try {
 
   // Lock read/write delegated directly to lib/parallel-lock-registry (P1-1).
 
+  // Advisory context is subject to the shared injection budget (cap + dedupe). The BLOCKED
+  // path below does not go through it — a block is never budgeted.
+  let injectionBudget = null;
+  try { injectionBudget = require('./lib/injection-budget.cjs'); } catch { /* optional */ }
+
+  /** Emit advisory additionalContext through the budget, staying silent when it says so. */
+  function emitAdvisory(text, data) {
+    const out = injectionBudget
+      ? injectionBudget.prepareInjection('parallel-safety', text, {
+          sessionId: injectionBudget.sessionIdFrom(data)
+        })
+      : text;
+    if (out) process.stdout.write(JSON.stringify({ additionalContext: out }) + '\n');
+  }
+
+  /** "a.kt, b.kt, c.kt (+4 more)" — the full list is in the lock registry, not in context. */
+  function summarizeFiles(files, max = 5) {
+    const shown = files.slice(0, max).join(', ');
+    return files.length > max ? `${shown} (+${files.length - max} more)` : shown;
+  }
+
   async function main() {
     const timer = createHookTimer('parallel-safety');
     try {
@@ -146,9 +167,7 @@ try {
       if (fileTargets.length === 0) {
         // No file targets detected — warn if prompt lacks Files: section
         if (prompt && !/Files?:/i.test(prompt)) {
-          process.stdout.write(JSON.stringify({
-            additionalContext: '[PARALLEL-SAFETY] No Files: section in dispatch prompt. Add "Files: path/to/file.ext" for parallel safety locks.'
-          }) + '\n');
+          emitAdvisory('[PARALLEL-SAFETY] No lock taken: dispatch prompt has no "Files: path/to/file.ext" section.', data);
         }
         timer.end({ status: 'no_files', exit: 0 });
         process.exit(0);
@@ -182,9 +201,12 @@ try {
       }
 
       if (conflicts.length > 0) {
-        const conflictDesc = conflicts
+        // Three conflicting files are enough to act on; the rest repeat the same fact.
+        const shownConflicts = conflicts.slice(0, 3);
+        const conflictDesc = shownConflicts
           .map(c => `"${c.file}" ${c.existingMode}-locked by ${c.existingAgent}, ${c.newAgent} wants ${c.newMode}`)
-          .join('; ');
+          .join('; ')
+          + (conflicts.length > shownConflicts.length ? ` (+${conflicts.length - shownConflicts.length} more)` : '');
         process.stderr.write(
           `[PARALLEL-SAFETY] BLOCKED: File conflict — ${conflictDesc}. ` +
           `Agent "${agentType}" cannot proceed until the owning agent completes.\n`
@@ -202,9 +224,10 @@ try {
         lockRegistry.writeLock(file, agentType, currentMode);
       }
 
-      process.stdout.write(JSON.stringify({
-        additionalContext: `[PARALLEL-SAFETY] ${currentMode}-locks acquired for ${agentType}: ${fileTargets.join(', ')}`
-      }) + '\n');
+      emitAdvisory(
+        `[PARALLEL-SAFETY] ${fileTargets.length} ${currentMode}-lock(s) for ${agentType}: ${summarizeFiles(fileTargets)}`,
+        data
+      );
 
       timer.end({ status: 'ok', exit: 0 });
       process.exit(0);

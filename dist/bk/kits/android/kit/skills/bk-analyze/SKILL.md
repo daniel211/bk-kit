@@ -1,6 +1,6 @@
 ---
 name: bk-analyze
-description: "Pure exploration skill — analyze project structure, architecture, and dependencies. No FSM, no hooks, no code changes. Can dispatch bk-researcher."
+description: "Pure exploration — analyze project structure, architecture, dependencies. No FSM, no hooks, no code changes."
 user-invocable: true
 argument-hint: "[topic: architecture / dependencies / structure / specific module]"
 ---

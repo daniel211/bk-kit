@@ -83,9 +83,18 @@ try {
       }
 
       const allLines = [...errors, ...warnings];
-      process.stdout.write(JSON.stringify({
-        additionalContext: allLines.join('\n')
-      }) + '\n');
+
+      // Advisory context is subject to the shared injection budget (cap + dedupe). Optional:
+      // if the lib is absent the text goes out unchanged.
+      let text = allLines.join('\n');
+      try {
+        const injectionBudget = require('./lib/injection-budget.cjs');
+        text = injectionBudget.prepareInjection('bootstrap-quality-gate', text, {
+          sessionId: injectionBudget.sessionIdFrom(data)
+        });
+      } catch { /* optional lib — keep the full text */ }
+
+      if (text) process.stdout.write(JSON.stringify({ additionalContext: text }) + '\n');
 
       timer.end({ status: warnings.length > 0 ? 'warn' : 'error', exit: 0 });
       process.exit(0);

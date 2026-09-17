@@ -1,6 +1,6 @@
 ---
 name: bk-agent-contract
-description: "REQUIRED before dispatching agents. Defines agent I/O file contracts, the impl report schema, background agent limitations, output verification protocol, and workflow completion report format."
+description: "REQUIRED before dispatching agents: agent I/O file contracts, impl report schema, background-agent limits, output verification."
 user-invocable: false
 ---
 
@@ -125,78 +125,18 @@ actual source — see `bk-code-review-workflow`.
 
 ## 4. AGENT INPUT/OUTPUT MATRIX
 
-| Agent | Required Input | Output |
-|-------|----------------|--------|
-| bk-researcher | Feature description | requirements.md |
-| design-validator | Figma URL | discovery.json, component-contracts.json |
-| design-spec-writer | Figma nodeId + slug | design.md (per screen) |
-| design-asset-exporter | assets.json (from design.md) | platform asset folders + asset-export-report.json |
-| api-integrator | API spec | endpoints.json, models.json |
-| bk-{platform}-developer (e.g. bk-ios-developer) | requirements, design, api, spec_index | impl report (md) |
-| bk-unit-test-agent | impl report(s), test-cases, spec_index | test-files.json |
-| bk-code-reviewer | impl report(s), spec_index | code-review.md |
-| security-auditor | impl report(s) | security.md |
-
----
+Who reads what and writes what — per-agent table: `references/io-matrix.md`.
 
 ## 5. BACKGROUND AGENT LIMITATIONS
 
-```
-Background agents CANNOT:
-  ✗ Call LSP tools
-  ✗ Call MCP servers
-  ✗ Return need_data (use blocked status instead)
+Background agents CANNOT call LSP tools or MCP servers, and CANNOT return `need_data` (use
+`blocked`). They CAN read (Glob/Grep/Read), write (Write/Edit) and run Bash.
+Main MUST therefore provide, in the prompt: every input file path (absolute), the expected output
+path, and complete context — never a reference to "previous" anything.
 
-Background agents CAN:
-  ✓ Read files (Glob, Grep, Read)
-  ✓ Write files (Write, Edit)
-  ✓ Execute commands (Bash)
-```
-
-Main MUST provide in prompt:
-- All input file paths (absolute)
-- Expected output file path
-- Complete context (no "previous" references)
-
-### Background Agent Status Protocol
-
-| Status | When | Conductor Action |
-|--------|------|-----------------|
-| `complete` | Work done, output written | Verify + proceed |
-| `partial` | Some work done, partial output | Assess → re-dispatch narrower scope OR proceed |
-| `blocked` | Missing critical info | Read `{feature}-blocked.json` → provide info → re-dispatch |
-| `failed` | Error occurred | Retry once simplified → escalate to user |
-
-When blocked, write `{output-dir}/{feature}-blocked.json`:
-```json
-{"agent": "agent-type", "status": "blocked", "missing": ["what's needed"], "partial_output": "path"}
-```
-
----
-
-## Confidence Reporting (Required)
-
-Every agent output MUST include confidence indicator in metadata footer:
-
-```
-<!-- metadata: {..., "confidence": "high|medium|low", "confidence_reason": "brief reason"} -->
-```
-
-### Definitions:
-| Level | Range | Meaning | Conductor Action |
-|-------|-------|---------|-----------------|
-| high | >= 80% | Clear evidence, verified | Continue pipeline |
-| medium | 50-79% | Some uncertainty | Log warning, monitor |
-| low | < 50% | Significant uncertainty | Trigger reactive protocol |
-
-### Examples:
-- `"confidence": "high", "confidence_reason": "single clear root cause with reproducible test"`
-- `"confidence": "medium", "confidence_reason": "2 possible causes, chose most likely based on evidence"`
-- `"confidence": "low", "confidence_reason": "cannot reproduce issue, multiple possible causes"`
-
-When confidence is LOW, conductor MUST check `rules/reactive-orchestration.md` before proceeding.
-
----
+Status protocol (`complete` / `partial` / `blocked` / `failed`), the `{feature}-blocked.json`
+shape, and the **required confidence footer** (`high`/`medium`/`low` + reason; LOW → check
+`rules/reactive-orchestration.md` before proceeding): `references/background-agents.md`.
 
 ## 6. OUTPUT VERIFICATION
 
@@ -229,44 +169,6 @@ AFTER agent completes:
 
 ## 8. WORKFLOW COMPLETION REPORT
 
-Path: `bk/dev/shared/reports/workflow-report-{feature}.json`
-
-```json
-{
-  "report_version": "1.0",
-  "feature": "{name}",
-  "generated_at": "ISO-8601",
-  "summary": {
-    "status": "SUCCESS|PARTIAL|FAILED",
-    "tasks": {"total": 8, "completed": 8, "skipped": 0}
-  },
-  "files_changed": {
-    "total": 5,
-    "list": [{"path": "...", "change": "modified", "description": "..."}]
-  },
-  "test_results": {
-    "unit": {"total": 10, "passed": 10, "failed": 0},
-    "gate_status": "PASSED"
-  },
-  "review_summary": {
-    "status": "approved|rejected",
-    "issues_found": 2,
-    "issues_fixed": 2
-  },
-  "impact_assessment": {
-    "scope": "low|medium|high",
-    "risk_level": "low"
-  }
-}
-```
-
-### Generate Logic
-
-```
-1. Read every impl report for the feature → union of `files_changed`
-2. Read test-execution-*.json → test_results
-3. Read code-review-*.json → review_summary
-4. Calculate impact from impl data
-5. Write workflow-report-{feature}.json
-6. Display summary to user
-```
+Path: `bk/dev/shared/reports/workflow-report-{feature}.json` — union of every impl report's
+`files_changed`, plus test results, review summary and impact assessment.
+Full JSON schema + generate logic: `references/completion-report.md`.

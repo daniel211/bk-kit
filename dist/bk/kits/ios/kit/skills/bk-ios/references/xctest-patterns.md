@@ -84,3 +84,95 @@ final class ViewModelTests: XCTestCase {
     }
 }
 ```
+
+## XCTest Patterns — full examples
+
+### Basic Test Setup
+```swift
+import XCTest
+@testable import App
+
+final class UserRepositoryTests: XCTestCase {
+    private var sut: UserRepository!
+    private var mockAPI: MockAPIClient!
+
+    override func setUp() {
+        super.setUp()
+        mockAPI = MockAPIClient()
+        sut = UserRepository(api: mockAPI)
+    }
+
+    override func tearDown() {
+        sut = nil
+        mockAPI = nil
+        super.tearDown()
+    }
+
+    func test_fetchUser_returnsUser() async throws {
+        mockAPI.stubbedResponse = User(id: "1", name: "Test")
+
+        let user = try await sut.fetchUser(id: "1")
+
+        XCTAssertEqual(user.name, "Test")
+        XCTAssertEqual(mockAPI.fetchCalledCount, 1)
+    }
+
+    func test_fetchUser_throwsOnNetworkError() async {
+        mockAPI.shouldThrow = true
+
+        do {
+            _ = try await sut.fetchUser(id: "1")
+            XCTFail("Expected error")
+        } catch {
+            XCTAssertTrue(error is NetworkError)
+        }
+    }
+}
+```
+
+### Async Testing
+```swift
+func test_publisherEmitsValues() async {
+    let expectation = expectation(description: "values emitted")
+    var received: [String] = []
+
+    sut.valuesPublisher
+        .sink { received.append($0) }
+        .store(in: &cancellables)
+
+    sut.loadValues()
+
+    await fulfillment(of: [expectation], timeout: 2.0)
+    XCTAssertEqual(received, ["a", "b", "c"])
+}
+```
+
+### @MainActor Testing
+```swift
+@MainActor
+final class LoginViewModelTests: XCTestCase {
+    func test_login_updatesState() async {
+        let vm = LoginViewModel(auth: MockAuthService())
+
+        await vm.login(email: "test@test.com", password: "pass")
+
+        XCTAssertTrue(vm.isLoggedIn)
+        XCTAssertNil(vm.errorMessage)
+    }
+}
+```
+
+### Fake Implementation (preferred over mocks)
+```swift
+class FakeUserStore: UserStoreProtocol {
+    var users: [String: User] = [:]
+
+    func save(_ user: User) async throws {
+        users[user.id] = user
+    }
+
+    func fetch(id: String) async throws -> User? {
+        return users[id]
+    }
+}
+```

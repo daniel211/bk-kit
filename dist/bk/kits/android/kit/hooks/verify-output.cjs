@@ -235,10 +235,9 @@ try {
         const outputValid = errors.length === 0;
         const retryCount = trackRetry(agentType, feature, outputValid);
         if (retryCount >= 2) {
-          const retrySignal = `[REACTIVE-SIGNAL: agent_stuck] (HIGH)\n` +
-            `Agent "${agentType}" has failed ${retryCount} times for "${feature}". ` +
-            'Consider dispatching bk-brainstormer for alternative approach. ' +
-            'See rules/reactive-orchestration.md §3.';
+          const retrySignal =
+            `[REACTIVE-SIGNAL: agent_stuck] (HIGH) "${agentType}" failed ${retryCount}x on "${feature}" — ` +
+            'Task(bk-brainstormer). Detail: rules/reactive-orchestration.md §3.';
           warnings.push(retrySignal);
         }
       }
@@ -261,20 +260,36 @@ try {
         process.exit(0);
       }
 
+      // Five of a kind is enough to act on — a placeholder scan can produce one warning per
+      // line, and the tail of that list never changed what the conductor had to do.
+      const MAX_ITEMS = 5;
+      const listOf = (items) => {
+        const shown = items.slice(0, MAX_ITEMS).map((i) => `  - ${i}`);
+        if (items.length > shown.length) shown.push(`  - (+${items.length - shown.length} more)`);
+        return shown;
+      };
+
       const lines = [];
       if (errors.length > 0) {
-        lines.push(`[AGENT-OUTPUT-REJECTED] Agent "${agentType}" output has errors:`);
-        errors.forEach(e => lines.push(`  - ${e}`));
-        lines.push('ACTION: Re-dispatch agent with corrected prompt.');
+        lines.push(`[AGENT-OUTPUT-REJECTED] "${agentType}" — re-dispatch with a corrected prompt:`);
+        lines.push(...listOf(errors));
       }
       if (warnings.length > 0) {
-        lines.push(`[AGENT-OUTPUT-WARNING] Agent "${agentType}" warnings:`);
-        warnings.forEach(w => lines.push(`  - ${w}`));
+        lines.push(`[AGENT-OUTPUT-WARNING] "${agentType}":`);
+        lines.push(...listOf(warnings));
       }
 
-      process.stdout.write(JSON.stringify({
-        additionalContext: lines.join('\n')
-      }) + '\n');
+      // Advisory context is subject to the shared injection budget (cap + dedupe). Optional:
+      // if the lib is absent the text goes out unchanged.
+      let text = lines.join('\n');
+      try {
+        const injectionBudget = require('./lib/injection-budget.cjs');
+        text = injectionBudget.prepareInjection('verify-output', text, {
+          sessionId: injectionBudget.sessionIdFrom(data)
+        });
+      } catch { /* optional lib — keep the full text */ }
+
+      if (text) process.stdout.write(JSON.stringify({ additionalContext: text }) + '\n');
 
       timer.end({ status: errors.length > 0 ? 'error' : 'warn', exit: 0 });
       process.exit(0);

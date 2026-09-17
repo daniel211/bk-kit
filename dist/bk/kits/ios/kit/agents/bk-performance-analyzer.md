@@ -49,11 +49,7 @@ Background: See `_base-background-lite.md` for shared read-only agent cognitive 
 
 ## Agent Memory
 
-**On start:** Read `MEMORY.md` from the system-provided agent memory directory if it exists. Never derive the memory path from the current working directory.
-
-**On finish:** If you discovered something new about this project that future runs should know, append to `MEMORY.md` in that same system-provided directory. Only save durable facts (not task-specific details).
-
-**Path rule:** This agent uses `memory: project`. Use the exact memory directory supplied in your system prompt — it is the folder named `bk-performance-analyzer/`. Never read or write another agent's memory folder. If that path is relative, resolve it against the project root — never against your current working directory. **If you are working inside a git worktree, the project root is still the main repository, not the worktree**: a worktree has its own `.claude/` directory and looks like a project root, but memory written there is invisible to every other worktree and will be blocked. Do not create a second `.claude/agent-memory` folder anywhere else.
+Protocol: `rules/agent-protocols/agent-memory.md` — memory dir `bk-performance-analyzer/` (`memory: project`).
 
 **What to save:** architecture patterns confirmed, recurring performance hotspots, project-specific optimization conventions.
 
@@ -63,12 +59,6 @@ Background: See `_base-background-lite.md` for shared read-only agent cognitive 
 - "List performance: team uses LazyVStack + ScrollView pattern, not List — for custom styling"
 - "Memory threshold: app receives memory warnings at ~180MB on iPhone 12 — target <150MB"
 - "Network: API responses average 2KB, but /feed endpoint returns 50KB — needs pagination"
-
-**Format:**
-```markdown
-## {date} — {one-line summary}
-- {fact learned}
-```
 
 ## Output
 Write `bk/dev/shared/reports/performance-{feature}.md`:
@@ -102,13 +92,8 @@ Write `bk/dev/shared/reports/performance-{feature}.md`:
 - Defaults if no thresholds defined: 2s startup, 60fps, 100MB memory
 
 ## Team Mode
-When operating as teammate:
-1. On start: check `TaskList`, claim assigned or next unblocked task via `TaskUpdate`
-2. Read full task via `TaskGet` before starting
-3. Do NOT make code changes — report findings and recommendations only
-4. When done: `TaskUpdate(status: "completed")` then `SendMessage` report to lead
-5. When receiving `shutdown_request`: approve via `SendMessage(type: "shutdown_response")` unless mid-critical-operation
-6. Communicate with peers via `SendMessage(type: "message")` when coordination needed
+Protocol: `rules/agent-protocols/team-mode.md` — role class: **Reviewer (read-only)**.
+Report to lead: performance report.
 
 ## When NOT to Use
 - Debugging specific crashes or errors — use bk-debugger instead

@@ -9,7 +9,7 @@ permissionMode: plan
 memory: project
 mcpServers: []
 executionMode: either
-skills: [bk-architecture, bk-problem-solving, bk-docs-seeker]
+skills: [bk-architecture, bk-problem-solving]
 triggers:
   - signal: agent_stuck
     condition: "retry_count >= 2"
@@ -54,6 +54,8 @@ Mobile architecture advisor evaluating approaches, debating trade-offs, and reco
 - **External docs:** Use `/bk-docs-seeker` to read latest documentation of external plugins/packages before recommending.
 - **GitHub repos:** When given a GitHub URL, use `repomix --remote <url>` to generate codebase summary for analysis.
 
+**Not preloaded — load on demand only:** `bk-docs-seeker`.
+
 ## Constraints
 - FORBIDDEN TOOLS: Edit, Bash, Task — advisory agent, never modifies project files
 - Never implements code — analysis and recommendation only
@@ -63,11 +65,7 @@ Mobile architecture advisor evaluating approaches, debating trade-offs, and reco
 
 ## Agent Memory
 
-**On start:** Read `MEMORY.md` from the system-provided agent memory directory if it exists. Never derive the memory path from the current working directory.
-
-**On finish:** If you discovered something new about this project that future runs should know, append to `MEMORY.md` in that same system-provided directory. Only save durable facts (not task-specific details).
-
-**Path rule:** This agent uses `memory: project`. Use the exact memory directory supplied in your system prompt — it is the folder named `bk-brainstormer/`. Never read or write another agent's memory folder. If that path is relative, resolve it against the project root — never against your current working directory. **If you are working inside a git worktree, the project root is still the main repository, not the worktree**: a worktree has its own `.claude/` directory and looks like a project root, but memory written there is invisible to every other worktree and will be blocked. Do not create a second `.claude/agent-memory` folder anywhere else.
+Protocol: `rules/agent-protocols/agent-memory.md` — memory dir `bk-brainstormer/` (`memory: project`).
 
 **What to save:** architecture decisions made and their outcomes, patterns that worked/failed for this project, platform-specific gotchas discovered, trade-off resolutions that proved correct or incorrect.
 
@@ -76,12 +74,6 @@ Mobile architecture advisor evaluating approaches, debating trade-offs, and reco
 - "BLoC over Riverpod for this project — team familiarity was decisive factor"
 - "Coordinator pattern confirmed for navigation — avoid NavStack-only patterns, deep linking needs coordinator"
 - "Room + NetworkBoundResource for offline-first was correct — DataStore alternative lacked query flexibility"
-
-**Format:**
-```markdown
-## {date} — {one-line summary}
-- {fact learned}
-```
 
 ## Output
 Write to `bk/dev/shared/reports/brainstorm-{feature}.md`:
@@ -106,13 +98,8 @@ Write to `bk/dev/shared/reports/brainstorm-{feature}.md`:
 ```
 
 ## Team Mode
-When operating as teammate:
-1. On start: check `TaskList`, claim assigned or next unblocked task via `TaskUpdate`
-2. Read full task via `TaskGet` before starting
-3. Do NOT make code changes — report findings and recommendations only
-4. When done: `TaskUpdate(status: "completed")` then `SendMessage` recommendation summary to lead
-5. When receiving `shutdown_request`: approve via `SendMessage(type: "shutdown_response")` unless mid-critical-operation
-6. Communicate with peers via `SendMessage(type: "message")` when coordination needed
+Protocol: `rules/agent-protocols/team-mode.md` — role class: **Reviewer (read-only)**.
+Report to lead: recommendation summary.
 
 ## When NOT to Use
 - Implementing code — use platform dev agents instead

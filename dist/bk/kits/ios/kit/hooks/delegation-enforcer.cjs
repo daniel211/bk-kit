@@ -22,6 +22,24 @@ try {
     'bk-brainstormer', 'bk-code-simplifier', 'bk-project-manager'
   ]);
 
+  // Advisory context is subject to the shared injection budget (cap + dedupe). Optional:
+  // if the lib is absent the text goes out unchanged.
+  let injectionBudget = null;
+  try { injectionBudget = require('./lib/injection-budget.cjs'); } catch { /* optional */ }
+
+  /** Emit advisory additionalContext through the budget, staying silent when it says so. */
+  function emitAdvisory(text, data) {
+    let out = text;
+    if (injectionBudget) {
+      try {
+        out = injectionBudget.prepareInjection('delegation-enforcer', text, {
+          sessionId: injectionBudget.sessionIdFrom(data)
+        });
+      } catch { out = text; }
+    }
+    if (out) process.stdout.write(JSON.stringify({ additionalContext: out }) + '\n');
+  }
+
   // --- Task 3.1A: Required sections validation for dispatch prompts ---
   const REQUIRED_PROMPT_SECTIONS = ['Task:', 'Output:'];
   const RECOMMENDED_PROMPT_SECTIONS = ['Platform:', 'Files:'];
@@ -84,9 +102,12 @@ try {
       // Skip non-kit agents, but warn on unknown bk-* prefixed agents
       if (!agentType || !KNOWN_AGENTS.has(agentType)) {
         if (agentType && agentType.startsWith('bk-')) {
-          process.stdout.write(JSON.stringify({
-            additionalContext: `[DISPATCH-WARN] Unknown bk-agent "${agentType}". Valid agents: ${[...KNOWN_AGENTS].join(', ')}`
-          }) + '\n');
+          // The full roster used to be pasted in here — ~1.4 KB of agent names on every typo.
+          // The names are already in .claude/agents/, which the model can list on demand.
+          emitAdvisory(
+            `[DISPATCH-WARN] "${agentType}" is not a kit agent — check the names in .claude/agents/.`,
+            data
+          );
         }
         timer.end({ status: 'ok', exit: 0 });
         process.exit(0);
@@ -274,9 +295,7 @@ try {
         traceAgent('start', { agent: agentType, feature: feature || undefined, platform, phase: phase || undefined });
       } catch { /* telemetry is best-effort */ }
 
-      process.stdout.write(JSON.stringify({
-        additionalContext: contextParts.join('. ')
-      }) + '\n');
+      emitAdvisory(contextParts.join('. '), data);
 
       timer.end({ status: 'ok', exit: 0 });
       process.exit(0);

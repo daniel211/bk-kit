@@ -148,9 +148,17 @@ try {
         output.push('Advisory: Full review pipeline (code-reviewer + security-auditor + performance-analyzer). Full finalize (3 agents).');
       }
 
-      process.stdout.write(JSON.stringify({
-        additionalContext: output.join('\n')
-      }) + '\n');
+      // Advisory context is subject to the shared injection budget (cap + dedupe). Optional:
+      // if the lib is absent the text goes out unchanged.
+      let text = output.join('\n');
+      try {
+        const injectionBudget = require('./lib/injection-budget.cjs');
+        text = injectionBudget.prepareInjection('complexity-detector', text, {
+          sessionId: injectionBudget.sessionIdFrom(data)
+        });
+      } catch { /* optional lib — keep the full text */ }
+
+      if (text) process.stdout.write(JSON.stringify({ additionalContext: text }) + '\n');
 
       timer.end({ status: 'ok', tier, subTasks: subTaskCount, files: fileCount, exit: 0 });
       process.exit(0);

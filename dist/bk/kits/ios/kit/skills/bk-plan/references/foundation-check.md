@@ -62,3 +62,35 @@ This context feeds into:
 - Step 5 (code-analysis) → knows patterns, skips broad scan
 - Step 6 (researchers) → accurate platform/arch context in prompts
 - Step 8 (synthesis) → expected code follows detected conventions
+
+## Full Extraction Detail (bk-plan Step 1)
+
+If `bk/docs/foundation/overview.md` is missing → **STOP** and show:
+"Foundation docs not found. Run `/bk-bootstrap` first to scan project."
+
+If it exists, read ALL 6 foundation files and extract specific data:
+
+1. `bk/docs/foundation/overview.md` → platform, entry points, module map
+2. `bk/docs/foundation/architecture.md` → architecture pattern, state management, DI, layer map
+3. `bk/docs/foundation/code-guidelines.md` → naming conventions, lint rules, test patterns
+4. `bk/docs/foundation/dependencies.md` → core deps, version constraints
+5. `bk/docs/foundation/build-targets.md` → build commands, CI config
+6. `bk/docs/foundation/design-system.md` (if exists) → UI components, theming
+
+Store the result as `foundation_context` for every subsequent step:
+
+```
+foundation_context = {
+  platform, entryPoints, moduleMap,
+  architecturePattern, stateManagement, di, layerMap,
+  namingConventions, lintRules, testPatterns,
+  coreDeps, versionConstraints,
+  buildCommands, ciConfig,
+  uiComponents, theming
+}
+```
+
+Then load `platform-context.json`.
+
+Pre-collected spec input: if `bk/dev/{feature}/spec-summary.md` exists, read it as pre-collected
+input and skip interview questions for anything `/bk-spec` already gathered.

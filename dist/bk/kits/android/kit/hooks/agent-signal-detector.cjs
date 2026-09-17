@@ -60,15 +60,26 @@ try {
     { pattern: /performance (critical|severe|bottleneck|blocking main)/i, signal: 'performance_issue', priority: 'MEDIUM' },
   ];
 
+  // One line per signal, naming the agent to dispatch and nothing else. The reasoning behind
+  // each route lives in rules/reactive-orchestration.md §3, which the model can read when it
+  // needs it — repeating it in every PostToolUse injection cost ~6 KB per Task batch.
   const RECOMMENDATIONS = {
-    'agent_stuck': 'Dispatch bk-brainstormer with current error context for alternative approach. If brainstormer also fails, dispatch bk-problem-solving. Do NOT retry the same agent.',
-    'fix_loop_stuck': 'Fix loop detected — same error repeating. Dispatch bk-problem-solving (Simplification Cascades technique). Do NOT retry — the current approach is fundamentally wrong.',
-    'unknown_api': 'Dispatch bk-docs-seeker to look up the unknown API/framework. Include the framework name and error message in dispatch prompt.',
-    'confidence_low': 'Agent reports low confidence. Dispatch bk-sequential-thinking for step-by-step analysis. If 2+ agents disagree, AskUserQuestion before proceeding.',
-    'conflicting_results': 'Multiple sources/agents disagree. Dispatch bk-sequential-thinking to analyze both sides and recommend.',
-    'architecture_concern': 'Architecture issue detected. Dispatch bk-brainstormer for refactor approach evaluation before proceeding.',
-    'performance_issue': 'Performance critical issue found. Dispatch bk-brainstormer for optimization approach before proceeding.',
+    'agent_stuck': 'Task(bk-brainstormer) with the error context; if that fails, bk-problem-solving. Do NOT retry the same agent.',
+    'fix_loop_stuck': 'Same error repeating: Task(bk-problem-solving). Do NOT retry — the approach itself is wrong.',
+    'unknown_api': 'Task(bk-docs-seeker) with the framework name + error text.',
+    'confidence_low': 'Task(bk-sequential-thinking). If 2+ agents disagree, AskUserQuestion first.',
+    'conflicting_results': 'Task(bk-sequential-thinking) to weigh both sides and pick one.',
+    'architecture_concern': 'Task(bk-brainstormer) to evaluate the refactor before proceeding.',
+    'performance_issue': 'Task(bk-brainstormer) for an optimisation approach before proceeding.',
   };
+
+  /** At most this many signals are reported — the rest are noise behind the first few. */
+  const MAX_REPORTED_SIGNALS = 3;
+
+  // Advisory context is subject to the shared injection budget (cap + dedupe). Optional:
+  // if the lib is absent the text goes out unchanged.
+  let injectionBudget = null;
+  try { injectionBudget = require('./lib/injection-budget.cjs'); } catch { /* optional */ }
 
   async function main() {
     const timer = createHookTimer('agent-signal-detector');
@@ -135,17 +146,30 @@ try {
           }));
         } catch { /* best-effort state write */ }
 
-        const lines = [];
-        for (const { signal, priority } of unique) {
-          lines.push(`[REACTIVE-SIGNAL: ${signal}] (${priority})`);
-          lines.push(RECOMMENDATIONS[signal]);
+        // HIGH first, then at most MAX_REPORTED_SIGNALS — one line each.
+        const reported = [...unique]
+          .sort((a, b) => (a.priority === b.priority ? 0 : a.priority === 'HIGH' ? -1 : 1))
+          .slice(0, MAX_REPORTED_SIGNALS);
+
+        const lines = reported.map(
+          ({ signal, priority }) => `[REACTIVE-SIGNAL: ${signal}] (${priority}) ${RECOMMENDATIONS[signal]}`
+        );
+        if (unique.length > reported.length) {
+          lines.push(`(+${unique.length - reported.length} more signal(s))`);
+        }
+        lines.push('Detail: rules/reactive-orchestration.md §3.');
+
+        const text = injectionBudget
+          ? injectionBudget.prepareInjection('agent-signal-detector', lines.join('\n'), {
+              sessionId: injectionBudget.sessionIdFrom(data)
+            })
+          : lines.join('\n');
+
+        if (text) {
+          process.stdout.write(JSON.stringify({ additionalContext: text }) + '\n');
         }
 
-        process.stdout.write(JSON.stringify({
-          additionalContext: lines.join('\n')
-        }) + '\n');
-
-        timer.end({ status: 'signals_detected', count: unique.length, agent: agentType, exit: 0 });
+        timer.end({ status: 'signals_detected', count: unique.length, agent: agentType, injected: !!text, exit: 0 });
       } else {
         timer.end({ status: 'ok', exit: 0 });
       }

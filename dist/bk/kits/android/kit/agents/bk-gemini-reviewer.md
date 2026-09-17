@@ -48,15 +48,9 @@ Background: See `_base-background-lite.md` for shared read-only agent cognitive 
 
 ## Agent Memory
 
-**On start:** Read `MEMORY.md` from the system-provided agent memory directory if it exists (`bk-gemini-reviewer/MEMORY.md`). Never derive memory path from cwd.
+Protocol: `rules/agent-protocols/agent-memory.md` — memory dir `bk-gemini-reviewer/` (`memory: project`).
 
-**On finish:** If you discovered durable patterns about this project (e.g. approved architectural waivers, recurring concurrency mistakes), append to `MEMORY.md`.
-
-**Format:**
-```markdown
-## {date} — {one-line summary}
-- {fact learned}
-```
+**What to save:** durable review patterns for this project — approved architectural waivers, recurring concurrency mistakes, findings the team has already rejected as non-issues.
 
 ## Output
 Write `bk/dev/shared/reports/code-review-gemini-{feature}.md`:
@@ -93,12 +87,9 @@ Write `bk/dev/shared/reports/code-review-gemini-{feature}.md`:
 - Ref: agent-protocols/output-gate.md, agent-protocols/tool-restriction.md
 
 ## Team Mode
-When operating as teammate:
-1. Check `TaskList`, claim assigned task via `TaskUpdate`
-2. Read full task via `TaskGet` before starting
-3. Execute the review harness (`agy`), cross-validate findings
-4. Write report and update task: `TaskUpdate(status: "completed")`
-5. Send report summary to lead via `SendMessage`
+Protocol: `rules/agent-protocols/team-mode.md` — role class: **Reviewer (read-only)**.
+Report to lead: harness review summary.
+Run the review harness (`agy`) and cross-validate its findings before reporting — never edit source.
 
 # bk-gemini-reviewer — Android Section
 

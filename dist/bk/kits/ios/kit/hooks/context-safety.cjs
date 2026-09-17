@@ -102,9 +102,17 @@ try {
         const note = demoted
           ? ' (heuristic estimate — install statusline cache for blocking guarantee)'
           : '';
-        process.stdout.write(JSON.stringify({
-          additionalContext: `${tag} Context at ${contextPct.toFixed(0)}%${note}. Consider saving a checkpoint before dispatching more agents.`
-        }) + '\n');
+        // Advisory context is subject to the shared injection budget (cap + dedupe). The
+        // blocked path above does NOT go through it. Optional lib: absent → text unchanged.
+        let text = `${tag} Context at ${contextPct.toFixed(0)}%${note}. Save a checkpoint before dispatching more agents.`;
+        try {
+          const injectionBudget = require('./lib/injection-budget.cjs');
+          text = injectionBudget.prepareInjection('context-safety', text, {
+            sessionId: injectionBudget.sessionIdFrom(data)
+          });
+        } catch { /* optional lib — keep the full text */ }
+
+        if (text) process.stdout.write(JSON.stringify({ additionalContext: text }) + '\n');
       }
 
       timer.end({ status: 'ok', exit: 0 });

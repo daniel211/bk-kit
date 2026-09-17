@@ -70,3 +70,40 @@ If no technique helps:
 - Combine if first doesn't work
 - Document what you tried
 - Not stuck forever, just temporarily
+
+## Technique Cheat-Sheet (key insight + red flag)
+
+### 1. Simplification Cascades
+Find one insight eliminating multiple components. "If this is true, we don't need X, Y, Z."
+
+**Key insight:** Everything is a special case of one general pattern.
+
+**Red flag:** "Just need to add one more case..." (repeating forever)
+
+### 2. Collision-Zone Thinking
+Force unrelated concepts together to discover emergent properties. "What if we treated X like Y?"
+
+**Key insight:** Revolutionary ideas from deliberate metaphor-mixing.
+
+**Red flag:** "I've tried everything in this domain"
+
+### 3. Meta-Pattern Recognition
+Spot patterns appearing in 3+ domains to find universal principles.
+
+**Key insight:** Patterns in how patterns emerge reveal reusable abstractions.
+
+**Red flag:** "This problem is unique" (probably not)
+
+### 4. Inversion Exercise
+Flip core assumptions to reveal hidden constraints. "What if the opposite were true?"
+
+**Key insight:** Valid inversions reveal context-dependence of "rules."
+
+**Red flag:** "There's only one way to do this"
+
+### 5. Scale Game
+Test at extremes (1000x bigger/smaller, instant/year-long) to expose fundamental truths.
+
+**Key insight:** What works at one scale fails at another.
+
+**Red flag:** "Should scale fine" (without testing)

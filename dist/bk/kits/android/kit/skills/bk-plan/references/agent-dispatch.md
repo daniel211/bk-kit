@@ -191,3 +191,66 @@ Glob("**/*.swift") or Glob("**/*.kt") or Glob("**/lib/**/*.dart")
 
 All agent outputs go to `{plan-dir}/research/`. Planner reads from there.
 Agents write to pre-agreed paths — no prompt-based output passing.
+
+## Planner Dispatch (Step 8 — foreground, MUST)
+
+DO NOT write `plan.md` / `sub-task-*.md` yourself. Dispatch bk-planner.
+`"bk-planner"` is the CUSTOM agent (`agents/bk-planner.md`): opus model, serena MCP,
+`Task(Explore)` / `Task(bk-researcher)`, skills(bk-architecture, bk-sequential-thinking,
+bk-docs-seeker), project memory. DO NOT use the built-in `Plan()` agent — it has none of these.
+
+```
+TaskUpdate(taskId=T5, status="in_progress")
+Task(subagent_type: "bk-planner", model: "opus",
+  description: "Create implementation plan for {feature}", prompt: "
+  Task: Create sub-task-based implementation plan
+  Feature: {feature_description}
+  Platform: {platform}
+  Context:
+    - bk/docs/foundation/ (project context — architecture, guidelines, deps)
+    - {plan-dir}/research/code-analysis-summary.md (Step 5 code impact analysis)
+    - {plan-dir}/research/researcher-*.md (Step 6 research outputs)
+    - {plan-dir}/inputs/ (design.json, requirements.json if exist)
+    - {plan-dir}/srs.md (if exists)
+  Scope: {triage_result — small/normal/large/massive from Step 2}
+  Gap decisions: {gap_decisions from Step 7 if any}
+  Templates: references/plan-synthesis.md, templates/plan-summary.md,
+    templates/sub-task-coding.md, sub-task-ui.md, sub-task-test.md
+  Output: {plan-dir}/plan.md + {plan-dir}/sub-task-*.md
+  Constraints: plan.md < 60 lines, sub-task 30-80 lines each
+")
+TaskUpdate(taskId=T5, status="completed")
+```
+
+bk-planner workflow: ORIENT (read Serena memories + foundation) → RESEARCH (Explore/serena) →
+STRUCTURE → WRITE → SAVE. The conductor reads the plan output, then proceeds to Step 8b.
+
+If parallel mode: add an `execution: parallel` instruction plus `owns:` glob enforcement to the
+planner prompt, and load `references/parallel-planning.md`.
+
+## Step 8b: Plan Quality Self-Check (before the critic)
+
+- Files are named `sub-task-NN-{slug}.md` — never `phase-*.md` (bk-code globs `sub-task-*`)
+- Every sub-task has ≥3 concrete file paths in `## Scope`
+- Every sub-task has an `## Expected Code` section with actual code preview
+- Every sub-task has a `## Tasks` checkbox list (bk-code's only hydration source)
+- Every sub-task has `## Success Criteria` with testable conditions
+- No sub-task file exceeds 120 lines
+- `plan.md` references foundation docs where relevant
+- IF any check fails → fix before proceeding to the critic
+
+## Requirement Tracing
+
+Each sub-task SHOULD carry the IDs it fulfils in YAML frontmatter, in the `reqs:` field
+(`traces:` is the pre-0.6.0 spelling — read-only, never emit it):
+
+```
+---
+reqs: [UC-001, NFR-SEC-001]
+---
+```
+
+IDs are copied verbatim from their source and never renumbered: `UC-`/`NFR-` from a `/bk-spec`
+SRS, `REQ-`/`TC-` from enterprise docs extracted in Step 4b, `REQ-` derived in Step 3 when there
+is no formal source. bk-planner maps them to sub-tasks. If no requirement source exists,
+`reqs: []` — and the sub-task's `## Scope` says why. Protocol: `rules/traceability.md`.

@@ -72,9 +72,17 @@ try {
         if (mcpAvailable === 'false' || mcpAvailable === '0') {
           const { message } = MCP_FALLBACK[mcpKey];
 
-          process.stdout.write(JSON.stringify({
-            additionalContext: message
-          }) + '\n');
+          // Advisory context is subject to the shared injection budget (cap + dedupe).
+          // Optional lib: if absent the message goes out unchanged.
+          let text = message;
+          try {
+            const injectionBudget = require('./lib/injection-budget.cjs');
+            text = injectionBudget.prepareInjection('mcp-health-monitor', message, {
+              sessionId: injectionBudget.sessionIdFrom(data)
+            });
+          } catch { /* optional lib — keep the full text */ }
+
+          if (text) process.stdout.write(JSON.stringify({ additionalContext: text }) + '\n');
 
           timer.end({ status: 'fallback_injected', mcpKey, exit: 0 });
           process.exit(0);

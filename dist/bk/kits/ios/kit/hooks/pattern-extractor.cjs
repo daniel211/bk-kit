@@ -26,7 +26,9 @@ try {
       // Consume stdin (Stop hook sends session data)
       let input = '';
       for await (const chunk of process.stdin) input += chunk;
-      // data not used for Stop event but consumed to avoid pipe errors
+      // Only the session id is used from a Stop event — stdin is consumed to avoid pipe errors.
+      let data = {};
+      try { data = JSON.parse(input || '{}') || {}; } catch { /* not JSON — ignore */ }
 
       const metricsDir = path.join(resolveProjectRoot(), '.bk-metrics');
       const summaryPath = path.join(metricsDir, 'workflow-summary.jsonl');
@@ -108,9 +110,17 @@ try {
         ...top3.map((ins, i) => `${i + 1}. ${ins}`)
       ];
 
-      process.stdout.write(JSON.stringify({
-        additionalContext: contextLines.join('\n')
-      }) + '\n');
+      // Advisory context is subject to the shared injection budget (cap + dedupe). Optional:
+      // if the lib is absent the text goes out unchanged.
+      let text = contextLines.join('\n');
+      try {
+        const injectionBudget = require('./lib/injection-budget.cjs');
+        text = injectionBudget.prepareInjection('pattern-extractor', text, {
+          sessionId: injectionBudget.sessionIdFrom(data)
+        });
+      } catch { /* optional lib — keep the full text */ }
+
+      if (text) process.stdout.write(JSON.stringify({ additionalContext: text }) + '\n');
 
       timer.end({ status: 'ok', insights: insights.length, exit: 0 });
       process.exit(0);
