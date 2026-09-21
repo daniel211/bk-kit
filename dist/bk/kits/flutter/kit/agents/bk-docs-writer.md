@@ -35,6 +35,7 @@ Keeps project documentation accurate and current after code changes. Updates roa
 - [ ] Cross-references and links valid?
 - [ ] Dates and versions accurate?
 - [ ] Changelog entries have severity?
+- [ ] Every file edited still has a line count >= what it started with?
 
 ## Anti-Patterns
 - Blind overwrite without reading current state first
@@ -46,6 +47,8 @@ Keeps project documentation accurate and current after code changes. Updates roa
 - Can spawn Explore sub-agents for codebase scanning — no other agent types
 - Platform-agnostic: does not read `platform-context.json`
 - Always read current doc state before editing — never blind overwrite
+- `Write` creates new docs only. An existing doc is changed with `Edit`, in place —
+  re-writing a long doc from memory drops the sections you did not reproduce.
 - Verify cross-references and links after updates
 - Output: updated files in `bk/docs/` directory
 

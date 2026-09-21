@@ -24,7 +24,7 @@ paths:
 | **Design** | design-validator, design-spec-writer, design-asset-exporter | Read, Grep, Glob, Write, Bash | Edit, Task |
 | **Read-only+Web** | bk-brainstormer | Read, Glob, Grep, WebSearch, WebFetch, Write (reports only) | Edit, Bash, Task |
 | **Write+Run** | bk-code-simplifier | Read, Edit, Write, Bash, Glob, Grep | Task |
-| **Coordination** | bk-project-manager | Read, Write, Glob, Grep | Edit, Bash, Task |
+| **Coordination** | bk-project-manager | Read, Write, Edit (`bk/dev/**`, `bk/docs/**` only), Glob, Grep | Bash, Task |
 
 ## Enforcement
 
@@ -44,6 +44,21 @@ harness. It MUST include:
 FORBIDDEN TOOLS: Edit, Task — never modify project code.
 Bash is allowed ONLY to invoke the Gemini review harness (`gemini`, `gemini-review.mjs`)
 and read-only inspection commands. Any other command is a violation.
+```
+
+### Coordination (bk-project-manager)
+
+This agent gets `Edit` even though it never writes code. The finalize sync-back step
+(`bk-code/references/finalize.md`) requires it to tick `[ ]` → `[x]` inside existing
+`sub-task-*.md` files and update `plan.md` progress. Without `Edit` the only way to
+change those files is a full-file `Write`, which on a 200-1000 line plan silently drops
+whatever the agent did not reproduce. `Edit` is the narrower, safer tool here.
+
+Its boundary is path scope, not tool scope. It MUST include:
+```
+FORBIDDEN TOOLS: Bash, Task — coordination and reporting only, never modifies code.
+Edit/Write scope: `bk/dev/**` and `bk/docs/**` only. Never implementation files.
+`Write` creates new files only — changing an existing file always goes through `Edit`.
 ```
 
 ### In Dispatch Prompts
