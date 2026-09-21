@@ -85,7 +85,14 @@ const DEFAULT_CONFIG = {
     'subagent-live-tracker': true,
     'post-edit-lint': true,
     'stop-lint-flush': true,
-    'native-lint-flush': true
+    'native-lint-flush': true,
+    'write-shrink-guard': true
+  },
+  // write-shrink-guard thresholds: block a Write only when the existing file has at least
+  // minLines lines and more than shrinkTolerance of them would disappear.
+  writeShrinkGuard: {
+    minLines: 50,
+    shrinkTolerance: 0.25
   },
   platform: 'auto'
 };
