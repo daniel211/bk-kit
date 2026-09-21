@@ -12,6 +12,7 @@ import { execSync } from 'node:child_process';
 import { reportHookPerf } from '../lib/hook-perf-measure.mjs';
 import { packageRootFrom } from '../lib/package-layout.mjs';
 import { addKitOption, resolveKitOrExit } from '../lib/kit-resolver.mjs';
+import { detectDrift, formatDriftList, readDoctorIgnore } from '../lib/kit-drift.mjs';
 
 /**
  * Check whether an executable is on PATH, on any host OS.
@@ -240,23 +241,45 @@ export async function runDoctor(targetDir, platform) {
     check(`${dir}/ directory exists`, () => existsSync(join(claudeDir, dir)));
   }
 
-  // 6. Check files from .bk-version.json exist
+  // 6. Check files from .bk-version.json are present AND still match their recorded hash.
+  //    Presence alone used to be the whole check, which made a locally patched kit file
+  //    indistinguishable from an untouched one — see lib/kit-drift.mjs.
   if (existsSync(versionPath)) {
     const versionData = JSON.parse(readFileSync(versionPath, 'utf8'));
     const files = versionData.files || {};
-    const fileList = Object.keys(files);
-    let missing = 0;
+    const drift = detectDrift(claudeDir, files, { ignore: readDoctorIgnore(targetDir) });
 
-    for (const relPath of fileList) {
-      if (!existsSync(join(claudeDir, relPath))) {
-        missing++;
-      }
-    }
-
-    check(`All ${fileList.length} kit files present`, () => {
-      if (missing === 0) return true;
-      console.log(`    ${missing} file(s) missing`);
+    check(`All ${drift.total} kit files present`, () => {
+      if (drift.missing.length === 0) return true;
+      console.log(`    ${drift.missing.length} file(s) missing`);
+      for (const line of formatDriftList(drift.missing)) console.log(`      ${line}`);
       return false;
+    });
+
+    // Always a warning, never an error: customising the kit is legitimate, and `bk update`
+    // already protects local edits by reporting a conflict instead of overwriting them. The
+    // point of this line is that the user knows the edits are there.
+    // The label states the verdict rather than the workload, because `check` prints it after
+    // the detail lines: "416 kit files match recorded hashes" under a list of what does not
+    // match reads as a contradiction.
+    const hashLabel = drift.drifted.length > 0
+      ? `${drift.drifted.length} of ${drift.checked} kit files modified locally`
+      : `${drift.checked} kit files match recorded hashes`;
+    check(hashLabel, () => {
+      if (drift.unreadable.length > 0) {
+        console.log(`    ${drift.unreadable.length} file(s) could not be read:`);
+        for (const line of formatDriftList(drift.unreadable)) console.log(`      ${line}`);
+      }
+      if (drift.drifted.length === 0) return drift.unreadable.length > 0 ? 'warn' : true;
+
+      console.log(`    ${drift.drifted.length} file(s) modified locally since install:`);
+      for (const line of formatDriftList(drift.drifted)) console.log(`      ${line}`);
+      console.log('    Local edits are fine — "bk update" keeps them and reports a conflict.');
+      console.log('    To take the package version of changed files instead:');
+      console.log(`      bk update --kit ${platform} --conflict take`);
+      console.log('    To silence deliberate customisations, list them under "doctorIgnore"');
+      console.log('    in .claude/.bk.json.');
+      return 'warn';
     });
   }
 
