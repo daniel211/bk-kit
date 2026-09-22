@@ -1,15 +1,35 @@
 #!/usr/bin/env node
-// workflow-summary-flush.cjs - Stop hook: close out the current workflow's unsummarized agents
-// Trigger: Stop
-// Purpose: Emit one rollup summary for the current (skill, feature) at the end of a session.
+// workflow-summary-flush.cjs - SessionEnd hook: close out the session's unsummarized agents
+// Trigger: SessionEnd
+// Purpose: Emit one rollup summary for the current (skill, feature) when the session ends.
 //
-// workflow-metrics.cjs summarizes on the EDGE into a terminal phase, and post-commit.cjs pins
-// current_phase at "commit" with nothing moving it back — so a feature gets at most one summary
-// and everything after its first commit (reviews, follow-up fixes: the majority of the work)
-// went unrecorded. A feature change closes the previous feature, but nothing follows the LAST
-// feature of a session. Field cases this hook is the only close-out for: the trailing feature
-// of every trustcall_ios session, and the whole fusionworkomni ad-hoc run (skill and feature
-// both "unknown", 10 agents traced, summary said 4) which no feature change ever followed.
+// WHY SessionEnd AND NOT Stop. workflow-metrics.cjs summarizes on the EDGE into a terminal
+// phase, and post-commit.cjs pins current_phase at "commit" with nothing moving it back — so a
+// feature gets at most one summary and everything after its first commit (reviews, follow-up
+// fixes: the majority of the work) went unrecorded. A feature change closes the feature before
+// it, but nothing follows the LAST feature of a session, and nothing follows an ad-hoc run at
+// all (fusionworkomni: skill and feature both "unknown", 10 agents traced, summary said 4).
+//
+// This hook shipped on `Stop` first, and that was wrong. Stop fires at the end of every TURN,
+// and a turn usually contains exactly one finished agent — so the rollup ran per turn. In
+// trustcall_ios on 0.10.0 the feature `testable-import-linkage` dispatched 8 agents and produced
+// 9 summaries, every one reading total_agents 1, 8 of them closed_by "session-stop";
+// fusionworkomni showed 5 summaries for 4 agents. `bk metrics` then reported avg_agents 1.0.
+// That is precisely the shape the terminal-phase edge trigger exists to prevent — the comment in
+// workflow-metrics.cjs describes the original as "30 summary rows in one day, each reading
+// total_agents 1". The mechanism was right and only the trigger was wrong: the first flush in
+// each repo correctly swept the pre-update backlog (fusionworkomni's first post-update summary
+// reads 6 agents).
+//
+// SessionEnd fires once, at the end of the session, which is the semantics this hook is named
+// for. Its payload carries cwd, hook_event_name, prompt_id, reason, scratchpad_dir, session_id
+// and transcript_path — and notably NO stop_hook_active, so there is no re-entry guard here. A
+// guard reading a field that is always undefined is the same class of bug as the `data.status`
+// read that made every trace row "unknown".
+//
+// KNOWN LIMIT: SessionEnd does not fire if a session is killed hard, and an interactive session
+// that stays open will not flush until /clear or exit. The tail is unsummarized until then —
+// which is exactly the pre-0.10.0 behaviour, so this is no worse, just not perfect.
 //
 // Never blocks, never exits non-zero, never throws out of the outer wrapper.
 
@@ -36,11 +56,21 @@ try {
       for await (const chunk of process.stdin) input += chunk;
       const data = JSON.parse(input || '{}');
 
-      // Re-entry guard: Claude is continuing because of a Stop hook. The first pass already
-      // flushed; a second rollup here would be the empty one emitSummary refuses anyway, but
-      // re-entering a Stop hook at all is how you build a loop.
-      if (data.stop_hook_active === true) {
-        timer.end({ status: 'skipped', reason: 'stop_hook_active', exit: 0 });
+      // A hook must not trust that it was invoked on the right event.
+      //
+      // Nothing in this file used to look at hook_event_name, so the ONLY thing separating a
+      // correct run from the per-turn over-counting above was one line in settings.json. Fed a
+      // Stop payload by accident while probing, it flushed happily and produced 8 summaries —
+      // and a downstream project that hand-merged settings.json wrong would reintroduce the
+      // whole regression silently. The event is named on the payload, so check it.
+      //
+      // Fail-open, as everywhere else: a missing or unrecognised hook_event_name is treated as
+      // the wrong event and no-ops, rather than throwing. The distinct status is the point —
+      // a misregistration then shows up in hook-log.jsonl naming the event it actually got,
+      // instead of quietly corrupting workflow-summary.jsonl.
+      const eventName = typeof data.hook_event_name === 'string' ? data.hook_event_name : '';
+      if (eventName !== 'SessionEnd') {
+        timer.end({ status: 'wrong_event', tool: eventName || 'none', exit: 0 });
         process.exit(0);
       }
 
@@ -67,6 +97,7 @@ try {
       // ended cleanly on a commit.
       timer.end({
         status: 'ok',
+        reason: data.reason || '',
         summarized: summary ? summary.total_agents : 0,
         exit: 0
       });
@@ -92,5 +123,5 @@ try {
     fs.appendFileSync(p.join(logDir, 'hook-log.jsonl'),
       JSON.stringify({ ts: new Date().toISOString(), hook: 'workflow-summary-flush', status: 'crash', error: e.message }) + '\n');
   } catch (_) {}
-  process.exit(0); // Fail-open: a metrics hook must never block the end of a turn
+  process.exit(0); // Fail-open: a metrics hook must never block the end of a session
 }

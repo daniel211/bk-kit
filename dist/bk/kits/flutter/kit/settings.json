@@ -125,7 +125,18 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs checkpoint-save.cjs pattern-extractor.cjs completion-notify.cjs session-cost-rollup.cjs workflow-summary-flush.cjs stop-lint-flush.cjs native-lint-flush.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs checkpoint-save.cjs pattern-extractor.cjs completion-notify.cjs session-cost-rollup.cjs stop-lint-flush.cjs native-lint-flush.cjs"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/workflow-summary-flush.cjs"
           }
         ]
       }

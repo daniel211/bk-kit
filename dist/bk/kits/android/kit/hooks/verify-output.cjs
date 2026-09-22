@@ -240,7 +240,7 @@ try {
         return Number.isFinite(at) && (nowMs - at) < RETRY_EVIDENCE_TTL_MS;
       }
 
-      function trackRetry(retryAgent, retryFeature, success, failureReasons) {
+      function trackRetry(retryAgent, retryScope, success, failureReasons) {
         let retryState = {};
         try { retryState = JSON.parse(fs.readFileSync(RETRY_STATE_FILE, 'utf8')); } catch (e) { /* new file */ }
 
@@ -253,7 +253,14 @@ try {
           if (!retryEvidenceIsFresh(retryState[k], nowMs)) delete retryState[k];
         }
 
-        const key = `${retryAgent}:${retryFeature}`;
+        // agent @ workflow id. `@` rather than `:` because the workflow id contains a colon
+        // of its own ("bk-debug:crash-fixes-critical"), and an unambiguous separator keeps the
+        // key readable in a file users open.
+        //
+        // No migration for the old `agent:feature` keys: they simply stop matching, and the 2h
+        // evidence horizon above prunes them on the next write. Nothing else reads this file —
+        // cmd-init.mjs only names the path in its gitignore list.
+        const key = `${retryAgent}@${retryScope}`;
         if (!retryState[key]) retryState[key] = { count: 0, errors: [] };
 
         if (!success) {
@@ -275,13 +282,36 @@ try {
         return retryState[key].count;
       }
 
-      // Track retry count per agent+feature combination
-      if (feature && agentType) {
+      // Track retry count per agent + workflow.
+      //
+      // This used to be gated on `feature && agentType`, and an ad-hoc session — one not driven
+      // by a /bk-* skill — has feature null in workflow state. So trackRetry was never called
+      // and agent_stuck never fired, which is the signal that tells the conductor to stop
+      // retrying a stuck agent and dispatch bk-brainstormer instead: ad-hoc work had no
+      // stuck-agent escape at all. Measured on 2026-09-22 with both field repos on 0.10.0:
+      // fusionworkomni, which works ad-hoc, has run whole sessions (one with 11 agents) and has
+      // no .retry-state.json file whatsoever, while trustcall_ios, which goes through /bk-debug,
+      // holds 20 keys. The only difference was whether a feature was set.
+      //
+      // resolveWorkflowId is the kit's existing answer to "what is this workflow" — the same one
+      // subagent-cost-capture, budget-guard and session-init use. Passing the session id is what
+      // scopes ad-hoc work to THIS session ("session:<id>") rather than letting two unrelated
+      // ad-hoc topics pile into one shared "session:unscoped" bucket and fire a false signal.
+      if (agentType) {
+        const { resolveWorkflowId } = require('./lib/workflow-identity.cjs');
+        const sessionId = data.session_id || data.sessionId || null;
+        const retryScope = resolveWorkflowId(state, sessionId);
+
+        // The key and the label are different concerns. "failed 2x on
+        // \"session:488d5917-7d67-...\"" tells the model nothing, so the message names the
+        // feature when there is one and says "this session" when there is not.
+        const retryLabel = feature ? `"${feature}"` : 'this session';
+
         const outputValid = errors.length === 0;
-        const retryCount = trackRetry(agentType, feature, outputValid, errors);
+        const retryCount = trackRetry(agentType, retryScope, outputValid, errors);
         if (retryCount >= 2) {
           const retrySignal =
-            `[REACTIVE-SIGNAL: agent_stuck] (HIGH) "${agentType}" failed ${retryCount}x on "${feature}" — ` +
+            `[REACTIVE-SIGNAL: agent_stuck] (HIGH) "${agentType}" failed ${retryCount}x on ${retryLabel} — ` +
             'Task(bk-brainstormer). Detail: rules/reactive-orchestration.md §3.';
           warnings.push(retrySignal);
         }

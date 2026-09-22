@@ -50,27 +50,55 @@ try {
         process.exit(0);
       }
 
+      // ONE SUMMARY ROW IS NOT ONE WORKFLOW. A feature is legitimately closed out more than
+      // once — the terminal-phase edge trigger writes a row when it first enters commit, and the
+      // SessionEnd flush writes another for everything after. In the field
+      // `testable-import-linkage` dispatched 8 agents and produced two correct rows, 1 and 7.
+      // Every count below used to divide by rows, so insights.md's sentence "Avg N
+      // agents/workflow over last N runs" was literally false: it would have said 4.0 over 2
+      // runs for one workflow that ran 8 agents.
+      //
+      // Grouping is by (skill, feature) within the window read above — the same feature reopened
+      // weeks later is genuinely a second workflow, and the window is the bound on that. No
+      // time-gap heuristic is applied; inventing one would put a guess where there is an honest
+      // limit. Kept in sync by hand with groupIntoWorkflows in cli/user-cli/commands/
+      // cmd-metrics.mjs, which is ESM and cannot be required from here.
+      const workflowMap = new Map();
+      for (const e of entries) {
+        const key = `${e.skill || 'unknown'}\u0000${e.feature || 'unknown'}`;
+        if (!workflowMap.has(key)) {
+          workflowMap.set(key, {
+            skill: e.skill || 'unknown', total_agents: 0, fix_loops: 0, reactive_signals: 0
+          });
+        }
+        const wf = workflowMap.get(key);
+        wf.total_agents += e.total_agents || 0;
+        wf.fix_loops += e.fix_loops || 0;
+        wf.reactive_signals += e.reactive_signals || 0;
+      }
+      const workflows = Array.from(workflowMap.values());
+
       const insights = [];
 
       // Pattern 1: High fix-loop rate
-      const withFixLoops = entries.filter(e => (e.fix_loops || 0) > 0);
-      if (entries.length > 0 && withFixLoops.length / entries.length > 0.3) {
-        insights.push(`Plan quality may need improvement — ${withFixLoops.length}/${entries.length} recent workflows had fix loops.`);
+      const withFixLoops = workflows.filter(w => w.fix_loops > 0);
+      if (workflows.length > 0 && withFixLoops.length / workflows.length > 0.3) {
+        insights.push(`Plan quality may need improvement — ${withFixLoops.length}/${workflows.length} recent workflows had fix loops.`);
       }
 
       // Pattern 2: Frequent agent_stuck / reactive signals
-      const highReactive = entries.filter(e => (e.reactive_signals || 0) > 1);
+      const highReactive = workflows.filter(w => w.reactive_signals > 1);
       if (highReactive.length >= 2) {
         insights.push(`Consider dispatching bk-brainstormer earlier in pipeline — ${highReactive.length} workflows triggered multiple reactive signals.`);
       }
 
       // Pattern 3: Specific agent failure patterns — high fix_loops on specific skills
       const skillFixMap = {};
-      for (const e of entries) {
-        const sk = e.skill || 'unknown';
+      for (const w of workflows) {
+        const sk = w.skill || 'unknown';
         if (!skillFixMap[sk]) skillFixMap[sk] = { runs: 0, fixLoops: 0 };
         skillFixMap[sk].runs++;
-        skillFixMap[sk].fixLoops += e.fix_loops || 0;
+        skillFixMap[sk].fixLoops += w.fix_loops;
       }
       for (const [sk, stats] of Object.entries(skillFixMap)) {
         if (stats.runs >= 2 && stats.fixLoops / stats.runs >= 1.5) {
@@ -80,8 +108,8 @@ try {
 
       // Default insight if no patterns detected
       if (insights.length === 0) {
-        const avgAgents = entries.reduce((s, e) => s + (e.total_agents || 0), 0) / entries.length;
-        insights.push(`Workflow health looks good. Avg ${avgAgents.toFixed(1)} agents/workflow over last ${entries.length} runs.`);
+        const avgAgents = workflows.reduce((s, w) => s + w.total_agents, 0) / workflows.length;
+        insights.push(`Workflow health looks good. Avg ${avgAgents.toFixed(1)} agents/workflow over last ${workflows.length} runs.`);
       }
 
       // Write insights.md (overwrite with latest)
@@ -90,16 +118,17 @@ try {
       const insightsContent = [
         `# Beer Kit Workflow Insights`,
         `_Generated: ${new Date().toISOString()}_`,
-        `_Based on last ${entries.length} workflow(s)_`,
+        `_Based on last ${workflows.length} workflow(s) across ${entries.length} summary row(s)_`,
         '',
         '## Detected Patterns',
         '',
         ...insights.map((ins, i) => `${i + 1}. ${ins}`),
         '',
         '## Raw Stats',
-        `- Total workflows analyzed: ${entries.length}`,
+        `- Total workflows analyzed: ${workflows.length}`,
+        `- Summary rows read: ${entries.length}`,
         `- Workflows with fix loops: ${withFixLoops.length}`,
-        `- Total reactive signals: ${entries.reduce((s, e) => s + (e.reactive_signals || 0), 0)}`
+        `- Total reactive signals: ${workflows.reduce((s, w) => s + w.reactive_signals, 0)}`
       ].join('\n');
       fs.writeFileSync(insightsPath, insightsContent, 'utf8');
 

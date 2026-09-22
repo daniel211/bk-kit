@@ -45,6 +45,63 @@ export function formatDuration(ms) {
 }
 
 /**
+ * Group summary rows into workflows by (skill, feature).
+ *
+ * ONE SUMMARY ROW IS NOT ONE WORKFLOW, and never was. A feature is legitimately closed out more
+ * than once: the terminal-phase edge trigger writes a row when the workflow first enters commit,
+ * and the SessionEnd flush writes another for everything that happened afterwards. In the field,
+ * `testable-import-linkage` dispatched 8 agents and produced exactly two correct rows —
+ * total_agents 1 and 7. Treating each row as a run averaged them to 4.0 for a workflow that ran
+ * 8. That cannot be fixed by writing rows more cleverly, because both rows are right; it has to
+ * be fixed here, on the read side. Doing so also removes the "when is a workflow finished?"
+ * question that produced two regressions in a row.
+ *
+ * Duration follows the em-dash contract: a workflow is measured if ANY of its rows carried a
+ * measured duration, and unmeasured rows contribute nothing rather than zero.
+ *
+ * CAVEAT, deliberate and not a heuristic: grouping is by (skill, feature) within the rows handed
+ * to this function, i.e. within the selected window. The same feature reopened weeks later is
+ * genuinely a second workflow, and grouping across all of time would merge the two. The window
+ * is the bound. No time-gap rule is applied — inventing one would put a guess where there is
+ * currently an honest limit.
+ *
+ * Kept in sync by hand with the same grouping in hooks/_base/pattern-extractor.cjs, which is
+ * CommonJS inside the hook tree and cannot import this module.
+ *
+ * @param {Array<Object>} entries — rows from workflow-summary.jsonl
+ * @returns {Array<Object>} one object per workflow, ordered by the time of its last row
+ */
+export function groupIntoWorkflows(entries) {
+  const byKey = new Map();
+  for (const e of entries) {
+    const skill = e.skill || 'unknown';
+    const feature = e.feature || 'unknown';
+    const key = `${skill}\u0000${feature}`;
+    if (!byKey.has(key)) {
+      byKey.set(key, {
+        skill, feature, rows: 0, ts: e.ts || null,
+        total_agents: 0, fix_loops: 0, reactive_signals: 0,
+        total_duration_ms: 0, measured: false
+      });
+    }
+    const wf = byKey.get(key);
+    wf.rows++;
+    if (e.ts) wf.ts = e.ts;
+    wf.total_agents += e.total_agents || 0;
+    wf.fix_loops += e.fix_loops || 0;
+    wf.reactive_signals += e.reactive_signals || 0;
+    if (typeof e.total_duration_ms === 'number' && Number.isFinite(e.total_duration_ms)) {
+      wf.total_duration_ms += e.total_duration_ms;
+      wf.measured = true;
+    }
+  }
+  return Array.from(byKey.values()).map((wf) => ({
+    ...wf,
+    total_duration_ms: wf.measured ? wf.total_duration_ms : null
+  }));
+}
+
+/**
  * Aggregate per-skill stats from summary entries.
  *
  * `avg_duration` averages only the runs that carry a measured duration, so a skill whose
@@ -64,13 +121,17 @@ export function formatDuration(ms) {
  * signals classified from each agent's final message, and reactive_signals counts any row that
  * raised a signal at all — so this varies with what actually happened in the run.
  *
- * @param {Array<Object>} entries
+ * `runs` counts WORKFLOWS, not summary rows — see groupIntoWorkflows above for why those are
+ * not the same thing. `clean_run_rate` therefore means "workflows with no fix loop and no
+ * reactive signal across all of their rows".
+ *
+ * @param {Array<Object>} entries — rows from workflow-summary.jsonl
  * @returns {Array<Object>}
  */
 export function aggregateBySkill(entries) {
   const map = new Map();
-  for (const e of entries) {
-    const key = e.skill || 'unknown';
+  for (const wf of groupIntoWorkflows(entries)) {
+    const key = wf.skill || 'unknown';
     if (!map.has(key)) {
       map.set(key, {
         skill: key, runs: 0, cleanRuns: 0, totalAgents: 0, totalFixLoops: 0,
@@ -79,14 +140,14 @@ export function aggregateBySkill(entries) {
     }
     const agg = map.get(key);
     agg.runs++;
-    const fixLoops = e.fix_loops || 0;
-    const reactive = e.reactive_signals || 0;
+    const fixLoops = wf.fix_loops || 0;
+    const reactive = wf.reactive_signals || 0;
     if (fixLoops === 0 && reactive === 0) agg.cleanRuns++;
-    agg.totalAgents += e.total_agents || 0;
+    agg.totalAgents += wf.total_agents || 0;
     agg.totalFixLoops += fixLoops;
     agg.totalReactiveSignals += reactive;
-    if (typeof e.total_duration_ms === 'number' && Number.isFinite(e.total_duration_ms)) {
-      agg.totalDurationMs += e.total_duration_ms;
+    if (typeof wf.total_duration_ms === 'number' && Number.isFinite(wf.total_duration_ms)) {
+      agg.totalDurationMs += wf.total_duration_ms;
       agg.measuredRuns++;
     }
   }
@@ -124,7 +185,7 @@ export function registerMetrics(program) {
   program
     .command('metrics')
     .description('Display aggregated workflow telemetry metrics')
-    .option('--last <n>', 'Show last N workflow entries', '7')
+    .option('--last <n>', 'Show the last N workflows (a workflow may span several summary rows)', '7')
     .option('--skill <name>', 'Filter by skill name')
     .action((opts) => {
       const metricsFile = join(process.cwd(), '.bk-metrics', 'workflow-summary.jsonl');
@@ -151,11 +212,15 @@ export function registerMetrics(program) {
         }
       }
 
-      // Apply --last N (take last N entries)
+      // Apply --last N. N WORKFLOWS, not N rows: a workflow spans however many summary rows
+      // its close-outs produced, and slicing rows would cut one in half and report the fragment
+      // as a whole run.
       const last = parseInt(opts.last, 10) || 7;
-      entries = entries.slice(-last);
+      const keptWorkflows = groupIntoWorkflows(entries).slice(-last);
+      const keptKeys = new Set(keptWorkflows.map((w) => `${w.skill}\u0000${w.feature}`));
+      entries = entries.filter((e) => keptKeys.has(`${e.skill || 'unknown'}\u0000${e.feature || 'unknown'}`));
 
-      console.log(`\nbk metrics — last ${entries.length} workflow(s)${opts.skill ? ` (skill: ${opts.skill})` : ''}\n`);
+      console.log(`\nbk metrics — last ${keptWorkflows.length} workflow(s)${opts.skill ? ` (skill: ${opts.skill})` : ''}\n`);
 
       // Aggregate and display table
       const rows = aggregateBySkill(entries);
@@ -175,8 +240,9 @@ export function registerMetrics(program) {
         }
       }
 
-      // Also show recent raw entries
-      console.log('\nRecent workflow runs:');
+      // Also show the raw rows behind the table — a workflow closed out twice shows both of
+      // its rows here, which is what makes the grouped totals above checkable by hand.
+      console.log('\nRecent workflow summary rows:');
       for (const e of entries) {
         console.log(formatWorkflowLine(e));
       }
