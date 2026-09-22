@@ -88,7 +88,7 @@ try {
 
       // Build compact context for agent
       const lines = [];
-      lines.push(`## MK Agent Context`);
+      lines.push(`## Beer Kit Agent Context`);
       lines.push(`- Agent: ${agentType}`);
       lines.push(`- Platform: ${platform}`);
       lines.push(`- Project root: ${projectRoot}`);

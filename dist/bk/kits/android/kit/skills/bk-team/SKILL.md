@@ -5,9 +5,9 @@ user-invocable: true
 argument-hint: "<dev|debug|review> <context> [--devs|--reviewers|--debuggers N]"
 ---
 
-# bk-team — MK Agent Team Orchestration
+# bk-team — Beer Kit Agent Team Orchestration
 
-Coordinate multiple independent Claude Code sessions for mobile development. Each teammate has own context window, loads MK context, communicates via shared task list and messaging.
+Coordinate multiple independent Claude Code sessions for mobile development. Each teammate has own context window, loads Beer Kit context, communicates via shared task list and messaging.
 
 **Requires:** Agent Teams enabled. Set `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in settings.json env.
 
@@ -37,12 +37,12 @@ When activated, IMMEDIATELY execute the matching template. Do NOT ask for confir
 
 ---
 
-## MK Context Block
+## Beer Kit Context Block
 
 Every teammate spawn prompt MUST include this at the end:
 
 ```
-MK Context:
+Beer Kit Context:
 - Work dir: {project root}
 - Platform: {ios|android|flutter}
 - Foundation: bk/docs/foundation/

@@ -53,6 +53,7 @@ const DEFAULT_CONFIG = {
     'agent-memory-path-guard': true,
     'mcp-health-monitor': true,
     'workflow-metrics': true,
+    'workflow-summary-flush': true,
     'pattern-extractor': true,
     'skill-chain-suggest': true,
     'traceability-check': true,
@@ -86,6 +87,7 @@ const DEFAULT_CONFIG = {
     'post-edit-lint': true,
     'stop-lint-flush': true,
     'native-lint-flush': true,
+    'lint-findings-inject': true,
     'write-shrink-guard': true
   },
   // write-shrink-guard thresholds: block a Write only when the existing file has at least
@@ -703,7 +705,7 @@ function resolvePlanPath(sessionId, config) {
   for (const method of order) {
     switch (method) {
       case 'session': {
-        // Read session state from workflow state (MK uses workflow state, not temp files)
+        // Read session state from workflow state (the kit uses workflow state, not temp files)
         const state = readWorkflowState();
         const activePlan = state?.active_plan || process.env.BK_ACTIVE_PLAN;
         if (activePlan) {

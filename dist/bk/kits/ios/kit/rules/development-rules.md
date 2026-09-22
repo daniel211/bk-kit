@@ -1,4 +1,4 @@
-# MK Development Rules
+# Beer Kit Development Rules
 
 ## Mobile-First Principles
 - **Offline-first**: cache critical data locally, queue writes for sync

@@ -211,18 +211,63 @@ try {
       const path = require('path');
       const RETRY_STATE_FILE = path.join(resolveProjectRoot(), 'bk', 'dev', 'shared', '.retry-state.json');
 
-      function trackRetry(retryAgent, retryFeature, success) {
+      /**
+       * How long a recorded failure stays evidence about the run happening now.
+       *
+       * 2 hours. The counter feeds a signal that says "<agent> failed Nx on <feature>", which
+       * the conductor acts on by dispatching a different agent — so it has to describe the work
+       * in front of it. It did not: trustcall_ios still held
+       * `bk-ios-developer:critical-security-fixes {count: 3}` from 2026-09-15 a week later,
+       * because count is only ever reset by a success and nothing pruned the file. Reuse that
+       * feature name weeks on and the FIRST stop fires agent_stuck with no failure in the
+       * session at all.
+       *
+       * 2 hours is chosen to be longer than any plausible fix loop on one feature — the field's
+       * longest single agent ran 638s, and a developer→reviewer→developer cycle is minutes, not
+       * hours — and short enough that yesterday's failures cannot speak for today. Deliberately
+       * not session-scoped: a compaction or a crash starts a new session mid-feature, and a
+       * genuine repeat across that boundary is exactly what the signal is for.
+       */
+      const RETRY_EVIDENCE_TTL_MS = 2 * 60 * 60 * 1000;
+
+      /** Enough to see the pattern, bounded so a state file users read stays readable. */
+      const MAX_RECORDED_ERRORS = 5;
+
+      /** Is this entry's last failure recent enough to still count? */
+      function retryEvidenceIsFresh(entry, nowMs) {
+        if (!entry || !entry.lastError) return false;
+        const at = Date.parse(entry.lastError);
+        return Number.isFinite(at) && (nowMs - at) < RETRY_EVIDENCE_TTL_MS;
+      }
+
+      function trackRetry(retryAgent, retryFeature, success, failureReasons) {
         let retryState = {};
         try { retryState = JSON.parse(fs.readFileSync(RETRY_STATE_FILE, 'utf8')); } catch (e) { /* new file */ }
+
+        const nowMs = Date.now();
+
+        // Prune every key whose evidence has aged out, not just this one. The file is read by
+        // users and by `bk doctor`; leaving week-old counters in it is what made a stale entry
+        // look like current state in the first place.
+        for (const k of Object.keys(retryState)) {
+          if (!retryEvidenceIsFresh(retryState[k], nowMs)) delete retryState[k];
+        }
 
         const key = `${retryAgent}:${retryFeature}`;
         if (!retryState[key]) retryState[key] = { count: 0, errors: [] };
 
         if (!success) {
           retryState[key].count++;
-          retryState[key].lastError = new Date().toISOString();
+          retryState[key].lastError = new Date(nowMs).toISOString();
+          // `errors` was initialized and never written to: every field entry carried a timestamp
+          // and an empty array, so nothing recorded WHAT failed. It now holds the most recent
+          // rejection reasons, newest last, capped.
+          const reasons = Array.isArray(failureReasons) ? failureReasons.filter(Boolean) : [];
+          retryState[key].errors = [...(retryState[key].errors || []), ...reasons]
+            .slice(-MAX_RECORDED_ERRORS);
         } else {
           retryState[key].count = 0; // Reset on success
+          retryState[key].errors = [];
         }
 
         try { fs.writeFileSync(RETRY_STATE_FILE, JSON.stringify(retryState, null, 2)); } catch (e) { /* ignore */ }
@@ -233,7 +278,7 @@ try {
       // Track retry count per agent+feature combination
       if (feature && agentType) {
         const outputValid = errors.length === 0;
-        const retryCount = trackRetry(agentType, feature, outputValid);
+        const retryCount = trackRetry(agentType, feature, outputValid, errors);
         if (retryCount >= 2) {
           const retrySignal =
             `[REACTIVE-SIGNAL: agent_stuck] (HIGH) "${agentType}" failed ${retryCount}x on "${feature}" — ` +

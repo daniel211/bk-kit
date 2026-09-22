@@ -1,4 +1,4 @@
-# MK Team Rules
+# Beer Kit Team Rules
 
 > Merged from team-coordination-rules.md + agent-communication.md.
 > Team coordination applies when operating via `bk-team`. File-based handoffs apply to all workflows.

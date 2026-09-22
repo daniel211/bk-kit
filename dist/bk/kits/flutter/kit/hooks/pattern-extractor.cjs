@@ -88,7 +88,7 @@ try {
       fs.mkdirSync(metricsDir, { recursive: true });
       const insightsPath = path.join(metricsDir, 'insights.md');
       const insightsContent = [
-        `# MK Workflow Insights`,
+        `# Beer Kit Workflow Insights`,
         `_Generated: ${new Date().toISOString()}_`,
         `_Based on last ${entries.length} workflow(s)_`,
         '',

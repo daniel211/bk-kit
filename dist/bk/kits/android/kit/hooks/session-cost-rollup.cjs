@@ -25,6 +25,19 @@ try {
         process.exit(0);
       }
 
+      // Re-entry guard, matching every other Stop hook in the kit (stop-lint-flush,
+      // workflow-summary-flush, native-lint-flush). This hook never read stdin at all, so it had
+      // no guard — which is why the field holds 49 `session` rows for a run with far fewer
+      // Stops, 8 of 41 distinct minutes carrying more than one.
+      let input = '';
+      for await (const chunk of process.stdin) input += chunk;
+      let data = {};
+      try { data = JSON.parse(input || '{}'); } catch { data = {}; }
+      if (data.stop_hook_active === true) {
+        timer.end({ status: 'skipped', reason: 'stop_hook_active', exit: 0 });
+        process.exit(0);
+      }
+
       const state = readWorkflowState() || {};
       const workflowId = state.workflowId || state.workflow_id || null;
 
@@ -32,7 +45,7 @@ try {
       const { costUsd: sessionCost, source } = await tryGetSessionCost();
 
       // Sum existing subagent ledger entries for comparison
-      const subagentSum = sumLedgerSubagentCosts();
+      const { total: subagentSum, byWorkflow } = sumLedgerSubagentCosts();
       const cumulativeFromState = state.cumulativeCostUsd || 0;
 
       // Use best available data. The subagent ledger is the last resort rather than the first
@@ -47,9 +60,33 @@ try {
         process.stderr.write(`[session-cost-rollup] scale-factor subagent/${source}: ${scaleFactor}x\n`);
       }
 
+      // Cost per workflow, measured rather than inherited.
+      //
+      // `costUsd` and `subagentSumUsd` are SESSION cumulatives, but the row also stamps the
+      // workflowId that happened to be current when the Stop fired, and a reader takes the two
+      // together as "what this feature cost". The field shows what that does: trustcall_ios's
+      // `commonalertvc-keywindow-fix` — a Trivial single-file fix with two agents — carries
+      // costUsd 29.66 / subagentSumUsd 66.62, both inherited from the feature before it. Its own
+      // cost is about 3.32, the sum of its own two subagent rows.
+      //
+      // So the scope is now stated rather than implied (`scope: 'session'`, and the two
+      // cumulatives keep their names because statusline.computeCumulativeCost reads `costUsd`
+      // off the last session row and adds the subagent rows after it), and the per-workflow
+      // figure is its own field. `type: "subagent"` rows already carry the workflowId they were
+      // actually dispatched under, so summing those per workflow is a measurement — nobody has
+      // to subtract two cumulatives by hand to get it.
+      const workflowCost = workflowId && byWorkflow.has(workflowId)
+        ? byWorkflow.get(workflowId)
+        : (workflowId ? 0 : null);
+
       const entry = {
         type: 'session',
+        // Explicit: costUsd and subagentSumUsd below cover the whole session, not this workflow.
+        scope: 'session',
         workflowId,
+        // Sum of the subagent rows actually stamped with this workflowId. null when no workflow
+        // was current — an unattributable cost is not zero, and must not read as zero.
+        workflowSubagentUsd: workflowCost === null ? null : Math.round(workflowCost * 1e8) / 1e8,
         tokensIn: state.totalTokensIn || 0,
         tokensOut: state.totalTokensOut || 0,
         costUsd: finalCost != null ? Math.round(finalCost * 1e8) / 1e8 : null,
@@ -135,26 +172,33 @@ try {
   }
 
   /**
-   * Sum costUsd from all subagent entries in the current ledger file.
-   * Returns 0 if ledger missing or unreadable.
+   * Sum costUsd from subagent entries in the current ledger, session-wide and per workflow.
+   *
+   * The per-workflow map is the whole point of the split: a subagent row is stamped with the
+   * workflowId it was dispatched under, so grouping by it answers "what did this feature cost"
+   * directly instead of leaving a reader to difference two session cumulatives.
+   *
+   * @returns {{ total: number, byWorkflow: Map<string, number> }} zeros if unreadable
    */
   function sumLedgerSubagentCosts() {
+    const byWorkflow = new Map();
     try {
       const ledgerPath = path.join(resolveMetricsDir(), 'cost-ledger.jsonl');
-      if (!fs.existsSync(ledgerPath)) return 0;
+      if (!fs.existsSync(ledgerPath)) return { total: 0, byWorkflow };
       const lines = fs.readFileSync(ledgerPath, 'utf8').split('\n').filter(Boolean);
       let sum = 0;
       for (const line of lines) {
         try {
           const obj = JSON.parse(line);
-          if (obj.type === 'subagent' && typeof obj.costUsd === 'number') {
-            sum += obj.costUsd;
-          }
+          if (obj.type !== 'subagent' || typeof obj.costUsd !== 'number') continue;
+          sum += obj.costUsd;
+          const wid = obj.workflowId || obj.workflow_id;
+          if (wid) byWorkflow.set(wid, (byWorkflow.get(wid) || 0) + obj.costUsd);
         } catch { /* skip malformed */ }
       }
-      return sum;
+      return { total: sum, byWorkflow };
     } catch {
-      return 0;
+      return { total: 0, byWorkflow };
     }
   }
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Git Worktree Manager for MK (Mobile Kit)
+ * Git Worktree Manager for Beer Kit
  * Cross-platform Node.js script for creating isolated git worktrees
  *
  * Usage: node worktree.cjs <command> [options]
@@ -1190,7 +1190,7 @@ function cmdRemove() {
 // Help text
 function cmdHelp() {
   console.log(`
-Git Worktree Manager for MK (Mobile Kit)
+Git Worktree Manager for Beer Kit
 
 Usage: node worktree.cjs <command> [options]
 

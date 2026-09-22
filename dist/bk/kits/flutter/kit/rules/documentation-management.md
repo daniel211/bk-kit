@@ -3,7 +3,7 @@ paths:
   - bk/docs/**
 ---
 
-# MK Documentation Management
+# Beer Kit Documentation Management
 
 ## Plan Structure
 

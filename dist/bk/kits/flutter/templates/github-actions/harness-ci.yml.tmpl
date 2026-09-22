@@ -1,8 +1,8 @@
-# harness-ci.yml — MK Harness CI/CD Validation Workflow
+# harness-ci.yml — Beer Kit Harness CI/CD Validation Workflow
 # Auto-generated from template: src/templates/github-actions/harness-ci.yml.tmpl
 # Copy to .github/workflows/harness-ci.yml in your project.
 
-name: MK Harness CI
+name: Beer Kit Harness CI
 
 on:
   push:
@@ -97,7 +97,7 @@ jobs:
 
             const icon = summary.errors > 0 ? '❌' : summary.warnings > 0 ? '⚠️' : '✅';
             const body = [
-              `## ${icon} MK Harness CI Results`,
+              `## ${icon} Beer Kit Harness CI Results`,
               '',
               `| Metric | Count |`,
               `|--------|-------|`,

@@ -1,15 +1,21 @@
 #!/usr/bin/env node
-// native-lint-flush.cjs - Stop hook: run the deferred native lint ONCE per turn
+// native-lint-flush.cjs - Stop hook: hand the deferred native lint to a detached worker
 // Trigger: Stop
-// Purpose: Drain the deferred native-lint queue written by arch-fitness-<platform>-native.cjs,
-//          group the paths by platform, and run each platform's linter a single time over the
-//          whole batch — emitting the same per-file findings and red/yellow signals the inline
-//          path used to emit.
+// Purpose: Check whether the deferred native-lint queue has anything in it and, if so, spawn
+//          lib/lint-flush-worker.cjs to drain it, group by platform and run each platform's
+//          linter once over its batch. Findings go to .bk-metrics/lint-findings.jsonl and are
+//          injected into the next turn by lint-findings-inject.
 //
-// Why this hook exists: the inline run cost 1076ms on average across 84 PostToolUse runs in one
-// field day (fusionworkomni) — 90.4s, 97% of all PostToolUse hook time — and 4 of those runs were
-// killed by bk-dispatch at exactly 5000/5001/5002ms with their findings lost, because the hook
-// had handed `dart analyze` a 30000ms budget the dispatcher never honoured.
+// Why this hook exists at all: the inline PostToolUse run cost 1076ms on average across 84 runs
+// in one field day (fusionworkomni) — 90.4s, 97% of all PostToolUse hook time — with 4 runs
+// killed by bk-dispatch at 5000/5001/5002ms and their findings lost.
+//
+// Why it no longer runs the linter itself: measured across 20 Stop events in the same repo,
+// [4485, 2732, 2076, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0] ms. 17 of 20 Stops had
+// nothing queued and cost ~1ms; the 3 with work blocked the end of the turn for 2.0–4.5 seconds,
+// exactly when the user had just produced code. checkpoint-save, the next most expensive Stop
+// hook, tops out at 141ms. Moving the run off the turn removes the spike without losing a
+// finding — it arrives with the next prompt instead.
 //
 // Never blocks. Never exits 2, even with errors in the batch: a platform configured to block
 // (`native_lint.<platform>.block_on_error: true`) stays inline and never reaches this hook.
@@ -19,16 +25,15 @@
 // Outer crash wrapper (catches require/parse failures)
 try {
   const { createHookTimer } = require('./lib/hook-logger.cjs');
-  const path = require('path');
   const { isHookEnabled } = require('./lib/bk-config-utils.cjs');
   const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');
-  const { loadHarnessPolicy } = require('./lib/harness-policy-loader.cjs');
-  const { takeNativeQueue, runNativeLintBatch } = require('./lib/native-lint-deferred.cjs');
+  const { readQueuedFiles } = require('./lib/lint-queue.cjs');
+  const { resolveNativeQueueFile } = require('./lib/native-lint-deferred.cjs');
+  const { spawnLintWorker } = require('./lib/lint-worker-spawn.cjs');
 
-  // A Stop-time batch is not under the 5s PostToolUse budget — it covers every file
-  // edited in the turn and nothing is waiting on it.
+  // Per-command bound, handed to the worker. A batched run is not under the 5s PostToolUse
+  // budget — it covers every file edited in the turn and nothing is waiting on it.
   const BATCH_TIMEOUT_MS = parseInt(process.env.BK_NATIVE_LINT_TIMEOUT_MS || '60000', 10);
-  const MAX_NAMES_SHOWN = 8;
 
   async function main() {
     const timer = createHookTimer('native-lint-flush');
@@ -42,8 +47,8 @@ try {
       for await (const chunk of process.stdin) input += chunk;
       const data = JSON.parse(input || '{}');
 
-      // Re-entry guard: Claude is continuing because of a Stop hook. Re-linting here
-      // is how you build a loop; the queue was drained by the first pass anyway.
+      // Re-entry guard: Claude is continuing because of a Stop hook. Spawning again here is how
+      // you build a loop; the worker's rename-claim would make the second spawn a no-op anyway.
       if (data.stop_hook_active === true) {
         timer.end({ status: 'skipped', reason: 'stop_hook_active', exit: 0 });
         process.exit(0);
@@ -52,98 +57,40 @@ try {
       const projectRoot = resolveProjectRoot(data);
       const sessionId = data.session_id || data.sessionId || '';
 
-      // Claim + clear in one step. Anything edited after this point queues fresh
-      // and is linted at the next Stop.
-      const entries = takeNativeQueue(projectRoot, sessionId);
-      if (entries.length === 0) {
+      // Read-only peek — the worker claims. stop-lint-flush ran moments ago and computed its
+      // deferral from this same queue while it was still intact; claiming here in the parent
+      // would have been fine for that ordering, but a spawn that failed after the claim would
+      // lose the whole batch, so the claim belongs in the process that does the work.
+      const queued = readQueuedFiles(resolveNativeQueueFile(projectRoot, sessionId));
+      if (queued.length === 0) {
         timer.end({ status: 'ok', files: 0, exit: 0 });
         process.exit(0);
       }
 
-      let nativeCfg = {};
-      try {
-        nativeCfg = (loadHarnessPolicy() || {}).native_lint || {};
-      } catch { /* fail-open: defaults are fine */ }
+      const spawned = spawnLintWorker({
+        kind: 'native',
+        projectRoot,
+        sessionId,
+        timeoutMs: BATCH_TIMEOUT_MS
+      });
 
-      // Group by the platform each entry recorded — no re-detection from the path.
-      const byPlatform = new Map();
-      for (const entry of entries) {
-        const platform = entry && entry.platform;
-        if (!platform) continue;
-        if (!byPlatform.has(platform)) byPlatform.set(platform, []);
-        byPlatform.get(platform).push(entry.file);
-      }
-
-      let totalFiles = 0;
-      let totalFindings = 0;
-      let totalRed = 0;
-      let totalYellow = 0;
-      let timedOut = 0;
-      let reportedAny = false;
-
-      for (const [platform, files] of byPlatform) {
-        const result = await runNativeLintBatch({
-          projectRoot,
-          platform,
-          files,
-          policy: nativeCfg,
-          timeoutMs: BATCH_TIMEOUT_MS
-        });
-
-        totalFiles += result.files;
-        totalFindings += result.findings;
-        totalRed += result.red;
-        totalYellow += result.yellow;
-        if (result.timedOut) timedOut += 1;
-
-        if (result.timedOut) {
-          process.stderr.write(`[NATIVE-LINT] ${platform}: timed out after ${BATCH_TIMEOUT_MS}ms over ${result.files} file(s)\n`);
-        } else if (result.findings > 0) {
-          const names = files.map((f) => path.basename(f));
-          const shown = names.slice(0, MAX_NAMES_SHOWN).join(', ');
-          const extra = names.length > MAX_NAMES_SHOWN ? `, +${names.length - MAX_NAMES_SHOWN} more` : '';
-          process.stderr.write(
-            `[NATIVE-LINT] ${platform}: ${result.findings} finding(s) across ${result.filesWithFindings} file(s) — ${shown}${extra}\n`
-          );
-          // The findings themselves, not just a count. On ios/flutter stop-lint-flush
-          // now defers its batch to this hook (NATIVE_SUPERSET_PLATFORMS), so this is
-          // the only lint report the user sees for those files — a headline count
-          // would be strictly less than the [LINT] block it replaced, which printed
-          // the linter's own file:line messages.
-          for (const f of result.reported || []) {
-            const where = `${path.basename((f && f.file) || '')}:${(f && f.line) || 0}`;
-            const sev = String((f && f.severity) || 'info').toUpperCase();
-            process.stderr.write(`  ${sev}: ${where} [${(f && f.rule) || '?'}] ${(f && f.message) || ''}\n`);
-          }
-          if (result.findings > (result.reported || []).length) {
-            process.stderr.write(`  …and ${result.findings - (result.reported || []).length} more finding(s)\n`);
-          }
-          reportedAny = true;
-        }
-      }
-
-      // Same sign-off the [LINT] block carried, for the same reason: findings at Stop
-      // are advisory, the turn is not blocked, and the user has to act before committing.
-      if (reportedAny) process.stderr.write('[NATIVE-LINT] Continuing — fix lint issues before committing.\n');
-
-      const status = (timedOut > 0 || totalRed > 0) ? 'warn' : 'ok';
       timer.end({
-        status,
-        platforms: byPlatform.size,
-        files: totalFiles,
-        findings: totalFindings,
-        red: totalRed,
-        yellow: totalYellow,
+        status: spawned ? 'ok' : 'error',
+        files: queued.length,
+        error: spawned ? '' : 'spawn_failed',
         exit: 0
       });
       process.exit(0);
     } catch (err) {
+      // Under bk-dispatch the happy-path process.exit(0) arrives here as a DispatchExit.
+      if (err && err.bkDispatchExit) throw err;
       timer.end({ status: 'error', error: err.message, exit: 0 });
       process.exit(0);
     }
   }
   main();
 } catch (e) {
+  if (e && e.bkDispatchExit) throw e;
   try {
     const fs = require('fs');
     const p = require('path');

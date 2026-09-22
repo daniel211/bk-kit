@@ -1,8 +1,8 @@
-# harness-budget.yml — MK Harness Weekly Cost Budget Trend
+# harness-budget.yml — Beer Kit Harness Weekly Cost Budget Trend
 # Auto-generated from template: src/templates/github-actions/harness-budget.yml.tmpl
 # Copy to .github/workflows/harness-budget.yml in your project.
 
-name: MK Harness Budget Trend
+name: Beer Kit Harness Budget Trend
 
 on:
   schedule:
@@ -76,7 +76,7 @@ jobs:
 
             const statusIcon = budget.exceeds ? '🔴' : budget.pct >= 80 ? '🟡' : '🟢';
             const body = [
-              `## ${statusIcon} MK Harness Budget Trend — ${date}`,
+              `## ${statusIcon} Beer Kit Harness Budget Trend — ${date}`,
               '',
               `### Cost Status`,
               `| Metric | Value |`,
@@ -118,7 +118,7 @@ jobs:
                 const created = await github.rest.issues.create({
                   owner: context.repo.owner,
                   repo: context.repo.repo,
-                  title: 'MK Harness Budget Trend Tracking',
+                  title: 'Beer Kit Harness Budget Trend Tracking',
                   body: 'This issue tracks weekly AI cost budget trends for the bk-harness CI system.',
                   labels: [process.env.BUDGET_ISSUE_LABEL]
                 });

@@ -1,9 +1,9 @@
-# MK Team Coordination Rules
+# Beer Kit Team Coordination Rules
 
-> These rules only apply when operating as a teammate within an MK Agent Team.
+> These rules only apply when operating as a teammate within a Beer Kit Agent Team.
 > They have no effect on standard sessions or subagent workflows.
 
-Rules for agents operating as teammates within an MK Agent Team.
+Rules for agents operating as teammates within a Beer Kit Agent Team.
 
 ## File Ownership (CRITICAL)
 
@@ -37,7 +37,7 @@ Rules for agents operating as teammates within an MK Agent Team.
 - Include actionable findings in messages, not just "I'm done"
 - Never send structured JSON status messages — use plain text
 
-## MK Stack Conventions
+## Beer Kit Stack Conventions
 
 ### Report Output
 - Save reports to `{plan-dir}/reports/` (injected via hook, fallback: `bk/dev/reports/`)

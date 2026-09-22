@@ -84,7 +84,7 @@ Context engineering curates the smallest high-signal token set for LLM tasks. Th
 
 ## Runtime Awareness
 
-MK provides runtime awareness via built-in hooks (statusline, checkpoint-save, context-safety). These hooks inject context usage data automatically during sessions.
+Beer Kit provides runtime awareness via built-in hooks (statusline, checkpoint-save, context-safety). These hooks inject context usage data automatically during sessions.
 
 **Thresholds:**
 - 70%: WARNING - consider optimization/compaction

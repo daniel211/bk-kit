@@ -137,7 +137,7 @@ function main() {
     const ckCtx = buildMkContext();
     if (ckCtx.length > 1) { // >1 = has env vars beyond the always-present commit convention line
       lines.push('');
-      lines.push('## MK Context');
+      lines.push('## Beer Kit Context');
       lines.push(...ckCtx);
     }
 

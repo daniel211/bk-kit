@@ -1,4 +1,4 @@
-# MK Agent Teams — Best Practices
+# Beer Kit Agent Teams — Best Practices
 
 ## Decision Matrix: Teams vs Subagents
 
@@ -98,7 +98,7 @@ Use when a dev's task is abandoned and tester must proceed with partial implemen
 - **Spawning teams for <3 parallel workstreams** — threshold for team value
 - **No file ownership defined** — always define explicit ownership in dev template
 - **Lead implementing while devs work** — lead coordinates only, does not edit files
-- **Forgetting MK Context Block** — teammates won't know project paths, platform, branch
+- **Forgetting Beer Kit Context Block** — teammates won't know project paths, platform, branch
 - **Using teams when token budget is near limit** — each teammate starts fresh context window
 
 ## Context Injection Checklist
@@ -106,7 +106,7 @@ Use when a dev's task is abandoned and tester must proceed with partial implemen
 Every teammate spawn prompt MUST include:
 - [ ] Task description with acceptance criteria
 - [ ] File ownership glob patterns (dev template only)
-- [ ] MK Context Block (work dir, platform, foundation path, reports path, branch)
+- [ ] Beer Kit Context Block (work dir, platform, foundation path, reports path, branch)
 - [ ] Teammate names for SendMessage coordination
 - [ ] `team_name` parameter on Task call
 

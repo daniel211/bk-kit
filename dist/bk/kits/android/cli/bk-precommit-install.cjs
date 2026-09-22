@@ -135,7 +135,7 @@ function generatePreCommitBlock() {
 - repo: local
   hooks:
     - id: bk-harness-ci
-      name: MK Harness CI Validation
+      name: Beer Kit Harness CI Validation
       language: node
       entry: node .claude/cli/bk-harness-ci/index.cjs --fail-on=error --format=console
       pass_filenames: false

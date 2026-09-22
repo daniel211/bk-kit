@@ -1,38 +1,38 @@
 #!/usr/bin/env node
-// stop-lint-flush.cjs - Stop hook: lint every file edited during the turn, ONCE
+// stop-lint-flush.cjs - Stop hook: hand this turn's lint batch to a detached worker
 // Template variables: flutter, dart analyze
 // Trigger: Stop
-// Purpose: Drain this session's lint queue (written by post-edit-lint.cjs), dedupe
-//          the paths, drop the ones native-lint-flush is about to analyze with the
-//          same tool, run the platform linter a single time over what is left, and
-//          report findings as [LINT] warnings on stderr.
+// Purpose: Decide whether there is anything to lint, work out which paths native-lint is about
+//          to cover anyway, and spawn lib/lint-flush-worker.cjs to do the actual run. Findings
+//          are written to .bk-metrics/lint-findings.jsonl and injected into the next turn by
+//          lint-findings-inject.
 //
-// One linter run per turn instead of one per edit. Never blocks, never exits
-// non-zero, never throws out of the outer wrapper.
+// The linter no longer runs inline. Measured across 20 Stop events in fusionworkomni:
+// [4485, 2732, 2076, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 0, 0] ms — 17 Stops had
+// nothing queued and cost ~1ms, while the 3 that had work held the end of the turn for 2.0–4.5
+// seconds, exactly when the user had just produced code. The next most expensive Stop hook,
+// checkpoint-save, tops out at 141ms. Lint findings do not have to land inside the turn that
+// produced the code, so they no longer do.
+//
+// Never blocks, never exits non-zero, never throws out of the outer wrapper.
 
 'use strict';
 
 // Outer crash wrapper (catches require/parse failures)
 try {
-  const path = require('path');
   const { createHookTimer } = require('./lib/hook-logger.cjs');
   const { isHookEnabled, loadConfig } = require('./lib/bk-config-utils.cjs');
   const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');
-  const { resolveQueueFile, takeQueue, readQueuedFiles } = require('./lib/lint-queue.cjs');
-  const {
-    buildBatchCommands, runLintCommand, usesSameBinaryAsNative, NATIVE_SUPERSET_PLATFORMS
-  } = require('./lib/lint-batch-runner.cjs');
-  const { NATIVE_QUEUE_NAMESPACE } = require('./lib/native-lint-deferred.cjs');
+  const { resolveQueueFile, readQueuedFiles } = require('./lib/lint-queue.cjs');
+  const { spawnLintWorker, computeDeferredPaths } = require('./lib/lint-worker-spawn.cjs');
 
   // Template-injected values
   const PLATFORM = 'flutter';
   const LINT_COMMAND = 'dart analyze';
 
-  // The batch gets its own bound so a pathological analyze cannot hang the end
-  // of a turn. Larger than the old per-file 30s because it covers every file.
+  // Per-command bound, handed to the worker. Unchanged: larger than the old per-file 30s
+  // because one command covers every file edited in the turn.
   const BATCH_TIMEOUT_MS = parseInt(process.env.BK_LINT_TIMEOUT_MS || '60000', 10);
-  const MAX_OUTPUT_CHARS = 2000;
-  const MAX_NAMES_SHOWN = 8;
 
   async function main() {
     const timer = createHookTimer('stop-lint-flush');
@@ -46,9 +46,8 @@ try {
       for await (const chunk of process.stdin) input += chunk;
       const data = JSON.parse(input || '{}');
 
-      // Re-entry guard: Claude is continuing because of a Stop hook. Linting
-      // again here is how you build a loop. The queue was already drained by
-      // the first pass anyway.
+      // Re-entry guard: Claude is continuing because of a Stop hook. Spawning again here is how
+      // you build a loop. The worker's rename-claim would make the second spawn a no-op anyway.
       if (data.stop_hook_active === true) {
         timer.end({ status: 'skipped', reason: 'stop_hook_active', exit: 0 });
         process.exit(0);
@@ -57,99 +56,65 @@ try {
       const platform = PLATFORM || 'unknown';
       const projectRoot = resolveProjectRoot(data);
       const sessionId = data.session_id || data.sessionId || '';
-      const queueFile = resolveQueueFile(projectRoot, sessionId);
 
-      // Claim + clear in one step. Anything edited after this point queues fresh
-      // and gets linted at the next Stop.
-      const claimed = takeQueue(queueFile);
-      if (claimed.length === 0) {
+      // Read-only peek. The worker does the claiming — see lint-flush-worker's header: a spawn
+      // that failed after a parent-side claim would lose the whole batch.
+      const queued = readQueuedFiles(resolveQueueFile(projectRoot, sessionId));
+      if (queued.length === 0) {
         timer.end({ status: 'ok', files: 0, exit: 0 });
         process.exit(0);
       }
 
-      // Drop what native-lint-flush is about to analyze anyway.
-      //
-      // settings.json runs this hook and then native-lint-flush on the same Stop.
-      // On ios/flutter both drive the SAME tool and the native command is a strict
-      // superset of ours (see NATIVE_SUPERSET_PLATFORMS) — so a file sitting in both
-      // queues gets `dart analyze`/`swiftlint` twice in one turn, for one set of
-      // findings. Measured in fusionworkomni: 27 runs of each hook in one window.
-      //
-      // Read-only on purpose: resolveQueueFile + readQueuedFiles, never takeQueue.
-      // takeQueue claims by rename, so taking it here would starve native-lint-flush
-      // of the very batch we are deferring to.
-      //
-      // All three gates matter:
-      //   - NATIVE_SUPERSET_PLATFORMS is flutter only. android runs different tools
-      //     (ktlintCheck vs detekt) and ios loses --strict on the native side, which
-      //     would downgrade its warnings from red signals to yellow.
-      //   - the configured lint command must drive the same binary the native path
-      //     does, or a custom command would be skipped for a run that never covers it.
-      //   - if native-lint-flush is disabled, nothing else lints those files at all;
-      //     skipping then loses the coverage outright rather than moving it.
-      let files = claimed;
-      let deferred = 0;
-      if (NATIVE_SUPERSET_PLATFORMS.includes(platform)
-          && usesSameBinaryAsNative(platform, LINT_COMMAND)
-          && isHookEnabled('native-lint-flush')) {
-        const nativeQueueFile = resolveQueueFile(projectRoot, sessionId, NATIVE_QUEUE_NAMESPACE);
-        const pending = new Set(readQueuedFiles(nativeQueueFile).map((f) => path.resolve(f)));
-        if (pending.size > 0) {
-          files = claimed.filter((f) => !pending.has(path.resolve(f)));
-          deferred = claimed.length - files.length;
+      // Which of those files native-lint-flush is about to analyze with the same tool. Computed
+      // here, in the parent, and passed down: both workers are detached, so a peek from inside
+      // the batch worker could race the native worker's claim and resurrect the double
+      // `dart analyze` per turn this deferral exists to prevent. Read-only on the native queue.
+      const deferredPaths = computeDeferredPaths({
+        projectRoot, sessionId, platform,
+        lintCommand: LINT_COMMAND,
+        nativeEnabled: isHookEnabled('native-lint-flush')
+      });
+
+      if (deferredPaths.length > 0) {
+        const deferred = new Set(deferredPaths.map(String));
+        if (queued.every((f) => deferred.has(f))) {
+          // Everything is covered by the native run. Distinct status so the dispatch report
+          // shows a deferral, not a turn with nothing to lint.
+          timer.end({ status: 'deferred_to_native', files: 0, deferred: queued.length, exit: 0 });
+          process.exit(0);
         }
-      }
-      if (files.length === 0) {
-        // Everything is covered by the native run moments from now. Distinct status
-        // so the dispatch report shows a deferral, not a turn with nothing to lint.
-        timer.end({ status: 'deferred_to_native', files: 0, deferred, exit: 0 });
-        process.exit(0);
       }
 
       const cfg = loadConfig() || {};
-      const mode = (cfg.lint && cfg.lint.batch) === 'per-file' ? 'per-file' : 'auto';
+      const spawned = spawnLintWorker({
+        kind: 'batch',
+        projectRoot,
+        sessionId,
+        platform,
+        lintCommand: LINT_COMMAND,
+        mode: (cfg.lint && cfg.lint.batch) === 'per-file' ? 'per-file' : 'auto',
+        deferredPaths,
+        timeoutMs: BATCH_TIMEOUT_MS
+      });
 
-      const commands = buildBatchCommands({ platform, files, lintCommand: LINT_COMMAND, mode });
-      if (commands.length === 0) {
-        // Unknown platform / no usable command — nothing to run.
-        timer.end({ status: 'ok', files: files.length, deferred, exit: 0 });
-        process.exit(0);
-      }
-
-      let failures = 0;
-      let combined = '';
-      for (const cmd of commands) {
-        const result = runLintCommand(cmd, { cwd: projectRoot, timeoutMs: BATCH_TIMEOUT_MS });
-        if (!result.ok) {
-          failures += 1;
-          if (result.timedOut) {
-            combined += `[LINT] timed out after ${BATCH_TIMEOUT_MS}ms\n`;
-          } else if (result.output) {
-            combined += result.output;
-          }
-        }
-      }
-
-      if (failures > 0) {
-        const names = files.map((f) => path.basename(f));
-        const shown = names.slice(0, MAX_NAMES_SHOWN).join(', ');
-        const extra = names.length > MAX_NAMES_SHOWN ? `, +${names.length - MAX_NAMES_SHOWN} more` : '';
-        process.stderr.write(`[LINT] ${platform} lint warnings for ${files.length} file(s): ${shown}${extra}\n`);
-        if (combined) process.stderr.write(combined.slice(0, MAX_OUTPUT_CHARS) + '\n');
-        process.stderr.write('[LINT] Continuing — fix lint issues before committing.\n');
-        timer.end({ status: 'warn', files: files.length, runs: commands.length, deferred, exit: 0 });
-      } else {
-        timer.end({ status: 'ok', files: files.length, runs: commands.length, deferred, exit: 0 });
-      }
-
+      timer.end({
+        status: spawned ? 'ok' : 'error',
+        files: queued.length,
+        deferred: deferredPaths.length,
+        error: spawned ? '' : 'spawn_failed',
+        exit: 0
+      });
       process.exit(0);
     } catch (err) {
+      // Under bk-dispatch the happy-path process.exit(0) arrives here as a DispatchExit.
+      if (err && err.bkDispatchExit) throw err;
       timer.end({ status: 'error', error: err.message, exit: 0 });
       process.exit(0);
     }
   }
   main();
 } catch (e) {
+  if (e && e.bkDispatchExit) throw e;
   try {
     const fs = require('fs');
     const p = require('path');

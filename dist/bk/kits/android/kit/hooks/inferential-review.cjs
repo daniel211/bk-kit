@@ -22,6 +22,8 @@
  *   BK_INFERENTIAL_SKIP=1    — bypass entirely
  *   BK_PROJECT_ROOT          — override project root (test isolation)
  *   BK_HARNESS_POLICY_PATH   — override policy file path
+ *   ANTHROPIC_API_KEY        — required for a real review; absent (outside mock mode) the hook
+ *                              skips at Tier 1 rather than queueing work no judge will do
  */
 
 'use strict';
@@ -38,6 +40,8 @@ const {
   resolveMetricPath
 } = require(path.join(libDir, 'harness-policy-loader.cjs'));
 const { enqueueEdit, getQueueSize, clearQueue } = require(path.join(libDir, 'inferential-queue.cjs'));
+const { isJudgeAvailable } = require(path.join(libDir, 'inferential-judge.cjs'));
+const { createHookTimer } = require(path.join(libDir, 'hook-logger.cjs'));
 
 const HOOK_NAME = 'inferential-review';
 
@@ -159,9 +163,15 @@ async function run() {
     // Write result to results JSONL
     const dir = path.dirname(resultsFile);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    // \`source\` is the difference between "reviewed and found nothing" and "never ran".
+    // Without it, all 12 field rows read { overall_score: 1, issue_count: 0, issues: [] } and
+    // nobody could tell that not one of them was a real review.
+    const source = result.source || 'unknown';
     const record = {
       ts: Date.now(),
       overall_score: result.overall_score,
+      source,
+      ...(result.reason ? { reason: result.reason } : {}),
       file_count: entries.length,
       issue_count: result.issues.length,
       issues: result.issues,
@@ -169,8 +179,10 @@ async function run() {
     };
     fs.appendFileSync(resultsFile, JSON.stringify(record) + '\\n', 'utf8');
 
-    // Track violation if score below threshold
-    if (result.overall_score < threshold) {
+    // Only a real answered API call may feed the red-signal ladder. A fabricated score must
+    // never escalate, and a row written before this change carries no \`source\` — 'unknown' is
+    // not 'api', deliberately.
+    if (source === 'api' && result.overall_score < threshold) {
       trackRedSignal('inferential_fail', {
         score: result.overall_score,
         threshold,
@@ -212,62 +224,79 @@ run().catch(() => {});
 // ─── Main ──────────────────────────────────────────────────────────────────
 
 async function main() {
+  const timer = createHookTimer(HOOK_NAME);
+  /** End the timer and exit 0. Every exit from this hook goes through here. */
+  const finish = (status, extra = {}) => {
+    timer.end({ status, exit: 0, ...extra });
+    process.exit(0);
+  };
+
   // Read stdin via fd 0 (cross-platform, works with Node pipes)
   let stdinData = '';
   try {
     stdinData = fs.readFileSync(0, 'utf8');
   } catch {
-    process.exit(0);
+    finish('error', { error: 'stdin_unreadable' });
   }
 
-  if (!stdinData || !stdinData.trim()) process.exit(0);
+  if (!stdinData || !stdinData.trim()) finish('skipped', { error: 'empty_stdin' });
 
   // Bypass env
-  if (process.env.BK_INFERENTIAL_SKIP === '1') process.exit(0);
+  if (process.env.BK_INFERENTIAL_SKIP === '1') finish('skipped');
 
   // Parse stdin
   const parsed = parseStdin(stdinData);
   if (!parsed) {
     // Malformed stdin — fail-open
-    process.exit(0);
+    finish('error', { error: 'malformed_stdin' });
   }
 
   const { filePath, toolInput, diffSize } = parsed;
-  if (!filePath) process.exit(0);
+  if (!filePath) finish('skipped');
 
   // Load policy
   let policy;
   try {
     policy = loadHarnessPolicy();
   } catch {
-    process.exit(0);
+    finish('error', { error: 'policy_load_failed' });
   }
 
   const cfg = policy.inferential_review;
-  if (!cfg || !cfg.enabled) process.exit(0);
+  if (!cfg || !cfg.enabled) finish('skipped');
 
   const projectRoot = policy.__projectRoot;
 
   // ── Tier 1: Cheap precondition checks ────────────────────────────────────
 
+  // Can a judge actually judge? Without ANTHROPIC_API_KEY (and outside mock mode) reviewBatch
+  // can only fail open, so the whole pipeline downstream of here is a detached node process per
+  // `batch_size` edits that produces a fabricated perfect score. That is what the field shows:
+  // 12 of 12 result rows in both repos are byte-identical to DEFAULT_RESULT because neither repo
+  // sets the key. Skipping the ENQUEUE as well as the spawn is the point — queueing without ever
+  // spawning would grow the queue without bound.
+  if (!isJudgeAvailable()) {
+    finish('skipped', { error: 'judge_unavailable' });
+  }
+
   // File pattern match
   const filePatterns = cfg.file_patterns || [];
-  if (!matchesFilePatterns(filePath, filePatterns)) process.exit(0);
+  if (!matchesFilePatterns(filePath, filePatterns)) finish('skipped');
 
   // Exempt path check
   const exemptPatterns = cfg.exempt_path_patterns || [];
-  if (isExemptPath(filePath, exemptPatterns)) process.exit(0);
+  if (isExemptPath(filePath, exemptPatterns)) finish('skipped');
 
   // Minimum diff size
   const minDiff = cfg.tier1_min_diff_chars || 20;
-  if (diffSize < minDiff) process.exit(0);
+  if (diffSize < minDiff) finish('skipped');
 
   // Optional max file size check (from disk)
   const maxFileSize = cfg.tier1_max_file_size_bytes || 500000;
   try {
     if (fs.existsSync(filePath)) {
       const stat = fs.statSync(filePath);
-      if (stat.size > maxFileSize) process.exit(0);
+      if (stat.size > maxFileSize) finish('skipped');
     }
   } catch { /* fail-open on stat error */ }
 
@@ -285,7 +314,7 @@ async function main() {
   const enqueued = enqueueEdit(entry, queueFile);
   if (!enqueued) {
     // enqueue failed — fail-open
-    process.exit(0);
+    finish('error', { error: 'enqueue_failed' });
   }
 
   // ── Check if batch threshold reached ─────────────────────────────────────
@@ -297,10 +326,11 @@ async function main() {
     // ── Tier 3: Spawn detached background LLM judge ───────────────────────
     process.stderr.write(`[${HOOK_NAME}] Queue at ${queueSize}/${batchSize} — triggering inferential review\n`);
     spawnJudgeProcess(queueFile, resultsFile, policy, projectRoot);
+    finish('ok', { tool: 'judge_spawned' });
   }
 
   // Always exit 0 — never block agent
-  process.exit(0);
+  finish('ok');
 }
 
 main().catch(err => {

@@ -22,8 +22,13 @@ try {
    * - performance_issue: "performance critical/severe/bottleneck"
    */
 
-  // Structured signal: agents can emit [SIGNAL: type] for explicit detection
-  const STRUCTURED_SIGNAL = /\[SIGNAL:\s*(\w+)\]/i;
+  // The signal vocabulary itself lives in lib/agent-signal-patterns.cjs so SubagentStop can
+  // apply the same rules to an agent's final message. See that file for why: `data.status`
+  // does not exist on SubagentStop, so workflow-metrics had no way to classify a finished
+  // agent and filed all 42 field trace rows as "unknown".
+  const {
+    STRUCTURED_SIGNAL, signalPatternsFor
+  } = require('./lib/agent-signal-patterns.cjs');
 
   // Tightened patterns (P2-2): broad single-word regexes (e.g. /stuck/, /ambiguous/) caused
   // high false-positive rate — they spam additionalContext and drown out real signals.
@@ -32,33 +37,7 @@ try {
   //   2. Regex fallback requires multi-word context (no single trigger word matches alone)
   //   3. Set BK_SIGNAL_DETECTOR_BROAD=1 to restore old aggressive matching
   const BROAD_MODE = process.env.BK_SIGNAL_DETECTOR_BROAD === '1';
-  const SIGNAL_PATTERNS = BROAD_MODE ? [
-    // Aggressive (legacy) — opt-in via env
-    { pattern: /cannot determine|unable to identify|unclear root cause/i, signal: 'agent_stuck', priority: 'HIGH' },
-    { pattern: /stuck|blocked|deadlocked|no progress/i, signal: 'agent_stuck', priority: 'HIGH' },
-    { pattern: /not (fully )?confident|uncertain about|ambiguous/i, signal: 'confidence_low', priority: 'HIGH' },
-    { pattern: /tried (multiple|several|different) approaches/i, signal: 'agent_stuck', priority: 'HIGH' },
-  ] : [
-    // Conservative (default) — multi-word/contextual phrases only
-    { pattern: /unable to (resolve|fix|complete|implement) (the|this|that)/i, signal: 'agent_stuck', priority: 'HIGH' },
-    { pattern: /(cannot|can't) (determine|identify|find) (the|a|any)/i, signal: 'agent_stuck', priority: 'HIGH' },
-    { pattern: /no clear path (forward|to proceed)/i, signal: 'agent_stuck', priority: 'HIGH' },
-    { pattern: /beyond (my|the) (scope|capability|expertise)/i, signal: 'agent_stuck', priority: 'HIGH' },
-    // fix_loop_stuck: error repeating
-    { pattern: /same (error|issue|problem) (again|persists|remains|still)/i, signal: 'fix_loop_stuck', priority: 'HIGH' },
-    { pattern: /error (persists|not resolved|still occurring|keeps happening)/i, signal: 'fix_loop_stuck', priority: 'HIGH' },
-    // unknown_api
-    { pattern: /unknown (API|framework|method|class|module|package)/i, signal: 'unknown_api', priority: 'HIGH' },
-    // confidence_low — explicit declarations only
-    { pattern: /confidence:\s*(low|\d{1,4}[0-6]\d?%)/i, signal: 'confidence_low', priority: 'HIGH' },
-    { pattern: /need(s)? (more|additional) (context|information|clarification) to/i, signal: 'confidence_low', priority: 'HIGH' },
-    // conflicting_results — explicit "X and Y disagree" framing
-    { pattern: /(conflicting|contradicting) (results|findings|recommendations)/i, signal: 'conflicting_results', priority: 'MEDIUM' },
-    // architecture_concern
-    { pattern: /architecture (violation|concern|mismatch)/i, signal: 'architecture_concern', priority: 'MEDIUM' },
-    // performance_issue
-    { pattern: /performance (critical|severe|bottleneck|blocking main)/i, signal: 'performance_issue', priority: 'MEDIUM' },
-  ];
+  const SIGNAL_PATTERNS = signalPatternsFor(BROAD_MODE);
 
   // One line per signal, naming the agent to dispatch and nothing else. The reasoning behind
   // each route lives in rules/reactive-orchestration.md §3, which the model can read when it

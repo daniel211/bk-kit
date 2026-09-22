@@ -16,8 +16,10 @@ try {
   async function main() {
     const timer = createHookTimer('workflow-metrics');
     try {
-      const { isHookEnabled, readWorkflowState, writeWorkflowState } = require('./lib/bk-config-utils.cjs');
+      const { isHookEnabled, readWorkflowState } = require('./lib/bk-config-utils.cjs');
       const { appendJsonl: _appendJsonl } = require('./lib/jsonl-rotator.cjs');
+      const { emitSummary } = require('./lib/workflow-summary.cjs');
+      const { classifyAgentOutput } = require('./lib/agent-signal-patterns.cjs');
 
       if (!isHookEnabled('workflow-metrics')) {
         timer.end({ status: 'skipped', exit: 0 });
@@ -34,7 +36,6 @@ try {
 
       const identity = readStopIdentity(data);
       const agentType = identity.name || '';
-      const agentStatus = data.status || 'unknown';
 
       // SubagentStop fires far more often than subagents are dispatched, and only the events
       // that name an agent correspond to one finishing. Tracing the rest as `agent: "unknown"`
@@ -45,6 +46,25 @@ try {
         timer.end({ status: 'unattributable_stop', exit: 0 });
         process.exit(0);
       }
+
+      // The agent's status, classified from what it actually said.
+      //
+      // This read `data.status`, which SubagentStop does not carry: the captured payload shape
+      // (.bk-metrics/subagent-stop-payload-keys.json, observed independently in both field
+      // repos) has agent_id, agent_transcript_path, agent_type, background_tasks, cwd, effort,
+      // hook_event_name, last_assistant_message, permission_mode, prompt_id, scratchpad_dir,
+      // session_crons, session_id, stop_hook_active, transcript_path — and no `status`. All 42
+      // field trace rows read `status: "unknown"`, so every metric derived from status was a
+      // structural zero (see fix_loops in lib/workflow-summary.cjs).
+      //
+      // `last_assistant_message` is the agent's FINAL message — where a bk agent puts its
+      // report or its escalation — not its whole transcript. A signal raised mid-run and then
+      // resolved is deliberately not recorded here.
+      const finalMessage = typeof data.last_assistant_message === 'string'
+        ? data.last_assistant_message
+        : '';
+      const signals = classifyAgentOutput(finalMessage);
+      const agentStatus = signals[0] || (finalMessage.trim() ? 'ok' : 'no_output');
 
       // Read workflow state
       const state = readWorkflowState() || {};
@@ -62,9 +82,53 @@ try {
       // A completion can be reported twice — the field caught a bk-project-manager run whose
       // second event read a longer transcript than its first. Without this, that run was
       // traced twice and counted twice: 8 traced agents against 7 that actually finished.
-      if (alreadyRecorded(readJsonlRows(tracePath), 'stable_id', identity.id, data.session_id)) {
+      const existingRows = readJsonlRows(tracePath);
+      if (alreadyRecorded(existingRows, 'stable_id', identity.id, data.session_id)) {
         timer.end({ status: 'duplicate_stop', exit: 0 });
         process.exit(0);
+      }
+
+      // FEATURE-CHANGE ROLLUP — close out the previous (skill, feature) before starting a new
+      // one. Work moving to another feature is the last moment its rows can still be attributed
+      // to it, and the terminal-phase edge below fires at most once per feature: post-commit.cjs
+      // pins current_phase at "commit" and nothing moves it back, so every later stop exits at
+      // `already_summarized`. Against the field data this close-out alone recovers
+      // critical-security-fixes (8 unsummarized rows), iap-purchase-flow (3),
+      // crash-fixes-critical (1) and the 5 orphan "unknown" rows that no summary ever covered.
+      //
+      // Gated on the session. agent-trace.jsonl is shared by every session in the repo — the
+      // kit already assumes concurrent sessions, which is why lib/lint-queue.cjs keys its queue
+      // by session id — so two sessions working two features interleave their rows. Without the
+      // gate, six alternating stops from two sessions both parked in "commit" produced five
+      // summaries, three of them feature-change rollups each reading total_agents 1: exactly the
+      // "Avg 1.0 agents/workflow" shape the edge trigger above exists to prevent. A key change
+      // within ONE session is a feature genuinely progressing; a key change measured against
+      // another session's row is just interleaving, and closes nothing.
+      //
+      // An unattributable row is not evidence either, so a missing session_id on either side
+      // means no rollup.
+      //
+      // The trade-off, stated plainly: a feature change that spans sessions (session 1 ends on
+      // feature A, session 2 opens on B) no longer gets a feature-change rollup for A. Normally
+      // the session-stop flush closes A at the end of session 1 — except when session 1 was
+      // interrupted, because Stop does not fire on an interrupted turn (measured in
+      // fusionworkomni: last Stop 02:31:44, then a 10-minute turn ending in UserPromptSubmit at
+      // 02:41:46 with no Stop, leaving 7 files queued and never linted — the same interrupt hole
+      // reaches here). A then stays open until some later session works on A and moves off it
+      // within that session. Still strictly better than the status quo, where A is never closed.
+      const lastRow = existingRows[existingRows.length - 1];
+      const sameSession = Boolean(
+        lastRow && lastRow.session_id && data.session_id && lastRow.session_id === data.session_id
+      );
+      if (sameSession && (lastRow.skill !== skill || lastRow.feature !== feature)) {
+        emitSummary({
+          metricsDir,
+          skill: lastRow.skill,
+          feature: lastRow.feature,
+          phase: lastRow.phase || '',
+          complexityTier: lastRow.complexity_tier || 'Standard',
+          closedBy: 'feature-change'
+        });
       }
 
       // Build trace entry
@@ -76,6 +140,7 @@ try {
         skill,
         feature,
         status: agentStatus,
+        signals,
         complexity_tier: complexityTier,
         phase: currentPhase
       };
@@ -93,7 +158,8 @@ try {
        * day (8 literal `commit -> commit` self-transitions), so every SubagentStop while
        * parked there appended another summary: 30 summary rows in one day, each reading
        * total_agents 1, and insights.md concluding "Avg 1.0 agents/workflow" for a period
-       * that actually ran 33 agents.
+       * that actually ran 33 agents. That is why the edge trigger survives the close-out
+       * work added around it — the fix for under-counting must not resurrect this.
        *
        * The previous trace row for the same feature+skill is the phase we came from. A row
        * with no `phase` at all was written by an older kit version — count it as
@@ -119,125 +185,12 @@ try {
       }
 
       if (terminalPhases.includes(currentPhase)) {
-        // Agents dispatched for THIS workflow — those traced since the previous summary for
-        // the same feature and skill.
-        //
-        // It used to count every trace row the feature had ever produced, so the number grew
-        // by one per workflow and was reported as that workflow's own. Six commits on one
-        // feature filed total_agents 101, 102, 103, 104, 105, 106, and insights.md read that
-        // back as "Avg 103.5 agents/workflow" for a feature that dispatched about 8. The
-        // absurdity was invisible while phantom rows had it reporting 685.
-        const summaryPath = path.join(metricsDir, 'workflow-summary.jsonl');
-        const priorSummaries = fs.existsSync(summaryPath)
-          ? fs.readFileSync(summaryPath, 'utf8').split('\n').filter(Boolean)
-            .map(l => { try { return JSON.parse(l); } catch { return null; } })
-            .filter(e => e && e.feature === feature && e.skill === skill && e.ts)
-          : [];
-        const since = priorSummaries.length
-          ? Date.parse(priorSummaries[priorSummaries.length - 1].ts)
-          : 0;
-
-        const allLines = fs.existsSync(tracePath)
-          ? fs.readFileSync(tracePath, 'utf8').split('\n').filter(Boolean)
-          : [];
-
-        const featureEntries = allLines
-          .map(l => { try { return JSON.parse(l); } catch { return null; } })
-          .filter(e => e && e.feature === feature && e.skill === skill)
-          .filter(e => !since || (Date.parse(e.ts) || 0) > since);
-
-        const totalAgents = featureEntries.length;
-        const fixLoops = featureEntries.filter(e =>
-          (e.agent || '').toLowerCase().includes('fix') ||
-          (e.status || '').toLowerCase().includes('fix_loop')
-        ).length;
-        const reactiveSignals = featureEntries.filter(e =>
-          (e.agent || '').toLowerCase().includes('brainstorm') ||
-          (e.agent || '').toLowerCase().includes('problem-solving') ||
-          (e.agent || '').toLowerCase().includes('sequential-thinking')
-        ).length;
-
-        // Duration is measured, not fabricated. This used to read
-        //   const totalDurationEst = totalAgents * 120;
-        // — the agent count times a constant, which carries no information `total_agents`
-        // right next to it does not already carry.
-        //
-        // The real figure is already on disk: subagent-live-tracker writes one `stop` row per
-        // agent to .bk-metrics/subagent-live.jsonl with a measured `duration_ms`, keyed by the
-        // same `stable_id` the trace rows carry — both are set from `readStopIdentity(data).id`,
-        // so this is an exact join, not a heuristic.
-        //
-        // Field evidence (fusionworkomni, one day, 33 agents): all 33 agent-trace rows matched
-        // a subagent-live `stop` event exactly on stable_id. Real elapsed total was 5863s
-        // against the constant's 3960s — understated by 48% — and the longest single agent ran
-        // 638s, the actionable number the constant hid completely.
-        //
-        // Never fall back to a fabricated number: when nothing can be measured the summary
-        // carries total_duration_ms: null with duration_source 'unavailable'. The read fails
-        // open exactly like the other file reads in this hook — any error leaves the map empty
-        // and the hook still writes the summary and still exits 0.
-        const stopDurations = new Map();
-        try {
-          const livePath = path.join(metricsDir, 'subagent-live.jsonl');
-          for (const line of fs.readFileSync(livePath, 'utf8').split('\n')) {
-            if (!line.trim()) continue;
-            let row;
-            try { row = JSON.parse(line); } catch { continue; }
-            if (!row || row.event !== 'stop' || !row.stable_id) continue;
-            if (typeof row.duration_ms !== 'number' || !Number.isFinite(row.duration_ms)) continue;
-            // First stop row wins, matching alreadyRecorded()'s first-record-wins rule.
-            if (!stopDurations.has(row.stable_id)) stopDurations.set(row.stable_id, row.duration_ms);
-          }
-        } catch { /* missing or unreadable → duration_source stays 'unavailable' */ }
-
-        let durationMatched = 0;
-        let totalDurationMs = 0;
-        let maxAgentDurationMs = 0;
-        for (const e of featureEntries) {
-          const ms = e && e.stable_id ? stopDurations.get(e.stable_id) : undefined;
-          if (typeof ms !== 'number') continue;
-          durationMatched++;
-          totalDurationMs += ms;
-          if (ms > maxAgentDurationMs) maxAgentDurationMs = ms;
-        }
-        const durationSource = durationMatched === 0
-          ? 'unavailable'
-          : (durationMatched === featureEntries.length ? 'measured' : 'partial');
-
-        const summary = {
-          ts: new Date().toISOString(),
-          skill,
-          feature,
+        emitSummary({
+          metricsDir, skill, feature,
           phase: currentPhase,
-          complexity_tier: complexityTier,
-          total_agents: totalAgents,
-          total_duration_ms: durationMatched ? Math.round(totalDurationMs) : null,
-          max_agent_duration_ms: durationMatched ? Math.round(maxAgentDurationMs) : null,
-          duration_source: durationSource,
-          // On a partial match the shortfall must be legible, not silently folded into a
-          // smaller total.
-          ...(durationSource === 'partial'
-            ? { duration_matched: durationMatched, duration_total: featureEntries.length }
-            : {}),
-          fix_loops: fixLoops,
-          reactive_signals: reactiveSignals
-        };
-
-        _appendJsonl(summaryPath, JSON.stringify(summary) + '\n');
-
-        // Serena sync (optional - only if BK_SERENA_AVAILABLE=true)
-        if (process.env.BK_SERENA_AVAILABLE === 'true') {
-          // Write flag file — actual Serena write_memory happens in conductor context, not hook
-          const serenaSyncPath = path.join(metricsDir, 'serena-sync-pending.json');
-          const syncPayload = {
-            ts: new Date().toISOString(),
-            skill,
-            feature,
-            summary_ref: summaryPath,
-            pending: true
-          };
-          fs.writeFileSync(serenaSyncPath, JSON.stringify(syncPayload, null, 2), 'utf8');
-        }
+          complexityTier,
+          closedBy: 'terminal-entry'
+        });
       }
 
       timer.end({ status: 'ok', agent: agentType, skill, feature, exit: 0 });

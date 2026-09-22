@@ -50,6 +50,20 @@ export function formatDuration(ms) {
  * `avg_duration` averages only the runs that carry a measured duration, so a skill whose
  * runs were never measured reads `—` instead of being dragged toward zero.
  *
+ * THERE IS NO success_rate COLUMN, deliberately. It used to count a run as a success when
+ * `e.phase === 'commit' || e.phase === 'completed'` — and post-commit.cjs pins `current_phase`
+ * at "commit" with nothing moving it back, so every summary row carries phase "commit": 8 of 8
+ * across both field repos. The column could not print anything but 100%, including for a
+ * sandbox run that contained a real fix loop (an agent reporting "Same error persists after the
+ * third attempt"). A workflow summary records that work happened, not whether it went well —
+ * "success" was never a thing this file measured, and a constant dressed as a rate is worse
+ * than no column.
+ *
+ * `clean_run_rate` replaces it and is measured: a run is clean when it recorded neither a fix
+ * loop nor a reactive signal. Both counts are now real — fix_loops reads the `fix_loop_stuck`
+ * signals classified from each agent's final message, and reactive_signals counts any row that
+ * raised a signal at all — so this varies with what actually happened in the run.
+ *
  * @param {Array<Object>} entries
  * @returns {Array<Object>}
  */
@@ -59,16 +73,18 @@ export function aggregateBySkill(entries) {
     const key = e.skill || 'unknown';
     if (!map.has(key)) {
       map.set(key, {
-        skill: key, runs: 0, successes: 0, totalAgents: 0, totalFixLoops: 0,
+        skill: key, runs: 0, cleanRuns: 0, totalAgents: 0, totalFixLoops: 0,
         totalReactiveSignals: 0, totalDurationMs: 0, measuredRuns: 0
       });
     }
     const agg = map.get(key);
     agg.runs++;
-    if (e.phase === 'commit' || e.phase === 'completed') agg.successes++;
+    const fixLoops = e.fix_loops || 0;
+    const reactive = e.reactive_signals || 0;
+    if (fixLoops === 0 && reactive === 0) agg.cleanRuns++;
     agg.totalAgents += e.total_agents || 0;
-    agg.totalFixLoops += e.fix_loops || 0;
-    agg.totalReactiveSignals += e.reactive_signals || 0;
+    agg.totalFixLoops += fixLoops;
+    agg.totalReactiveSignals += reactive;
     if (typeof e.total_duration_ms === 'number' && Number.isFinite(e.total_duration_ms)) {
       agg.totalDurationMs += e.total_duration_ms;
       agg.measuredRuns++;
@@ -77,7 +93,7 @@ export function aggregateBySkill(entries) {
   return Array.from(map.values()).map(a => ({
     skill: a.skill,
     runs: a.runs,
-    success_rate: a.runs > 0 ? `${Math.round((a.successes / a.runs) * 100)}%` : '0%',
+    clean_run_rate: a.runs > 0 ? `${Math.round((a.cleanRuns / a.runs) * 100)}%` : '0%',
     avg_agents: a.runs > 0 ? (a.totalAgents / a.runs).toFixed(1) : '0',
     avg_duration: a.measuredRuns > 0 ? formatDuration(a.totalDurationMs / a.measuredRuns) : '—',
     avg_fix_loops: a.runs > 0 ? (a.totalFixLoops / a.runs).toFixed(1) : '0',
@@ -139,7 +155,7 @@ export function registerMetrics(program) {
       const last = parseInt(opts.last, 10) || 7;
       entries = entries.slice(-last);
 
-      console.log(`\nmk metrics — last ${entries.length} workflow(s)${opts.skill ? ` (skill: ${opts.skill})` : ''}\n`);
+      console.log(`\nbk metrics — last ${entries.length} workflow(s)${opts.skill ? ` (skill: ${opts.skill})` : ''}\n`);
 
       // Aggregate and display table
       const rows = aggregateBySkill(entries);
@@ -148,7 +164,7 @@ export function registerMetrics(program) {
         console.table(rows);
       } else {
         // Manual formatting fallback
-        const header = ['skill', 'runs', 'success_rate', 'avg_agents', 'avg_duration', 'avg_fix_loops', 'reactive_signals'];
+        const header = ['skill', 'runs', 'clean_run_rate', 'avg_agents', 'avg_duration', 'avg_fix_loops', 'reactive_signals'];
         const colWidths = header.map(h => Math.max(h.length, ...rows.map(r => String(r[h] || '').length)));
         const fmt = (val, w) => String(val).padEnd(w);
         const separator = colWidths.map(w => '-'.repeat(w)).join('  ');

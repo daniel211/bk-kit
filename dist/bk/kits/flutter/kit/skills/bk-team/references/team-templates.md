@@ -1,7 +1,7 @@
 # Team Templates — full execution order (bk-team)
 
 Every template calls `TeamCreate` at step 2 and every teammate spawn carries `team_name` plus the
-MK Context Block from SKILL.md.
+Beer Kit Context Block from SKILL.md.
 
 ## ON `/bk-team dev <plan-path>` [--devs N]:
 
@@ -20,7 +20,7 @@ IMMEDIATELY execute in order:
 4. **CALL** `Task` x N to spawn dev teammates:
    - `subagent_type: "bk-{platform}-developer"`, `mode: "plan"`, `plan_mode_required: true`
    - `model: "opus"`, `name: "dev-{N}"`
-   - Prompt: task description + file ownership + MK Context Block
+   - Prompt: task description + file ownership + Beer Kit Context Block
 
 5. **REVIEW AND APPROVE** each dev's plan via `plan_approval_response`. Reject if file ownership violated.
 
@@ -61,7 +61,7 @@ IMMEDIATELY execute in order:
 
 4. **CALL** `Task` x N to spawn debugger teammates:
    - `subagent_type: "bk-debugger"`, `model: "sonnet"`, `name: "debugger-{N}"`
-   - Prompt: task description + MK Context Block
+   - Prompt: task description + Beer Kit Context Block
 
 5. **MONITOR** via TaskCompleted events. Let debuggers message each other — adversarial convergence.
    - Fallback: Check `TaskList` if no events in 60s
@@ -96,7 +96,7 @@ IMMEDIATELY execute in order:
 
 4. **CALL** `Task` x N to spawn reviewer teammates:
    - `subagent_type: "bk-code-reviewer"`, `model: "sonnet"`, `name: "reviewer-{N}"`
-   - Prompt: task description + MK Context Block
+   - Prompt: task description + Beer Kit Context Block
 
 5. **MONITOR** via TaskCompleted events + TaskList fallback (60s).
 

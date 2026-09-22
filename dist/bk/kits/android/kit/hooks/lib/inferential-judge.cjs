@@ -3,9 +3,11 @@
  *
  * Exports:
  *   reviewBatch(batchEntries, modelConfig) → Promise<ReviewResult>
+ *   isJudgeAvailable() → boolean
  *
- * ReviewResult: { overall_score: number (0-1), issues: Issue[] }
+ * ReviewResult: { overall_score: number (0-1), issues: Issue[], source: Source, reason?: string }
  * Issue:        { severity: 'error'|'warning'|'info', file: string, message: string }
+ * Source:       'api' | 'mock' | 'unavailable' | 'error'
  *
  * Modes:
  *   Real mode:  Calls Claude API via ANTHROPIC_API_KEY.
@@ -14,6 +16,16 @@
  * Fail-open contract:
  *   Any error (no API key, network error, timeout, invalid JSON) →
  *   return { overall_score: 1.0, issues: [] } and log warning to stderr.
+ *
+ * Fail-open is not the same as a clean review, and `source` is what says which one happened.
+ * All 12 rows in .bk-metrics/inferential-results.jsonl across both field repos read exactly
+ * { overall_score: 1, issue_count: 0, issues: [] } — byte-identical to DEFAULT_RESULT, because
+ * neither repo sets ANTHROPIC_API_KEY, so the sensor has never once run for real. That includes
+ * the trustcall session that was fixing genuine force-unwrap crashes. The warning went to
+ * stderr and vanished; the row on disk was indistinguishable from a perfect review, and a user
+ * reading their metrics saw "quality 1.0". The other fail-open paths — network error, timeout,
+ * unparseable response — produced the same perfect score, so a broken API call also read clean.
+ * Every return below therefore carries its provenance, and only 'api' is a measurement.
  */
 
 'use strict';
@@ -31,6 +43,16 @@ const DEFAULT_RESULT = { overall_score: 1.0, issues: [] };
  */
 function isMockMode() {
   return process.env.BK_INFERENTIAL_MODE === 'mock';
+}
+
+/**
+ * Can a judge actually judge right now? Mock mode counts — it answers deterministically, which
+ * is a real answer for tests. Without this, the hook spawned a detached node process per
+ * `batch_size` edits that could only ever fail open.
+ * @returns {boolean}
+ */
+function isJudgeAvailable() {
+  return isMockMode() || Boolean(process.env.ANTHROPIC_API_KEY);
 }
 
 /**
@@ -177,17 +199,19 @@ function parseAPIResponse(rawResponse) {
 async function reviewBatch(batchEntries, modelConfig = {}) {
   // Mock mode — deterministic result for tests
   if (isMockMode()) {
-    return getMockResult();
+    return { ...getMockResult(), source: 'mock' };
   }
 
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     process.stderr.write(`${MODULE} No ANTHROPIC_API_KEY — fail-open with perfect score\n`);
-    return { ...DEFAULT_RESULT };
+    return { ...DEFAULT_RESULT, source: 'unavailable', reason: 'no_api_key' };
   }
 
   if (!batchEntries || batchEntries.length === 0) {
-    return { ...DEFAULT_RESULT };
+    // Nothing was reviewed, so nothing was measured. The worker returns before calling this,
+    // so this is a direct-caller guard.
+    return { ...DEFAULT_RESULT, source: 'unavailable', reason: 'empty_batch' };
   }
 
   const model = modelConfig.model || 'claude-haiku-4-5';
@@ -209,11 +233,14 @@ async function reviewBatch(batchEntries, modelConfig = {}) {
       }
     }
     const result = parseAPIResponse(raw);
-    return result;
+    // The only path that produces a measurement.
+    return { ...result, source: 'api' };
   } catch (e) {
     process.stderr.write(`${MODULE} reviewBatch error (fail-open): ${e.message}\n`);
-    return { ...DEFAULT_RESULT };
+    // Network failure, timeout or unparseable response. Same perfect score as before, but it
+    // no longer masquerades as a clean review.
+    return { ...DEFAULT_RESULT, source: 'error', reason: String(e.message || 'unknown').slice(0, 120) };
   }
 }
 
-module.exports = { reviewBatch, buildPrompt, DEFAULT_RESULT };
+module.exports = { reviewBatch, buildPrompt, isJudgeAvailable, DEFAULT_RESULT };

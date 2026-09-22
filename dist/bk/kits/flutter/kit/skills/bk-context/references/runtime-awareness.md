@@ -1,8 +1,8 @@
 # Runtime Awareness
 
-Monitor context window utilization in real-time to optimize MK sessions.
+Monitor context window utilization in real-time to optimize Beer Kit sessions.
 
-> **Note**: MK provides runtime awareness via built-in hooks (statusline, checkpoint-save, context-safety).
+> **Note**: Beer Kit provides runtime awareness via built-in hooks (statusline, checkpoint-save, context-safety).
 > These hooks inject context usage data automatically — no manual setup required.
 
 ## Overview

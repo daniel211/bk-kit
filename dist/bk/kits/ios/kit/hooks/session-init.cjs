@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // session-init.cjs - SessionStart hook for beer-kit mobile toolkit
-// Template variables: ios, platform-context.json
+// Template variables: ios, platform-context.json, swiftlint lint --strict
 // Trigger: SessionStart (startup|resume|clear|compact)
 // Purpose: Detect mobile platform, load platform context, init workflow state
 
@@ -101,11 +101,27 @@ try {
       // Same bug class, other file: a lint queue is opened on PostToolUse and drained at
       // Stop, so a session that dies first leaves its .bk-metrics/lint-queue/<id>.jsonl
       // behind with nothing anywhere to clean it up (fusionworkomni still held one two days
-      // after that session ended). The current session id is passed so its own queue — and
-      // its --native sibling — is never swept out from under it.
+      // after that session ended).
+      //
+      // ADOPT BEFORE REAPING. That orphan queue names real files that were never linted, so
+      // deleting it threw away the lint pass rather than performing it — which is the whole
+      // #4 failure: Stop never fired, and 24 hours later the evidence was removed. Adoption
+      // spawns a detached worker per orphan queue; only what survives that (too old, or
+      // nothing left in it) is reaped. Both calls get the current session id so this
+      // session's own queue — and its --native sibling — is neither adopted nor swept out
+      // from under it; it is drained by its own Stop and by lint-findings-inject.
+      const lintSessionId = data.session_id || data.sessionId || null;
+      try {
+        const { adoptOrphanLintQueues } = require('./lib/lint-worker-spawn.cjs');
+        adoptOrphanLintQueues(cwd, {
+          currentSessionId: lintSessionId,
+          platform,
+          lintCommand: 'swiftlint lint --strict'
+        });
+      } catch { /* fail-open — adoption is recovery, not a precondition */ }
       try {
         const { reapStaleQueues } = require('./lib/lint-queue.cjs');
-        reapStaleQueues(cwd, { currentSessionId: data.session_id || data.sessionId || null });
+        reapStaleQueues(cwd, { currentSessionId: lintSessionId });
       } catch { /* fail-open — reaping is housekeeping, not a precondition */ }
 
       const hasFoundation = fs.existsSync(path.join(cwd, 'docs', 'foundation', 'overview.md'));
@@ -218,7 +234,7 @@ try {
       }
 
       // Output health check
-      const summary = '\n--- MK Session Health Check ---\n' + healthChecks.join('\n') + '\n---\n';
+      const summary = '\n--- Beer Kit Session Health Check ---\n' + healthChecks.join('\n') + '\n---\n';
       process.stdout.write(summary);
 
       if (source === 'compact') {
