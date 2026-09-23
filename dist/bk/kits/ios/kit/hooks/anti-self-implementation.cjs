@@ -68,11 +68,8 @@ try {
    */
   function isAgentContext(data) {
     if (process.env.BK_AGENT_TYPE) return true;
-    if (data && (data.agent_type || data.agent_id)) return true;
-    const transcript = String(
-      (data && (data.agent_transcript_path || data.transcript_path)) || ''
-    ).replace(/\\/g, '/');
-    return transcript.includes('/subagents/');
+    // Payload signals shared with conductor-inbox-drain — see lib/hook-caller-context.cjs.
+    return require('./lib/hook-caller-context.cjs').isSubagentEvent(data);
   }
 
   async function main() {

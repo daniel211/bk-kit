@@ -1,8 +1,8 @@
 /**
  * agent-signal-patterns.cjs — the reactive-signal vocabulary, in one place.
  *
- * These patterns used to live inside agent-signal-detector.cjs, which is a PostToolUse(Task)
- * hook. That made them unreachable from SubagentStop, and SubagentStop is where the status of
+ * These patterns used to live inside agent-signal-detector.cjs, which was then a
+ * PostToolUse(Task) hook (it has since moved to SubagentStop too). That made them unreachable from SubagentStop, and SubagentStop is where the status of
  * a finished agent gets recorded. The consequence was measured in both field repos: every one
  * of the 42 rows in .bk-metrics/agent-trace.jsonl read `status: "unknown"`, because
  * workflow-metrics read `data.status` and the captured SubagentStop payload shape
@@ -13,8 +13,8 @@
  * session_id, stop_hook_active, transcript_path.
  *
  * Extracting the vocabulary lets workflow-metrics classify `last_assistant_message` with the
- * exact same rules the detector applies to a Task result, so `status` and `fix_loops` become
- * measurements instead of structural zeros.
+ * exact same rules the detector applies, so `status` and `fix_loops` become measurements
+ * instead of structural zeros. Both now read the same field, `last_assistant_message`.
  */
 
 'use strict';

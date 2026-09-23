@@ -26,6 +26,8 @@ try {
       // Consume stdin
       let input = '';
       for await (const chunk of process.stdin) input += chunk;
+      let hookData = {};
+      try { hookData = JSON.parse(input || '{}'); } catch { /* no session → nothing queued */ }
 
       const state = readWorkflowState() || {};
       const currentSkill = state.command || '';
@@ -95,9 +97,14 @@ try {
         writeWorkflowState({ _last_chain_suggest: suggestKey });
       } catch { /* best-effort */ }
 
-      process.stdout.write(JSON.stringify({
-        additionalContext: suggestion
-      }) + '\n');
+      // Queued, not printed: SubagentStop output only ever reached the subagent's own transcript
+      // (field: X-Game-Pro agent-a6722278dade32579.jsonl, fusionworkomni
+      // agent-abde7f4fe706b884b.jsonl). conductor-inbox-drain delivers it — lib/conductor-inbox.cjs.
+      require('./lib/conductor-inbox.cjs').postToConductor(
+        require('./lib/resolve-project-root.cjs').resolveProjectRoot(),
+        hookData.session_id || hookData.sessionId || null,
+        { source: 'skill-chain-suggest', text: suggestion }
+      );
 
       timer.end({ status: 'ok', skill: currentSkill, next: nextCommand, exit: 0 });
       process.exit(0);

@@ -5,7 +5,7 @@
  * Writes .bk-version.json for update tracking.
  */
 
-import { existsSync, writeFileSync, readFileSync, appendFileSync, unlinkSync, rmSync, readdirSync } from 'node:fs';
+import { existsSync, writeFileSync, readFileSync, unlinkSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { hashAllFiles } from '../lib/hash-tracker.mjs';
 import { runDoctor } from './cmd-doctor.mjs';
@@ -13,6 +13,12 @@ import { copyDirFiltered } from '../lib/file-utils.mjs';
 import { mergeSettings } from '../lib/settings-merger.mjs';
 import { kitLayout, packageRootFrom } from '../lib/package-layout.mjs';
 import { addKitOption, resolveKitOrExit } from '../lib/kit-resolver.mjs';
+import {
+  gitPrefix, writeGitignoreEntries,
+} from '../lib/session-state-gitignore.mjs';
+
+// Re-exported: callers and tests have always imported the list from here.
+export { NEVER_COMMIT, writeGitignoreEntries } from '../lib/session-state-gitignore.mjs';
 
 /**
  * Register the init command with commander.
@@ -24,7 +30,10 @@ export function registerInit(program) {
     .description('Initialize .claude/ with a platform development kit')
     .option('--target <dir>', 'Target project directory', '.')
     .option('--force', 'Overwrite existing .claude/ directory')
-    .option('--gitignore', "Add the kit's per-machine state files to .gitignore");
+    // Both spellings: --gitignore predates the default and stays valid in scripts (it also
+    // forces the write outside a git repository); --no-gitignore is the opt-out.
+    .option('--gitignore', "Add the kit's per-machine state files to .gitignore (default in a git repo)")
+    .option('--no-gitignore', "Do not touch .gitignore");
 
   addKitOption(command)
     // Async because runDoctor is: its design-engine check dynamically imports the kit that
@@ -168,6 +177,10 @@ export function registerInit(program) {
       console.log(`  ✓ Platform: ${platform}`);
       console.log(`  ✓ Version: ${kitManifest.version}\n`);
 
+      // Ignore the session state before doctor runs, so doctor reports the result rather than
+      // the moment just before it.
+      applyGitignoreDefault(targetDir, opts.gitignore);
+
       // Run doctor
       console.log('Running doctor check...');
       const doctorResult = await runDoctor(targetDir, platform);
@@ -178,89 +191,38 @@ export function registerInit(program) {
         console.log(`\n⚠ Kit initialized with ${doctorResult.errors} issue(s). Run "bk doctor" for details.`);
       }
 
-      let wroteGitignore = false;
-      if (opts.gitignore) {
-        const added = writeGitignoreEntries(targetDir);
-        wroteGitignore = true;
-        if (added.length > 0) {
-          console.log(`\n  ✓ Added ${added.length} entr${added.length === 1 ? 'y' : 'ies'} to .gitignore`);
-        } else {
-          console.log('\n  ✓ .gitignore already covers the kit\'s per-machine state');
-        }
-      }
-
-      printVersionControlNotice(targetDir, wroteGitignore);
+      printVersionControlNotice(targetDir);
     });
 }
 
 /**
- * Paths the kit writes that must never be committed.
+ * Write the never-commit entries to .gitignore — by default, in a git repository.
  *
- * Every one is a record of *this machine's* session, not of the work:
+ * Until 0.10.1 this needed `--gitignore` and the default was a printed notice. The notice did
+ * not work: X-Game-Pro has no .gitignore at all, its kit-install commit already tracked
+ * .workflow-state.json and .bk-metrics/, and a later "commit this task and the bk state"
+ * added the .bak, the retry state and five checkpoints. A list of files that must never be
+ * committed is not advice to print once; it is setup.
  *
- *   .workflow-state.json  FSM phase plus session-scoped agent ids — `dev_agent_id` is
- *                         resumable only in the session that spawned it, so the file is
- *                         actively misleading on a second machine. It also changes on
- *                         nearly every tool call, and merging its counters and appended
- *                         arrays is exactly what git cannot do.
- *   checkpoints/          snapshots of the above
- *   handoff/              context-reset handoff notes, written per session
- *   .statusline-cache.json, .retry-state.json   live counters
- *   .bk-metrics/          per-developer runtime telemetry
+ * Outside a git repository nothing is written unless `--gitignore` asks for it explicitly: a
+ * stray .gitignore in a directory that is not under git is clutter, and `update` or a re-init
+ * writes it once the project is. `--no-gitignore` opts out everywhere.
  *
- * What carries work between machines is the plan directory — `bk/dev/{feature}/` with its
- * `.plan-state.json` — which records what is *done* rather than which session did it, and
- * from which the phase is re-derived on the other machine. That is what belongs in git.
- */
-export const NEVER_COMMIT = [
-  'bk/dev/shared/.workflow-state.json',
-  'bk/dev/shared/.workflow-state.json.*',
-  'bk/dev/shared/checkpoints/',
-  'bk/dev/shared/handoff/',
-  'bk/dev/shared/.statusline-cache.json',
-  'bk/dev/shared/.retry-state.json',
-  '.bk-metrics/',
-];
-
-const GITIGNORE_HEADER =
-  '# beer-kit — per-machine session state; the plans in bk/dev/{feature}/ are committed';
-
-/**
- * Read the project's .gitignore as a set of trimmed, de-slashed entries.
  * @param {string} targetDir
- * @returns {{ text: string, entries: Set<string> }}
+ * @param {boolean|undefined} flag - true for --gitignore, false for --no-gitignore, undefined for neither
+ * @returns {{ status: 'written'|'covered'|'skipped'|'not-git', added: string[] }}
  */
-function readGitignore(targetDir) {
-  let text = '';
-  try {
-    text = readFileSync(join(targetDir, '.gitignore'), 'utf8');
-  } catch {
-    // No .gitignore — nothing is ignored yet.
+export function applyGitignoreDefault(targetDir, flag) {
+  if (flag === false) return { status: 'skipped', added: [] };
+  if (flag !== true && gitPrefix(targetDir) === null) return { status: 'not-git', added: [] };
+
+  const added = writeGitignoreEntries(targetDir);
+  if (added.length > 0) {
+    console.log(`  ✓ Added ${added.length} session-state entr${added.length === 1 ? 'y' : 'ies'} to .gitignore (--no-gitignore to skip)`);
+    return { status: 'written', added };
   }
-  const entries = new Set(
-    text.split('\n').map((l) => l.trim().replace(/\/$/, '')).filter(Boolean),
-  );
-  return { text, entries };
-}
-
-/**
- * Append the missing never-commit entries to .gitignore.
- *
- * Appends only what is absent, so running it twice adds nothing the second time and a user
- * who ignores more than the kit asks for keeps their own rules.
- *
- * @param {string} targetDir
- * @returns {string[]} The entries actually written
- */
-export function writeGitignoreEntries(targetDir) {
-  const { text, entries } = readGitignore(targetDir);
-  const missing = NEVER_COMMIT.filter((e) => !entries.has(e.replace(/\/$/, '')));
-  if (missing.length === 0) return [];
-
-  const prefix = text.length === 0 || text.endsWith('\n') ? '' : '\n';
-  const block = `${prefix}\n${GITIGNORE_HEADER}\n${missing.join('\n')}\n`;
-  appendFileSync(join(targetDir, '.gitignore'), block, 'utf8');
-  return missing;
+  console.log('  ✓ .gitignore already covers the kit\'s per-machine state');
+  return { status: 'covered', added };
 }
 
 /**
@@ -271,10 +233,9 @@ export function writeGitignoreEntries(targetDir) {
  * git repository.
  *
  * @param {string} targetDir
- * @param {boolean} wroteGitignore - Whether --gitignore already handled the ignore list
  */
-function printVersionControlNotice(targetDir, wroteGitignore) {
-  if (!existsSync(join(targetDir, '.git'))) return;
+function printVersionControlNotice(targetDir) {
+  if (gitPrefix(targetDir) === null) return;
 
   console.log('\nVersion control — what to do with what this created:');
   console.log('  commit  .claude/          the kit; pins one version for the team');
@@ -282,13 +243,6 @@ function printVersionControlNotice(targetDir, wroteGitignore) {
   console.log('  commit  bk/dev/{feature}/ plans and .plan-state.json — this is what moves');
   console.log('                            work between machines and between people');
   console.log('  ignore  session state     per-machine, changes every tool call, does not merge');
-
-  if (wroteGitignore) return;
-
-  const { entries } = readGitignore(targetDir);
-  const missing = NEVER_COMMIT.filter((e) => !entries.has(e.replace(/\/$/, '')));
-  if (missing.length === 0) return;
-
-  console.log('\nAdd to .gitignore (or re-run init with --gitignore to write them):');
-  for (const e of missing) console.log(`  ${e}`);
+  // Whether it IS ignored is doctor's line above ("session state ignored by git"), which also
+  // prints the fix after --no-gitignore; repeating the list here only doubled it.
 }

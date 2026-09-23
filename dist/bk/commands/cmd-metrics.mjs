@@ -45,7 +45,43 @@ export function formatDuration(ms) {
 }
 
 /**
- * Group summary rows into workflows by (skill, feature).
+ * The workflow a summary row belongs to.
+ *
+ * A row written since the workflow_id stamp carries it: `bk-code:crypto-module` for a skill
+ * workflow (merges across sessions, as it should — a resumed feature is the same workflow) and
+ * `session:<id>` for ad-hoc work (one workflow per session). See emitSummary in
+ * hooks/_base/lib/workflow-summary.cjs.
+ *
+ * Grouping by (skill, feature) alone — the 0.10.1 rule — collapsed every ad-hoc session ever
+ * run into one workflow, because they all write skill and feature "unknown". fusionworkomni's
+ * insights.md read "Based on last 1 workflow(s) across 6 summary row(s) … Avg 14.0
+ * agents/workflow" for six rows from several separate sessions.
+ *
+ * LEGACY ROWS (no workflow_id) cannot be split that way — they carry no session id, so there is
+ * nothing to split on. The choice:
+ *   - a legacy row WITH a known feature gets the key the writer would stamp today
+ *     (`${skill || 'session'}:${feature}`, mirroring resolveWorkflowId), so a skill workflow
+ *     whose close-outs straddle the upgrade still reads as one workflow;
+ *   - a legacy row with feature "unknown" keeps the 0.10.1 (skill, feature) grouping, in a key
+ *     space no stamped id can collide with. LIMITATION, stated plainly: pre-stamp ad-hoc rows
+ *     inside the window still collapse into one workflow among themselves. They age out of the
+ *     window; nothing on disk can recover their session.
+ *
+ * Kept in sync by hand with pattern-extractor.cjs, which cannot import this module.
+ *
+ * @param {Object} e — one workflow-summary.jsonl row
+ * @returns {string}
+ */
+export function workflowKey(e) {
+  if (typeof e.workflow_id === 'string' && e.workflow_id.trim()) return e.workflow_id.trim();
+  const skill = e.skill && e.skill !== 'unknown' ? e.skill : '';
+  const feature = e.feature && e.feature !== 'unknown' ? e.feature : '';
+  if (feature) return `${skill || 'session'}:${feature}`;
+  return `legacy\u0000${e.skill || 'unknown'}\u0000${e.feature || 'unknown'}`;
+}
+
+/**
+ * Group summary rows into workflows by workflowKey (above).
  *
  * ONE SUMMARY ROW IS NOT ONE WORKFLOW, and never was. A feature is legitimately closed out more
  * than once: the terminal-phase edge trigger writes a row when the workflow first enters commit,
@@ -56,36 +92,44 @@ export function formatDuration(ms) {
  * be fixed here, on the read side. Doing so also removes the "when is a workflow finished?"
  * question that produced two regressions in a row.
  *
+ * But ONE (skill, feature) IS NOT ONE WORKFLOW EITHER — not for ad-hoc work, where every session
+ * shares the key "unknown/unknown". That is why the key is the stamped workflow_id.
+ *
  * Duration follows the em-dash contract: a workflow is measured if ANY of its rows carried a
  * measured duration, and unmeasured rows contribute nothing rather than zero.
  *
- * CAVEAT, deliberate and not a heuristic: grouping is by (skill, feature) within the rows handed
- * to this function, i.e. within the selected window. The same feature reopened weeks later is
- * genuinely a second workflow, and grouping across all of time would merge the two. The window
- * is the bound. No time-gap rule is applied — inventing one would put a guess where there is
- * currently an honest limit.
+ * CAVEAT, deliberate and not a heuristic: a skill workflow's key is command:feature, grouped
+ * within the rows handed to this function, i.e. within the selected window. The same feature
+ * reopened weeks later is genuinely a second workflow, and grouping across all of time would
+ * merge the two. The window is the bound. No time-gap rule is applied — inventing one would put
+ * a guess where there is currently an honest limit.
  *
  * Kept in sync by hand with the same grouping in hooks/_base/pattern-extractor.cjs, which is
  * CommonJS inside the hook tree and cannot import this module.
  *
  * @param {Array<Object>} entries — rows from workflow-summary.jsonl
- * @returns {Array<Object>} one object per workflow, ordered by the time of its last row
+ * Ordered by each workflow's LAST row (file order, which is append order). Map insertion order
+ * alone would be first-row order, and `--last N` would then drop a long-running skill workflow
+ * that is still the most recently active one, just because an ad-hoc session opened after it.
+ *
+ * @param {Array<Object>} entries — rows from workflow-summary.jsonl
+ * @returns {Array<Object>} one object per workflow, ordered by the position of its last row
  */
 export function groupIntoWorkflows(entries) {
   const byKey = new Map();
-  for (const e of entries) {
-    const skill = e.skill || 'unknown';
-    const feature = e.feature || 'unknown';
-    const key = `${skill}\u0000${feature}`;
+  for (const [i, e] of entries.entries()) {
+    const key = workflowKey(e);
     if (!byKey.has(key)) {
       byKey.set(key, {
-        skill, feature, rows: 0, ts: e.ts || null,
+        key, skill: e.skill || 'unknown', feature: e.feature || 'unknown', rows: 0,
+        ts: e.ts || null,
         total_agents: 0, fix_loops: 0, reactive_signals: 0,
         total_duration_ms: 0, measured: false
       });
     }
     const wf = byKey.get(key);
     wf.rows++;
+    wf.last_index = i;
     if (e.ts) wf.ts = e.ts;
     wf.total_agents += e.total_agents || 0;
     wf.fix_loops += e.fix_loops || 0;
@@ -95,10 +139,12 @@ export function groupIntoWorkflows(entries) {
       wf.measured = true;
     }
   }
-  return Array.from(byKey.values()).map((wf) => ({
-    ...wf,
-    total_duration_ms: wf.measured ? wf.total_duration_ms : null
-  }));
+  return Array.from(byKey.values())
+    .sort((a, b) => a.last_index - b.last_index)
+    .map(({ last_index: _i, ...wf }) => ({
+      ...wf,
+      total_duration_ms: wf.measured ? wf.total_duration_ms : null
+    }));
 }
 
 /**
@@ -217,8 +263,10 @@ export function registerMetrics(program) {
       // as a whole run.
       const last = parseInt(opts.last, 10) || 7;
       const keptWorkflows = groupIntoWorkflows(entries).slice(-last);
-      const keptKeys = new Set(keptWorkflows.map((w) => `${w.skill}\u0000${w.feature}`));
-      entries = entries.filter((e) => keptKeys.has(`${e.skill || 'unknown'}\u0000${e.feature || 'unknown'}`));
+      // Keyed by the same workflowKey the grouping used, so the rows kept are exactly the rows
+      // of the workflows kept — two ad-hoc sessions are two workflows here as well.
+      const keptKeys = new Set(keptWorkflows.map((w) => w.key));
+      entries = entries.filter((e) => keptKeys.has(workflowKey(e)));
 
       console.log(`\nbk metrics — last ${keptWorkflows.length} workflow(s)${opts.skill ? ` (skill: ${opts.skill})` : ''}\n`);
 

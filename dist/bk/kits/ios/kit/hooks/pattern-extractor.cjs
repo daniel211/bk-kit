@@ -58,14 +58,34 @@ try {
       // agents/workflow over last N runs" was literally false: it would have said 4.0 over 2
       // runs for one workflow that ran 8 agents.
       //
-      // Grouping is by (skill, feature) within the window read above — the same feature reopened
-      // weeks later is genuinely a second workflow, and the window is the bound on that. No
-      // time-gap heuristic is applied; inventing one would put a guess where there is an honest
-      // limit. Kept in sync by hand with groupIntoWorkflows in cli/user-cli/commands/
-      // cmd-metrics.mjs, which is ESM and cannot be required from here.
+      // Grouping is by the row's stamped workflow_id — `bk-code:crypto-module` for a skill
+      // workflow (still merges across sessions: a resumed feature is the same workflow),
+      // `session:<id>` for ad-hoc work. Grouping by (skill, feature), as 0.10.1 did, folded every
+      // ad-hoc session into one "unknown/unknown" workflow: fusionworkomni's insights.md said
+      // "Based on last 1 workflow(s) across 6 summary row(s) … Avg 14.0 agents/workflow" for six
+      // rows from several separate sessions.
+      //
+      // Legacy rows (no workflow_id) carry no session to split on. One with a known feature gets
+      // the key the writer would stamp today, so a skill workflow straddling the upgrade stays
+      // one workflow; one with feature "unknown" keeps the 0.10.1 (skill, feature) grouping in
+      // its own key space — pre-stamp ad-hoc rows in the window still collapse together, an
+      // honest limit that ages out of the window.
+      //
+      // All within the window read above — the same feature reopened weeks later is genuinely a
+      // second workflow, and the window is the bound on that. No time-gap heuristic is applied;
+      // inventing one would put a guess where there is an honest limit. Kept in sync by hand with
+      // workflowKey / groupIntoWorkflows in cli/user-cli/commands/cmd-metrics.mjs, which is ESM
+      // and cannot be required from here.
+      const workflowKey = (e) => {
+        if (typeof e.workflow_id === 'string' && e.workflow_id.trim()) return e.workflow_id.trim();
+        const sk = e.skill && e.skill !== 'unknown' ? e.skill : '';
+        const ft = e.feature && e.feature !== 'unknown' ? e.feature : '';
+        if (ft) return `${sk || 'session'}:${ft}`;
+        return `legacy\u0000${e.skill || 'unknown'}\u0000${e.feature || 'unknown'}`;
+      };
       const workflowMap = new Map();
       for (const e of entries) {
-        const key = `${e.skill || 'unknown'}\u0000${e.feature || 'unknown'}`;
+        const key = workflowKey(e);
         if (!workflowMap.has(key)) {
           workflowMap.set(key, {
             skill: e.skill || 'unknown', total_agents: 0, fix_loops: 0, reactive_signals: 0

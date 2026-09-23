@@ -4,6 +4,7 @@
  * Plan Complete Reminder Hook
  * Trigger: SubagentStop (matcher: planner|bk-planner)
  * Purpose: Remind conductor to run /bk-code after planning completes
+ * Delivery: queued in the conductor inbox — SubagentStop output never reaches the conductor
  */
 try {
   const fs = require('fs');
@@ -23,42 +24,37 @@ try {
         process.exit(0);
       }
 
-      // Find latest plan directory
-      const plansDir = path.join(resolveProjectRoot(), 'bk', 'dev');
-      let planPath = null;
-      
-      if (fs.existsSync(plansDir)) {
-        const dirs = fs.readdirSync(plansDir)
-          .filter(d => !d.startsWith('.') && d !== 'shared' && fs.existsSync(path.join(plansDir, d, 'plan.md')))
-          .sort().reverse();
-        if (dirs.length > 0) {
-          planPath = path.resolve(plansDir, dirs[0]);
-        }
-      }
+      // The plan the planner just wrote: the newest plan.md. This used to take the
+      // reverse-alphabetical first plan directory, which named another feature's plan in the field
+      // (see lib/current-plan.cjs).
+      const root = resolveProjectRoot();
+      let state = null;
+      try {
+        state = JSON.parse(fs.readFileSync(path.join(root, 'bk', 'dev', 'shared', '.workflow-state.json'), 'utf8'));
+      } catch (e) { /* no workflow state */ }
+      const { currentPlanFile } = require('./lib/current-plan.cjs');
+      const planFile = currentPlanFile(root, state);
 
-      // Also check workflow state
-      if (!planPath) {
-        const statePath = path.join(resolveProjectRoot(), 'bk', 'dev', 'shared', '.workflow-state.json');
-        if (fs.existsSync(statePath)) {
-          try {
-            const state = JSON.parse(fs.readFileSync(statePath, 'utf8'));
-            if (state.plan_dir) planPath = path.resolve(resolveProjectRoot(), state.plan_dir);
-          } catch (e) { /* ignore */ }
-        }
-      }
-
-      if (planPath) {
+      if (planFile) {
+        // "Next step: /bk-code" is wrong advice when the planner ran inside /bk-code's own plan
+        // phase — the X-Game-Pro planner at 08:53Z did, and the conductor was told to start the
+        // workflow it was already running.
+        const insideCode = state && state.command === 'bk-code';
         const output = [
-          '',
           '## Plan Complete',
-          `Plan ready at: ${planPath}/plan.md`,
-          '',
-          `Next step: /bk-code ${planPath}/plan.md`,
-          '',
-          'Tip: Consider /compact before implementation to free context window.',
-          ''
+          `Plan ready at: ${planFile}`,
+          insideCode
+            ? 'Next step: continue the running /bk-code workflow with this plan.'
+            : `Next step: /bk-code ${planFile}`,
+          'Tip: Consider /compact before implementation to free context window.'
         ].join('\n');
-        process.stdout.write(output);
+
+        // Queued for the conductor, not printed: SubagentStop output only reaches the planner's
+        // own transcript (lib/conductor-inbox.cjs).
+        require('./lib/conductor-inbox.cjs').postToConductor(root, data.session_id || data.sessionId || null, {
+          source: 'plan-complete-reminder',
+          text: output
+        });
       }
 
       process.exit(0);

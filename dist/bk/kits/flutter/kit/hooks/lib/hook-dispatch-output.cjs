@@ -21,6 +21,16 @@
  *     same as when each hook had its own process.
  *   - plain-text stdout is carried in `additionalContext` when any hook emitted JSON, and passed
  *     through untouched when none did (which is how SessionStart/UserPromptSubmit context works).
+ *
+ * Delivery — shapeForEvent() then puts the merged context where Claude Code actually reads it
+ * for this event. "All of it reaches Claude" above was not true: a bare top-level
+ * `{additionalContext}` is recorded in the transcript as a `hook_success` attachment with
+ * `content: ""` and never shown to the model. Counted over ~/.claude/projects (last 40 days):
+ * 334 PreToolUse and 432 PostToolUse main-session hook_success rows whose stdout was bare
+ * `{additionalContext}`, every one with empty content; the only PreToolUse context the model saw
+ * (166 `hook_additional_context` rows) came from dispatches where some hook in the group happened
+ * to print `hookSpecificOutput`, which dragged the bare text along. The field's
+ * `[AGENT-OUTPUT-REJECTED] … failed 10x` lived only in those stdout fields.
  */
 
 /** Decisions ordered by how much they restrict; the strongest one present wins. */
@@ -114,6 +124,102 @@ function mergeStdout(results) {
 }
 
 /**
+ * Events whose `hookSpecificOutput.additionalContext` reaches a model — verified in transcripts as
+ * `hook_additional_context` attachments: PreToolUse (main), PostToolUse (main), SubagentStart
+ * (the subagent's own sidechain — that is its audience). UserPromptSubmit and SessionStart are
+ * the two events whose plain stdout is itself added as context (every such row in the field has
+ * non-empty `content`), and hookSpecificOutput is valid on them too.
+ */
+const MODEL_CONTEXT_EVENTS = new Set(['PreToolUse', 'PostToolUse', 'SubagentStart', 'UserPromptSubmit', 'SessionStart']);
+
+/** Of those, the events where plain stdout already works and is left exactly as it was. */
+const PLAIN_TEXT_EVENTS = new Set(['UserPromptSubmit', 'SessionStart']);
+
+/**
+ * Events whose output reaches nobody, but whose words are for the conductor. SubagentStop output
+ * lands only in the subagent's own transcript (skill-chain-suggest's `[SUGGEST-NEXT]` in
+ * X-Game-Pro agent-a6722278dade32579.jsonl and fusionworkomni agent-abde7f4fe706b884b.jsonl, and
+ * in no main transcript). Its text goes to the session's conductor inbox (conductor-inbox.cjs),
+ * delivered on the conductor's next event.
+ *
+ * Deliberately NOT routed:
+ *   - Stop. Its only speaker is pattern-extractor's per-turn `[PATTERN-INSIGHTS] Workflow health
+ *     looks good…` — 660 rows in the field, one per turn. Routed, that becomes a line injected
+ *     at the start of every turn describing the turn before. Stop-time work that matters to the
+ *     next turn already has its own channel (lint findings via lint-findings-inject).
+ *   - SessionEnd. The session is over; an inbox keyed by it would only be reaped.
+ *   - PreCompact, TaskCompleted, TeammateIdle, Notification — nothing in the kit prints context
+ *     on them except the team handlers, which already emit hookSpecificOutput.
+ * Their stdout is left exactly as the hooks wrote it.
+ */
+const CONDUCTOR_INBOX_EVENTS = new Set(['SubagentStop']);
+
+/**
+ * Put merged stdout where this event delivers it.
+ *
+ * @param {string} stdout — mergeStdout()'s result
+ * @param {string|null} event — hook_event_name from the payload
+ * @returns {{ stdout: string, conductorText: string|null }} what to print, and what (if
+ *   anything) must go to the conductor inbox instead
+ */
+function shapeForEvent(stdout, event) {
+  const unchanged = { stdout, conductorText: null };
+  const chunk = classify(stdout);
+  if (!chunk || !event) return unchanged;
+
+  if (MODEL_CONTEXT_EVENTS.has(event)) {
+    if (chunk.kind === 'text') {
+      if (PLAIN_TEXT_EVENTS.has(event)) return unchanged;
+      return {
+        stdout: `${JSON.stringify({ hookSpecificOutput: { hookEventName: event, additionalContext: chunk.text } })}\n`,
+        conductorText: null
+      };
+    }
+    const obj = { ...chunk.json };
+    const bare = obj.additionalContext;
+    const hso = obj.hookSpecificOutput && typeof obj.hookSpecificOutput === 'object'
+      ? { ...obj.hookSpecificOutput }
+      : null;
+    if (!bare) {
+      // Already shaped. Only a missing hookEventName is filled in — it is required.
+      if (hso && !hso.hookEventName) {
+        obj.hookSpecificOutput = { hookEventName: event, ...hso };
+        return { stdout: `${JSON.stringify(obj)}\n`, conductorText: null };
+      }
+      return unchanged;
+    }
+    delete obj.additionalContext;
+    const target = hso || {};
+    obj.hookSpecificOutput = {
+      ...target,
+      hookEventName: target.hookEventName || event,
+      additionalContext: joinLine(target.additionalContext || '', bare)
+    };
+    return { stdout: `${JSON.stringify(obj)}\n`, conductorText: null };
+  }
+
+  if (CONDUCTOR_INBOX_EVENTS.has(event)) {
+    if (chunk.kind === 'text') return { stdout: '', conductorText: chunk.text };
+    const obj = { ...chunk.json };
+    let text = obj.additionalContext || '';
+    delete obj.additionalContext;
+    if (obj.hookSpecificOutput && typeof obj.hookSpecificOutput === 'object') {
+      const hso = { ...obj.hookSpecificOutput };
+      text = joinLine(text, hso.additionalContext || '');
+      delete hso.additionalContext;
+      const rest = Object.keys(hso).filter((k) => k !== 'hookEventName');
+      if (rest.length > 0) obj.hookSpecificOutput = hso;
+      else delete obj.hookSpecificOutput;
+    }
+    // Anything else (a `decision: "block"` meant for the subagent, say) still goes to stdout.
+    const out = Object.keys(obj).length > 0 ? `${JSON.stringify(obj)}\n` : '';
+    return { stdout: out, conductorText: text || null };
+  }
+
+  return unchanged;
+}
+
+/**
  * The exit code the dispatcher should use.
  *
  * @param {Array<{exitCode: number|null, status: string}>} results
@@ -135,4 +241,7 @@ function mergeStderr(results) {
   return results.map((r) => r.stderr || '').join('');
 }
 
-module.exports = { mergeStdout, mergeExitCode, mergeStderr, classify };
+module.exports = {
+  mergeStdout, mergeExitCode, mergeStderr, classify, shapeForEvent,
+  MODEL_CONTEXT_EVENTS, PLAIN_TEXT_EVENTS, CONDUCTOR_INBOX_EVENTS
+};

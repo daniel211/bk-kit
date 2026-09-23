@@ -89,7 +89,11 @@ try {
         feature: state.feature || 'unknown',
         phase: state.current_phase || '',
         complexityTier: state.complexity_tier || 'Standard',
-        closedBy: 'session-stop'
+        closedBy: 'session-stop',
+        // The SessionEnd payload carries session_id (see the field list above). It is what
+        // makes an ad-hoc close-out `session:<id>` — its own workflow — rather than one more
+        // row folded into every other ad-hoc session's "unknown/unknown".
+        sessionId: data.session_id
       });
 
       // null means every row for this key was already covered by an earlier close-out. A

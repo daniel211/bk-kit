@@ -13,6 +13,9 @@ import { reportHookPerf } from '../lib/hook-perf-measure.mjs';
 import { packageRootFrom } from '../lib/package-layout.mjs';
 import { addKitOption, resolveKitOrExit } from '../lib/kit-resolver.mjs';
 import { detectDrift, formatDriftList, readDoctorIgnore } from '../lib/kit-drift.mjs';
+import {
+  appendIgnoreCommand, missingIgnoreEntries, trackedSessionState, untrackCommand,
+} from '../lib/session-state-gitignore.mjs';
 
 /**
  * Check whether an executable is on PATH, on any host OS.
@@ -345,6 +348,45 @@ export async function runDoctor(targetDir, platform) {
     const result = await reportDesignEngine(targetDir);
     return result.status === 'ok' ? true : 'warn';
   });
+
+  // 10. Per-machine session state kept out of git — see lib/session-state-gitignore.mjs for the
+  //     field case (X-Game-Pro, commit 75e97db) that no check here caught. Tracked state is an
+  //     error: it is already in history, it conflicts on the next pull, and on another machine
+  //     it describes a session that is not there. Missing ignore entries are a warning: nothing
+  //     is wrong yet, but a broad `git add` is one step away. Skipped entirely outside a git
+  //     repository — there is nothing to get wrong there.
+  const tracked = trackedSessionState(targetDir);
+  if (tracked) {
+    const missing = missingIgnoreEntries(targetDir);
+    const label = tracked.files.length > 0
+      ? `${tracked.files.length} session-state file(s) tracked by git`
+      : 'session state ignored by git';
+    check(label, () => {
+      if (tracked.files.length === 0 && missing.length === 0) return true;
+      if (tracked.files.length > 0) {
+        console.log('    Per-machine state is committed; it changes every tool call and does not merge:');
+        for (const line of formatDriftList(tracked.files)) console.log(`      ${line}`);
+      }
+      if (missing.length > 0) {
+        console.log('    Not ignored, so a broad `git add` will commit them:');
+        for (const e of missing) console.log(`      ${e}`);
+      }
+      console.log('    Fix, from this directory:');
+      if (missing.length > 0) {
+        console.log(`      ${appendIgnoreCommand(missing)}`);
+        console.log('      (or "bk update", which writes the same entries)');
+      }
+      if (tracked.files.length > 0) {
+        console.log(`      ${untrackCommand(tracked.pathspecs)}`);
+        if (missing.length > 0) console.log('      git add .gitignore');
+        console.log('      git commit -m "chore: stop tracking beer-kit session state"');
+        console.log('    The files stay on disk here. Other clones drop their copies on the next pull;');
+        console.log('    the kit re-derives the phase from bk/dev/{feature}/.plan-state.json.');
+        return false;
+      }
+      return 'warn';
+    });
+  }
 
   return { passed, warnings, errors };
 }

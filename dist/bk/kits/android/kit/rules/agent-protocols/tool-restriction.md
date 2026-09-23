@@ -78,12 +78,15 @@ Use Bash strictly to invoke the Gemini review harness.
 
 ### Hook Enforcement
 
-`verify-output.cjs` enforces tool restrictions:
-1. Scans agent output for Edit/Bash patterns for read-only agents → `[TOOL-RESTRICT]` error
-2. For **Read-only+Harness**, scans for `Edit`, plus any Bash command outside the harness
+`verify-output.cjs` (SubagentStop, when the agent finishes) enforces tool restrictions from
+the tool calls recorded in the agent's own transcript (`agent_transcript_path`):
+1. Read-only agents: any `Edit` / `MultiEdit` / `NotebookEdit` / `Bash` call → `[TOOL-RESTRICT]` error;
+   a `Write` outside `bk/` → `[TOOL-RESTRICT]` warning
+2. For **Read-only+Harness**, any Edit-family call, plus any Bash command outside the harness
    allowlist (`agy` / `gemini-review.mjs` / read-only inspection) → `[TOOL-RESTRICT]` error
 3. Second layer on top of `permissionMode: plan` in agent frontmatter
 
-**Scope of the hook:** it is a best-effort scan of the agent's returned transcript after
-the fact, not a sandbox. It catches and reports violations; it cannot prevent one
-mid-flight. Treat the agent frontmatter (`disallowedTools`) as the primary boundary.
+**Scope of the hook:** it is a check of the agent's transcript after the fact, not a
+sandbox. It catches and reports violations; it cannot prevent one mid-flight, and it is
+skipped when the transcript cannot be read. Treat the agent frontmatter (`disallowedTools`)
+as the primary boundary.

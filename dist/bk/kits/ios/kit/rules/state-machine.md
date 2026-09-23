@@ -91,11 +91,22 @@ Fix-loop max 1: 1 automatic retry, then escalate to user.
 
 ---
 
+## `/bk-plan` Transitions
+
+```
+(none) → planning → completed | aborted
+```
+
+One phase for the whole plan run (steps live in `.plan-state.json`). Written at Step 2 so the
+plan never runs under the previous workflow's name. Detail: `skills/bk-plan/references/workflow-state.md`.
+
+---
+
 ## State Persistence
 
 File: `bk/dev/shared/.workflow-state.json`
 
-Written by the FSM commands (`/bk-code`, `/bk-debug`, `/bk-refactor`) at **every** phase
+Written by the FSM commands (`/bk-code`, `/bk-debug`, `/bk-refactor`, `/bk-plan`) at **every** phase
 change. `fsm-guard.cjs` fires on Write/Edit of this path — a command that tracks its progress
 only in a per-feature state file (`.plan-state.json`, `.spec-state.json`) gets no transition
 validation, no recurrence ladder and no compaction recovery.
@@ -105,10 +116,10 @@ below. Without it every transition passes through unvalidated.
 
 ```json
 {
-  "workflow_type": "bk-code|bk-debug|bk-refactor",
-  "command": "bk-code|bk-debug|bk-refactor",
+  "workflow_type": "bk-code|bk-debug|bk-refactor|bk-plan",
+  "command": "bk-code|bk-debug|bk-refactor|bk-plan",
   "feature": "feature-name-slug",
-  "current_phase": "plan|coding|testing|review|commit|escalated|aborted|classify|analyze|brainstorm",
+  "current_phase": "plan|coding|testing|review|commit|escalated|aborted|classify|analyze|brainstorm|planning|completed",
   "phase_history": [{"phase": "", "from_phase": "", "ts": 0, "entered_by": ""}],
   "phase_recurrence_count": {},
   "batch": 1,
@@ -138,6 +149,7 @@ below. Without it every transition passes through unvalidated.
 | `commit` | Terminal (success) | Feature committed successfully |
 | `escalated` | Terminal (pending) | Fix-loop max exceeded — awaiting user decision |
 | `aborted` | Terminal (failure) | User chose to discard work |
+| `completed` | Terminal (success) | bk-plan: plan approved |
 
 ### Halt flags (set by the harness, cleared only by the user)
 
@@ -165,7 +177,8 @@ the command to the user.
 ### Not version controlled
 
 `bk/dev/shared/.workflow-state.json` and `checkpoints/` are per-machine and are not committed
-(`bk init --kit <platform> --gitignore` writes the rules). What is committed is the plan directory,
+(`bk init` and `bk update` write the rules; `bk doctor` flags any that are tracked). Never
+stage them, even when asked to commit "bk state". What is committed is the plan directory,
 `bk/dev/{feature}/` with its `.plan-state.json`.
 
 So a plan pulled from another machine or another developer legitimately has no FSM state.
@@ -182,8 +195,9 @@ episode instead.
 
 ### Starting the next workflow (new episode)
 
-`commit` and `aborted` have no outgoing edges inside an episode. The next workflow starts by
-writing an **opening phase** — `plan` (bk-code), `classify` (bk-debug), `analyze` (bk-refactor)
+`commit`, `aborted` and `completed` have no outgoing edges inside an episode. The next workflow
+starts by writing an **opening phase** — `plan` (bk-code), `classify` (bk-debug), `analyze`
+(bk-refactor), `planning` (bk-plan)
 — straight over the terminal state. `fsm-guard.cjs` recognises that as a new episode and:
 
 - lets it through (`commit → plan` is not an invalid transition, it is a restart);
@@ -193,7 +207,9 @@ writing an **opening phase** — `plan` (bk-code), `classify` (bk-debug), `analy
 
 The new workflow may be a different one: `bk-code` ending at `commit` followed by `bk-debug`
 opening at `classify` is a valid restart. Any *other* phase written out of a terminal state is
-still refused — resuming a committed workflow at `review` is a bug, not a restart. Never delete
+still refused — resuming a committed workflow at `review` is a bug, not a restart. The one
+non-terminal exception is an in-flight `bk-plan`: a plan writes no code, so another workflow's
+opening phase (or `planning` for another feature) replaces it. Never delete
 `.workflow-state.json` to get unstuck; write the opening phase.
 
 ### Escalation Transitions

@@ -22,7 +22,7 @@
 
 const path = require('path');
 const { readPayload, installStdin } = require('./lib/hook-dispatch-stdin.cjs');
-const { mergeStdout, mergeExitCode, mergeStderr } = require('./lib/hook-dispatch-output.cjs');
+const { mergeStdout, mergeExitCode, mergeStderr, shapeForEvent } = require('./lib/hook-dispatch-output.cjs');
 const { hookBudgetMs } = require('./lib/hook-budget.cjs');
 
 /**
@@ -107,7 +107,29 @@ async function main() {
     } catch { /* diagnostics are best-effort */ }
   }
 
-  const out = mergeStdout(records);
+  // Merge, then put the context where this event actually delivers it (see shapeForEvent). Text
+  // for an event that cannot reach the conductor — SubagentStop — is queued in the session's
+  // conductor inbox instead of being printed into the subagent's transcript.
+  let event = null;
+  let sessionId = null;
+  try {
+    const parsed = JSON.parse(payload || '{}');
+    event = parsed.hook_event_name || null;
+    sessionId = parsed.session_id || parsed.sessionId || null;
+  } catch { /* unparseable payload: print the merge unchanged */ }
+
+  const shaped = shapeForEvent(mergeStdout(records), event);
+  if (shaped.conductorText) {
+    try {
+      const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');
+      require('./lib/conductor-inbox.cjs').postToConductor(resolveProjectRoot(), sessionId, {
+        source: `${event}:${records.map((r) => r.script).join(',')}`,
+        text: shaped.conductorText
+      });
+    } catch { /* fail-open: an inbox fault must not fail the hook event */ }
+  }
+
+  const out = shaped.stdout;
   const err = mergeStderr(records);
   if (out) process.stdout.write(out);
   if (err) process.stderr.write(err);

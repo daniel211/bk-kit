@@ -88,7 +88,8 @@ const DEFAULT_CONFIG = {
     'stop-lint-flush': true,
     'native-lint-flush': true,
     'lint-findings-inject': true,
-    'write-shrink-guard': true
+    'write-shrink-guard': true,
+    'conductor-inbox-drain': true
   },
   // write-shrink-guard thresholds: block a Write only when the existing file has at least
   // minLines lines and more than shrinkTolerance of them would disappear.
@@ -410,11 +411,20 @@ function writeWorkflowState(updates, root) {
 }
 
 /**
- * Get canonical output file path for an agent report
+ * Canonical bk/dev/shared/reports path for an agent that has one, per
+ * rules/agent-protocols/output-gate.md.
+ *
+ * Returns null for any other agent. This used to fall back to `<agent>-<feature>.md`, which
+ * invented a report obligation for every agent the map did not name — bk-researcher,
+ * bk-planner, bk-git-manager, bk-ios-developer — and verify-output rejected each of them for
+ * not writing a file nobody had asked for. Which file an agent really owes, in which of the
+ * several places the kit's own documents name, is lib/agent-report-contract.cjs's job; this
+ * only answers "what is the canonical shared/reports name".
+ *
  * @param {string} agentType - e.g. 'code-reviewer', 'unit-test-agent'
  * @param {string} feature - Feature name slug
  * @param {string} [platform] - Platform for test agents (ios/android/flutter)
- * @returns {string} Absolute path
+ * @returns {string|null} Absolute path, or null when the agent has no shared report
  */
 function getOutputPath(agentType, feature, platform) {
   const base = path.join(sharedDir(), 'reports');
@@ -432,8 +442,8 @@ function getOutputPath(agentType, feature, platform) {
     'device-test-agent': `device-test-${pfx}-${feature}.md`,
     'test-architect': `test-strategy-${feature}.md`
   };
-  const filename = map[bare] || `${bare}-${feature}.md`;
-  return path.join(base, filename);
+  const filename = map[bare];
+  return filename ? path.join(base, filename) : null;
 }
 
 /**

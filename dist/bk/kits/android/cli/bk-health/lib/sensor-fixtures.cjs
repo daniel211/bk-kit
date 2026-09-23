@@ -102,12 +102,14 @@ const FIXTURES = [
     displayName: 'agent-signal-detector',
     category: 'observer',
     fixture: {
+      // SubagentStop completion — the event this hook runs on since background dispatch made
+      // PostToolUse(Task|Agent) fire at launch.
       input: {
-        tool_name: 'Task',
-        tool_input: { description: 'Run tests' },
-        tool_response: {
-          output: 'I cannot determine the root cause. I am stuck and unable to identify the issue.'
-        }
+        hook_event_name: 'SubagentStop',
+        session_id: 'fixture-asd-001',
+        agent_id: 'fixture-asd-agent',
+        agent_type: 'bk-debugger',
+        last_assistant_message: 'I cannot determine the root cause. I am stuck and unable to identify the issue.'
       },
       env: {},
       files: {}
@@ -605,7 +607,7 @@ const FIXTURES = [
       env: {},
       files: {
         '.claude/.bk.json': JSON.stringify({ hooks: {} }),
-        'Sources/UserViewModel.swift': Array(200).fill('  let x = 1').join('\n') + '\n'
+        'Sources/UserViewModel.swift': Array(260).fill('  let x = 1').join('\n') + '\n'
       }
     },
     expected: {
@@ -821,14 +823,11 @@ const FIXTURES = [
     category: 'observer',
     fixture: {
       input: {
-        tool_name: 'Task',
-        tool_input: {
-          subagent_type: 'bk-ios-developer',
-          description: 'Implement user profile screen'
-        },
-        tool_response: {
-          output: 'Implementation complete. Created UserViewModel.swift and ProfileView.swift.'
-        }
+        hook_event_name: 'SubagentStop',
+        session_id: 'fixture-verify-001',
+        agent_id: 'fixture-verify-agent',
+        agent_type: 'bk-ios-developer',
+        last_assistant_message: 'Implementation complete. Created UserViewModel.swift and ProfileView.swift.'
       },
       env: {},
       files: {

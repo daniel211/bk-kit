@@ -3,7 +3,7 @@
 // Trigger: SubagentStop (matcher: planner|bk-planner)
 // Purpose: Parse plan.md to count sub-tasks, files, estimated LOC
 //          then set complexity_tier in .workflow-state.json
-// Non-blocking (exit 0). Output via stdout as advisory context.
+// Non-blocking (exit 0). Advisory text is queued for the conductor (lib/conductor-inbox.cjs).
 
 'use strict';
 
@@ -35,22 +35,11 @@ try {
         process.exit(0);
       }
 
-      // Find latest plan directory
-      const plansDir = path.join(resolveProjectRoot(), 'bk', 'dev');
-      let planPath = null;
-
-      if (fs.existsSync(plansDir)) {
-        const dirs = fs.readdirSync(plansDir)
-          .filter(d => !d.startsWith('.') && d !== 'shared' && d !== 'reports')
-          .sort().reverse();
-        for (const dir of dirs) {
-          const candidate = path.join(plansDir, dir, 'plan.md');
-          if (fs.existsSync(candidate)) {
-            planPath = candidate;
-            break;
-          }
-        }
-      }
+      // The plan the planner just wrote — the newest plan.md, not the reverse-alphabetical first
+      // (see lib/current-plan.cjs for the field case where that picked another feature's plan
+      // and wrote its tier into workflow state).
+      const { currentPlanFile } = require('./lib/current-plan.cjs');
+      const planPath = currentPlanFile(resolveProjectRoot(), readWorkflowState());
 
       if (!planPath) {
         timer.end({ status: 'no_plan', exit: 0 });
@@ -148,19 +137,19 @@ try {
         output.push('Advisory: Full review pipeline (code-reviewer + security-auditor + performance-analyzer). Full finalize (3 agents).');
       }
 
-      // Advisory context is subject to the shared injection budget (cap + dedupe). Optional:
-      // if the lib is absent the text goes out unchanged.
-      let text = output.join('\n');
-      try {
-        const injectionBudget = require('./lib/injection-budget.cjs');
-        text = injectionBudget.prepareInjection('complexity-detector', text, {
-          sessionId: injectionBudget.sessionIdFrom(data)
-        });
-      } catch { /* optional lib — keep the full text */ }
+      output.push(`Plan: ${path.relative(resolveProjectRoot(), planPath)}`);
 
-      if (text) process.stdout.write(JSON.stringify({ additionalContext: text }) + '\n');
+      // Queued for the conductor, not printed: this runs on SubagentStop, whose output only ever
+      // reached the planner's own transcript (all 7 field [COMPLEXITY-DETECTED] rows are
+      // sidechain). No injection budget here — conductor-inbox-drain applies it on delivery, and
+      // charging it twice would make the delivery look like a duplicate of itself.
+      const { postToConductor } = require('./lib/conductor-inbox.cjs');
+      const queued = postToConductor(resolveProjectRoot(), data.session_id || data.sessionId || null, {
+        source: 'complexity-detector',
+        text: output.join('\n')
+      });
 
-      timer.end({ status: 'ok', tier, subTasks: subTaskCount, files: fileCount, exit: 0 });
+      timer.end({ status: 'ok', tier, subTasks: subTaskCount, files: fileCount, queued, exit: 0 });
       process.exit(0);
     } catch (err) {
       timer.end({ status: 'error', error: err.message, exit: 0 });

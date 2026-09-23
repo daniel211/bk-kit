@@ -37,7 +37,7 @@ After EVERY agent dispatch returns:
 ### Detection Method
 
 Signals are detected two ways:
-1. **Hook-level** (automatic): `agent-signal-detector.cjs` parses output, injects `[REACTIVE-SIGNAL]` into conductor context
+1. **Hook-level** (automatic): `agent-signal-detector.cjs` (SubagentStop) reads a finished agent's final message, injects `[REACTIVE-SIGNAL]` into conductor context. `verify-output.cjs` (SubagentStop) adds `agent_stuck` when the same agent fails its output check twice on one workflow. SubagentStop output cannot reach you directly, so both arrive on your next tool call or prompt
 2. **Conductor-level** (manual): Conductor reads agent output and recognizes patterns above
 
 ---

@@ -127,7 +127,10 @@ try {
           feature: lastRow.feature,
           phase: lastRow.phase || '',
           complexityTier: lastRow.complexity_tier || 'Standard',
-          closedBy: 'feature-change'
+          closedBy: 'feature-change',
+          // sameSession guarantees this is also lastRow's session, so an ad-hoc key being
+          // closed here resolves to that session's `session:<id>` workflow.
+          sessionId: data.session_id
         });
       }
 
@@ -189,7 +192,8 @@ try {
           metricsDir, skill, feature,
           phase: currentPhase,
           complexityTier,
-          closedBy: 'terminal-entry'
+          closedBy: 'terminal-entry',
+          sessionId: data.session_id
         });
       }
 

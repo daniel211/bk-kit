@@ -57,6 +57,11 @@ Load: `references/autodream-integration.md`
    small/normal/large/massive; parallel signals if `--parallel`/`--auto`.
    Load: `references/feature-triage.md` + `references/parallel-planning.md`
 
+   **2a. Declare the workflow** — write `bk/dev/shared/.workflow-state.json`:
+   `workflow_type`/`command: "bk-plan"`, `feature`, `plan_dir`, `platform`,
+   `current_phase: "planning"`. Skip it and the plan runs as whatever workflow ran last.
+   Load: `references/workflow-state.md`
+
    **2b. Task Tracking** — TaskCreate per dispatch step, updated before/after each dispatch.
    Load: `references/task-tracking-setup.md`
 
@@ -107,7 +112,8 @@ Load: `references/autodream-integration.md`
     — Skip if: < 3 sub-tasks
 
 12. **Present** — write `.plan-state.json`, show the plan summary, ask approve / revise / cancel.
-    On approve: output `/bk-code {plan-dir}/plan.md`
+    On approve: `current_phase: "completed"`, then output `/bk-code {plan-dir}/plan.md`.
+    On cancel: `current_phase: "aborted"`.
 
 ## Output Contract
 

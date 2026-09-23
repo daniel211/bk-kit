@@ -22,7 +22,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs prompt-context-inject.cjs context-monitor.cjs lint-findings-inject.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs prompt-context-inject.cjs context-monitor.cjs lint-findings-inject.cjs conductor-inbox-drain.cjs"
           }
         ]
       }
@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/compact-recovery.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs compact-recovery.cjs"
           }
         ]
       }
@@ -53,7 +53,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs global-kill-switch.cjs tool-repetition-detector.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs global-kill-switch.cjs tool-repetition-detector.cjs conductor-inbox-drain.cjs"
           }
         ]
       },
@@ -71,7 +71,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/write-shrink-guard.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs write-shrink-guard.cjs"
           }
         ]
       },
@@ -89,7 +89,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/scout-block.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs scout-block.cjs"
           }
         ]
       },
@@ -107,7 +107,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/mcp-health-monitor.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs mcp-health-monitor.cjs"
           }
         ]
       }
@@ -129,7 +129,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/workflow-summary-flush.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs workflow-summary-flush.cjs"
           }
         ]
       }
@@ -162,7 +162,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/task-completed-handler.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs task-completed-handler.cjs"
           }
         ]
       }
@@ -173,7 +173,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/teammate-idle-handler.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs teammate-idle-handler.cjs"
           }
         ]
       }
@@ -193,7 +193,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs subagent-live-tracker.cjs workflow-metrics.cjs skill-chain-suggest.cjs subagent-cost-capture.cjs decision-tracker.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs subagent-live-tracker.cjs workflow-metrics.cjs skill-chain-suggest.cjs subagent-cost-capture.cjs decision-tracker.cjs verify-output.cjs agent-signal-detector.cjs"
           }
         ]
       }
@@ -209,20 +209,11 @@
         ]
       },
       {
-        "matcher": "Task|Agent",
-        "hooks": [
-          {
-            "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs verify-output.cjs agent-signal-detector.cjs"
-          }
-        ]
-      },
-      {
         "matcher": "AskUser.*",
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/preference-tracker.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs preference-tracker.cjs"
           }
         ]
       },
@@ -231,7 +222,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/post-commit.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs post-commit.cjs"
           }
         ]
       },
@@ -240,7 +231,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/token-burn-detector.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs token-burn-detector.cjs conductor-inbox-drain.cjs"
           }
         ]
       }

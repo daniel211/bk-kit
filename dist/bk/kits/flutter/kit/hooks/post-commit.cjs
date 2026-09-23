@@ -58,6 +58,33 @@ try {
     }
   }
 
+  /**
+   * The kit's per-machine session state — mirrors NEVER_COMMIT in the CLI's
+   * lib/session-state-gitignore.mjs (ESM, different install tree, so not shared by import;
+   * post-commit.test.mjs feeds every NEVER_COMMIT entry through this hook to keep them equal).
+   *
+   * None of it is ever a deliverable, and listing it here pushed the other way: after the
+   * warning named untracked kit paths, the conductor in X-Game-Pro asked bk-git-manager to
+   * commit "the bk state" too, and 75e97db put .workflow-state.json.bak, .retry-state.json and
+   * five checkpoints into history. Matched at any depth, because git reports paths from the
+   * repository root and the project may be a subdirectory; `.bk-metrics/` is matched in any
+   * directory because the kit also writes it under feature dirs.
+   */
+  const SESSION_STATE = [
+    /(^|\/)bk\/dev\/shared\/\.workflow-state\.json(\..*)?$/,
+    /(^|\/)bk\/dev\/shared\/(checkpoints|handoff)(\/|$)/,
+    /(^|\/)bk\/dev\/shared\/\.(statusline-cache|retry-state)\.json$/,
+    /(^|\/)\.bk-metrics(\/|$)/,
+  ];
+  const isSessionState = (f) => SESSION_STATE.some((re) => re.test(f));
+
+  /**
+   * An untracked directory git collapsed into one line that also holds session state —
+   * `bk/`, `bk/dev/`, `bk/dev/shared/`. Naming it is right (the session may have written a
+   * plan in there), but `git add` on it would sweep the state in with the plan.
+   */
+  const holdsSessionState = (f) => f.endsWith('/') && /(^|\/)bk\/(dev\/(shared\/)?)?$/.test(f);
+
   function untrackedFiles(cwd) {
     try {
       const { execSync } = require('child_process');
@@ -73,7 +100,7 @@ try {
         .filter((l) => l.startsWith('?? '))
         .map((l) => l.slice(3).trim())
         .filter(Boolean)
-        .filter((f) => !f.endsWith('.bak') && !f.startsWith('.bk-metrics/'))
+        .filter((f) => !f.endsWith('.bak') && !isSessionState(f))
         .filter((f) => {
           if (!edited) return true;                      // no history: report everything
           if (f.endsWith('/')) {                         // git collapses an untracked directory
@@ -168,6 +195,10 @@ try {
           (more > 0 ? `\n  ...and ${more} more` : '') +
           `\nIf any belong to this commit it did not capture them (\`git add <dir>\` skips new files). ` +
           `Verify: git show --stat ${commitHash || 'HEAD'}`;
+        if (untracked.some(holdsSessionState)) {
+          context += `\nStage files by name inside bk/: bk/dev/shared/ also holds per-machine session state ` +
+            `(.workflow-state.json*, checkpoints/, handoff/, .retry-state.json, .statusline-cache.json) that is never committed.`;
+        }
 
         try {
           const { trackWarnSignal } = require('./lib/harness-policy-loader.cjs');

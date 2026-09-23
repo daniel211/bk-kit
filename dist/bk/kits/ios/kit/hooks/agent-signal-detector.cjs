@@ -1,6 +1,19 @@
 #!/usr/bin/env node
 // agent-signal-detector.cjs - Detect reactive signals in agent output and inject recommendations
-// Trigger: PostToolUse (Task)
+// Trigger: SubagentStop (completions only — see lib/subagent-stop-identity.cjs)
+//
+// Until 0.10.1 this ran on PostToolUse(Task|Agent) and read `data.tool_result || data.output ||
+// data.result`. PostToolUse carries none of those — its field is `tool_response` — so the hook
+// logged `no_output` on 100% of its runs in both field repos and `reactive_signals` was a
+// structural zero everywhere. Reading `tool_response` instead would not have helped for long:
+// Claude Code now dispatches agents in the background by default, and for those PostToolUse
+// fires at launch with "Async agent launched successfully…", before the agent has said
+// anything. SubagentStop fires at completion and carries `last_assistant_message`, the agent's
+// final message — the same text workflow-metrics classifies with the same vocabulary.
+//
+// Delivery: SubagentStop output never reaches the conductor, so the recommendation is queued in
+// lib/conductor-inbox.cjs and delivered by conductor-inbox-drain.cjs on the conductor's next
+// event, where the injection budget is applied.
 
 'use strict';
 
@@ -10,8 +23,8 @@ try {
 
   /**
    * Agent Signal Detector Hook
-   * Trigger: PostToolCall (Task)
-   * Purpose: Detect reactive signals in agent output and inject recommendations
+   * Trigger: SubagentStop
+   * Purpose: Detect reactive signals in a finished agent's final message and inject recommendations
    *
    * Signals detected:
    * - agent_stuck: "cannot determine", "unable to identify", "stuck", "blocked"
@@ -41,7 +54,7 @@ try {
 
   // One line per signal, naming the agent to dispatch and nothing else. The reasoning behind
   // each route lives in rules/reactive-orchestration.md §3, which the model can read when it
-  // needs it — repeating it in every PostToolUse injection cost ~6 KB per Task batch.
+  // needs it — repeating it in every injection cost ~6 KB per Task batch.
   const RECOMMENDATIONS = {
     'agent_stuck': 'Task(bk-brainstormer) with the error context; if that fails, bk-problem-solving. Do NOT retry the same agent.',
     'fix_loop_stuck': 'Same error repeating: Task(bk-problem-solving). Do NOT retry — the approach itself is wrong.',
@@ -55,10 +68,6 @@ try {
   /** At most this many signals are reported — the rest are noise behind the first few. */
   const MAX_REPORTED_SIGNALS = 3;
 
-  // Advisory context is subject to the shared injection budget (cap + dedupe). Optional:
-  // if the lib is absent the text goes out unchanged.
-  let injectionBudget = null;
-  try { injectionBudget = require('./lib/injection-budget.cjs'); } catch { /* optional */ }
 
   async function main() {
     const timer = createHookTimer('agent-signal-detector');
@@ -76,12 +85,29 @@ try {
       for await (const chunk of process.stdin) input += chunk;
       const data = JSON.parse(input || '{}');
 
-      const agentOutput = data.tool_result || data.output || data.result || '';
-      const toolInput = data.tool_input || {};
-      const agentType = toolInput.subagent_type || toolInput.agent_type || 'unknown';
+      // A settings.json still wiring this hook to PostToolUse must not act on launch metadata.
+      if (data.hook_event_name && data.hook_event_name !== 'SubagentStop') {
+        timer.end({ status: 'not_subagent_stop', exit: 0 });
+        process.exit(0);
+      }
 
-      if (!agentOutput || typeof agentOutput !== 'string') {
-        timer.end({ status: 'no_output', exit: 0 });
+      // Most SubagentStop events are not an agent finishing; only those naming one are.
+      const { readStopIdentity, isCompletion } = require('./lib/subagent-stop-identity.cjs');
+      const identity = readStopIdentity(data);
+      if (!isCompletion(identity)) {
+        timer.end({ status: 'not_a_completion', exit: 0 });
+        process.exit(0);
+      }
+      const agentType = identity.name;
+
+      // The FINAL message only, as in workflow-metrics: a signal raised mid-run and then
+      // resolved is not a reason to reroute.
+      const agentOutput = typeof data.last_assistant_message === 'string'
+        ? data.last_assistant_message
+        : '';
+
+      if (!agentOutput.trim()) {
+        timer.end({ status: 'no_output', agent: agentType, exit: 0 });
         process.exit(0);
       }
 
@@ -111,19 +137,38 @@ try {
         // Write signal state to workflow-state for downstream hooks. The counter and the
         // agent list accumulate, so they are derived under the write lock — concurrent
         // subagents signalling at once must not overwrite each other's entries.
+        //
+        // A completion can be reported twice (lib/subagent-stop-identity.cjs), and counting it
+        // twice would double signal_count and list the agent twice in retry_agents. The stable
+        // ids already counted are kept alongside, and the check runs inside the same locked
+        // updater so two copies of one stop arriving together cannot both pass it.
+        let duplicate = false;
         try {
-          writeWorkflowState((fresh) => ({
-            last_signal: {
-              type: unique[0].signal,
-              priority: unique[0].priority,
-              agent: agentType,
-              timestamp: Date.now()
-            },
-            signal_count: (fresh.signal_count || 0) + unique.length,
-            // Keep last 10 entries to avoid unbounded growth
-            retry_agents: [...(fresh.retry_agents || []), agentType].slice(-10)
-          }));
+          writeWorkflowState((fresh) => {
+            const seen = Array.isArray(fresh.signal_stops) ? fresh.signal_stops : [];
+            if (identity.id && seen.includes(identity.id)) {
+              duplicate = true;
+              return null;   // no write
+            }
+            return {
+              last_signal: {
+                type: unique[0].signal,
+                priority: unique[0].priority,
+                agent: agentType,
+                timestamp: Date.now()
+              },
+              signal_count: (fresh.signal_count || 0) + unique.length,
+              // Keep last 10 entries to avoid unbounded growth
+              retry_agents: [...(fresh.retry_agents || []), agentType].slice(-10),
+              signal_stops: identity.id ? [...seen, identity.id].slice(-20) : seen
+            };
+          });
         } catch { /* best-effort state write */ }
+
+        if (duplicate) {
+          timer.end({ status: 'duplicate_stop', agent: agentType, exit: 0 });
+          process.exit(0);
+        }
 
         // HIGH first, then at most MAX_REPORTED_SIGNALS — one line each.
         const reported = [...unique]
@@ -138,17 +183,14 @@ try {
         }
         lines.push('Detail: rules/reactive-orchestration.md §3.');
 
-        const text = injectionBudget
-          ? injectionBudget.prepareInjection('agent-signal-detector', lines.join('\n'), {
-              sessionId: injectionBudget.sessionIdFrom(data)
-            })
-          : lines.join('\n');
+        const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');
+        const { postToConductor } = require('./lib/conductor-inbox.cjs');
+        const queued = postToConductor(resolveProjectRoot(), data.session_id || data.sessionId || null, {
+          source: 'agent-signal-detector',
+          text: lines.join('\n')
+        });
 
-        if (text) {
-          process.stdout.write(JSON.stringify({ additionalContext: text }) + '\n');
-        }
-
-        timer.end({ status: 'signals_detected', count: unique.length, agent: agentType, injected: !!text, exit: 0 });
+        timer.end({ status: 'signals_detected', count: unique.length, agent: agentType, queued, exit: 0 });
       } else {
         timer.end({ status: 'ok', exit: 0 });
       }

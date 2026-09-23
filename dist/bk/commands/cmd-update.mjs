@@ -11,6 +11,9 @@ import { createInterface } from 'node:readline';
 import { hashFile } from '../lib/hash-tracker.mjs';
 import { buildPackageInventory, kitLayout, packageRootFrom, sourceFor } from '../lib/package-layout.mjs';
 import { addKitOption, resolveKitOrExit } from '../lib/kit-resolver.mjs';
+import {
+  gitPrefix, trackedSessionState, untrackCommand, writeGitignoreEntries,
+} from '../lib/session-state-gitignore.mjs';
 
 /**
  * Classify a file's change state by comparing 3 hashes.
@@ -90,7 +93,8 @@ export function registerUpdate(program) {
     .command('update')
     .description('Update .claude/ kit to latest package version')
     .option('--target <dir>', 'Target project directory', '.')
-    .option('--conflict <strategy>', 'How to resolve conflicts without asking: keep | take', 'prompt');
+    .option('--conflict <strategy>', 'How to resolve conflicts without asking: keep | take', 'prompt')
+    .option('--no-gitignore', "Do not add the kit's per-machine state files to .gitignore");
 
   addKitOption(command)
     .action(async (opts) => {
@@ -238,5 +242,39 @@ export function registerUpdate(program) {
       } else {
         console.log('  ✓ Already up to date');
       }
+
+      if (opts.gitignore !== false) reconcileSessionStateIgnore(targetDir);
     });
+}
+
+/**
+ * Bring an existing project's .gitignore up to the never-commit list, and say so when state
+ * is already tracked.
+ *
+ * `update` otherwise never touches a file the user owns, so this is deliberate: appending
+ * missing ignore lines is additive and idempotent — no user rule is changed or removed, and a
+ * broader rule the user already has counts as covering (see missingIgnoreEntries). Without it
+ * the fix would reach new installs only; every project initialised before init wrote the
+ * entries by default — X-Game-Pro, the case that motivated it, included — would stay exposed.
+ * `--no-gitignore` opts out, as it does for init.
+ *
+ * Untracking is only reported, never done: `git rm --cached` stages deletions into the user's
+ * next commit, which is theirs to make.
+ *
+ * @param {string} targetDir
+ */
+export function reconcileSessionStateIgnore(targetDir) {
+  if (gitPrefix(targetDir) === null) return;
+
+  const added = writeGitignoreEntries(targetDir);
+  if (added.length > 0) {
+    console.log(`  ✓ Added ${added.length} session-state entr${added.length === 1 ? 'y' : 'ies'} to .gitignore (--no-gitignore to skip)`);
+  }
+
+  const tracked = trackedSessionState(targetDir);
+  if (tracked && tracked.files.length > 0) {
+    console.log(`  ⚠ ${tracked.files.length} session-state file(s) are tracked by git; .gitignore does not untrack them:`);
+    console.log(`      ${untrackCommand(tracked.pathspecs)}`);
+    console.log('    then commit. "bk doctor" lists the files.');
+  }
 }

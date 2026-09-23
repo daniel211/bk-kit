@@ -452,8 +452,21 @@ try {
           agent_dispatch_count: { ...freshAll, [featureKey]: freshCounts },
           agent_dispatch_history: freshHistory,
           // Other hooks read state.feature and have only ever seen null. Record what this
-          // dispatch identified so they stop guessing too.
-          ...(featureKey !== 'unscoped' ? { feature: featureKey } : {})
+          // dispatch identified so they stop guessing too — but only into an EMPTY slot.
+          //
+          // This used to overwrite whatever was there with the first `bk/dev/<slug>/` in the
+          // prompt, and it was the only thing that ever rewrote `feature` behind a workflow's
+          // back. In the iOS field repo (X-Game-Pro, 0.10.1) `/bk-plan crypto-module` ran over
+          // a committed `bk-code:ios-project-init`: the first researcher's prompt named
+          // bk/dev/crypto-module/, so the state became bk-code / commit / crypto-module — a
+          // feature grafted onto another workflow's command and terminal phase, which
+          // workflow-metrics then closed as `terminal-entry` after one agent. Later a
+          // bk-git-manager prompt that listed bk/dev/ios-project-init/.plan-state.json among
+          // the files to stage flipped it straight back. A prompt mentions paths; it does not
+          // declare what the workflow is. The skill that owns the state declares that
+          // (bk-code, bk-plan, ... write `feature` themselves), and the per-dispatch bucket
+          // above still keys on the prompt, so the count scoping is unchanged.
+          ...(featureKey !== 'unscoped' && !fresh.feature ? { feature: featureKey } : {})
         };
       });
     } catch { /* fail-open */ }

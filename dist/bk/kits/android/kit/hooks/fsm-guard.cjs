@@ -43,8 +43,33 @@ try {
       commit: [],
       aborted: [],
       escalated: ['aborted', 'commit']
+    },
+    // /bk-plan never declared itself in the shared state, so a plan run inherited whatever the
+    // last workflow left there. In the iOS field repo (X-Game-Pro, 0.10.1) `/bk-plan` for
+    // `crypto-module` ran on top of a committed `bk-code:ios-project-init`: the state kept
+    // `command: "bk-code"`, `current_phase: "commit"`, the planning agents were traced as a
+    // bk-code workflow at commit, and the very first researcher's stop closed a summary as
+    // `terminal-entry` with total_agents 1. Planning is now a workflow of its own.
+    //
+    // `planning` covers the whole plan run — the steps inside it are tracked in
+    // .plan-state.json, not here; the FSM only needs to know that a plan is in flight and when
+    // it ends. The names are deliberately disjoint from bk-code's (`plan`, `review`, ...): if
+    // bk-plan's opening phase were `plan`, a `/bk-code` writing `plan` over it would hit the
+    // same-phase fast path and never open its own episode.
+    'bk-plan': {
+      null: ['planning'],
+      planning: ['completed', 'aborted'],
+      completed: [],
+      aborted: []
     }
   };
+
+  // Workflows whose in-flight state protects nothing. A plan run writes documents under
+  // bk/dev/{feature}/ and nothing else, so a plan the user walked away from — approved it in
+  // chat without the `completed` write landing, or moved to another feature — must not refuse
+  // the next workflow with exit 2. The coding workflows are NOT here: abandoning a bk-code
+  // mid-batch leaves half-written source behind, and that refusal is the guard doing its job.
+  const ABANDONABLE_WORKFLOWS = new Set(['bk-plan']);
 
   // Advisory context is subject to the shared injection budget (cap + dedupe). The deny paths
   // below (`permissionDecision: "deny"` + exit 2) deliberately do NOT go through it — a block
@@ -66,7 +91,8 @@ try {
 
   // Phases a workflow ends in. They have no outgoing edges *within* an episode — the only
   // move out of one is starting a new workflow, handled by startsNewEpisode() below.
-  const TERMINAL_PHASES = new Set(['commit', 'aborted']);
+  // `completed` is bk-plan's: a plan ends at approval, it never commits code.
+  const TERMINAL_PHASES = new Set(['commit', 'aborted', 'completed']);
 
   /**
    * Extract current_phase from JSON content string.
@@ -122,16 +148,42 @@ try {
    * Anything else out of a terminal phase stays blocked — resuming the SAME committed feature
    * at `review` is still a bug, not a restart.
    *
+   * One exception reaches past terminal phases: (iii) an in-flight ABANDONABLE workflow (a
+   * plan) gives way to a write that opens a workflow — a different type, or the same type for
+   * a different feature. `/bk-plan` → approve → `/bk-code` is the kit's main path, and a
+   * conductor that skips the `completed` write must not be refused at bk-code's first step.
+   * Re-writing `planning` for the SAME plan (resume after compaction) is not a new episode.
+   *
    * @param {string|null} currentPhase - Phase on disk
    * @param {string} newPhase - Phase being written
    * @param {string|null} startType - Workflow type the new write declares, else the one on disk
-   * @param {{current: object, feature: string|null, workflowId: string|null}} identity
+   * @param {{current: object, feature: string|null, workflowId: string|null,
+   *          workflowType: string|null}} identity - workflowType: the type the write declares
    * @returns {boolean}
    */
   function startsNewEpisode(currentPhase, newPhase, startType, identity) {
-    if (!currentPhase || !TERMINAL_PHASES.has(currentPhase)) return false;
     const table = startType && TRANSITIONS[startType];
-    if (table && (table.null || []).includes(newPhase)) return true;
+    const opensWorkflow = Boolean(table && (table.null || []).includes(newPhase));
+    if (!currentPhase || !TERMINAL_PHASES.has(currentPhase)) {
+      return opensWorkflow && abandonsInFlightPlan(identity);
+    }
+    if (opensWorkflow) return true;
+    return declaresDifferentWorkflow(identity);
+  }
+
+  /**
+   * Case (iii) of startsNewEpisode: the workflow on disk is abandonable, and the write names
+   * a different workflow type or a different feature.
+   *
+   * @param {{current: object, feature: string|null, workflowId: string|null,
+   *          workflowType: string|null}} identity
+   * @returns {boolean}
+   */
+  function abandonsInFlightPlan(identity) {
+    if (!identity || !identity.current) return false;
+    const onDisk = identity.current.workflow_type || identity.current.command || null;
+    if (!onDisk || !ABANDONABLE_WORKFLOWS.has(onDisk)) return false;
+    if (identity.workflowType && identity.workflowType !== onDisk) return true;
     return declaresDifferentWorkflow(identity);
   }
 
@@ -278,7 +330,12 @@ try {
       // exactly the case the field repo got stuck on, and it would be unreachable below.
       const startType =
         (newWorkflowType && TRANSITIONS[newWorkflowType]) ? newWorkflowType : workflowType;
-      const identity = { current: currentState, feature: newFeature, workflowId: newWorkflowId };
+      const identity = {
+        current: currentState,
+        feature: newFeature,
+        workflowId: newWorkflowId,
+        workflowType: newWorkflowType
+      };
       if (startsNewEpisode(currentPhase, newPhase, startType, identity)) {
         try {
           writeWorkflowState({

@@ -35,6 +35,12 @@ Before every commit:
 3. Run `git diff --cached --stat` and compare the file count against what the dispatch asked for.
 4. **If the count does not match, stop and report the mismatch. Do not commit.**
 
+**Never stage per-machine session state**, even when asked to commit "bk state" or "everything":
+`bk/dev/shared/.workflow-state.json*`, `bk/dev/shared/checkpoints/`, `bk/dev/shared/handoff/`,
+`bk/dev/shared/.retry-state.json`, `bk/dev/shared/.statusline-cache.json`, any `.bk-metrics/`.
+Leave them out, commit the rest, and tell the caller why (`bk doctor` shows the fix). If they are
+already tracked, do not commit their changes — report it. Plans in `bk/dev/{feature}/` are fine.
+
 After every commit:
 5. Run `git status --short` again. If anything under the feature's source or test directories is
    still `??`, the commit did not capture the deliverable — say so plainly.
@@ -78,6 +84,7 @@ Report only what you verified, and quote the command output you verified it with
 ## Constraints
 - Never force-push to main/master
 - Never commit secrets (.env, credentials, API keys, *.pem, *.key)
+- Never commit kit session state (see Staging Contract), whoever asks
 - Never skip pre-commit hooks (--no-verify)
 - Never spawns other agents (leaf agent)
 - Platform-agnostic: does not read `platform-context.json`

@@ -79,8 +79,8 @@ Write `bk/dev/shared/reports/code-review-gemini-{feature}.md`:
 - Bash is granted ONLY to invoke the Gemini review harness (`gemini` CLI,
   `gemini-review.mjs`) and read-only inspection (`git diff/status/log`, `ls`, `cat`,
   `grep`, availability probes). Running anything else is a violation.
-  `verify-output.cjs` scans the returned transcript against this allowlist and raises
-  `[TOOL-RESTRICT]` — it reports violations after the fact, it does not sandbox you,
+  When you finish, `verify-output.cjs` checks every Bash call in your transcript against this
+  allowlist and raises `[TOOL-RESTRICT]` — it reports violations after the fact, it does not sandbox you,
   so treat the boundary as your own responsibility.
 - Max 2 review cycles per PR
 - Output: write review report to `bk/dev/shared/reports/code-review-gemini-{feature}.md` and `.json`
