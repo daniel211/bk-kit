@@ -102,21 +102,30 @@ by re-deriving the phase from the last completed sub-task, then writing both.
 ## Statusline progress
 
 While `/bk-code` runs a plan, the statusline shows a line of its own, under the
-platform/workflow line: `📋 sub 3/7 ✗1 · task 12/30 ✗2 · B2/4` (done/total, ✗ = failed,
-current batch). Other workflows — including `/bk-plan` — never show it. It reads `plan_dir`
-from `.workflow-state.json`, then the plan on disk — not Claude Tasks — so it is only as
-current as the Post Sub-Task Sync:
+platform/workflow line: `📋 sub 3/7 ✗1 ⏸1 · task 12/30 ✗2 · B2/4` (done/total, ✗ failed,
+⏸ blocked, current batch). Other workflows — including `/bk-plan` — never show it. It reads
+`plan_dir` from `.workflow-state.json`, then the plan on disk — not Claude Tasks — so it is
+only as current as the Post Sub-Task Sync.
 
-| Counted as | Written by bk-code |
+A sub-task's status is taken from any of: its frontmatter `status:`, `.plan-state.json`
+`stepResults[NN].status`, or its row's Status in a plan.md table. Done in any source wins,
+then failed, then blocked.
+
+| Counted as | Status word (frontmatter, stepResults, or plan.md Status cell) |
 |------------|--------------------|
-| Sub-task done | frontmatter `status: complete` (or `stepResults[NN].status: "complete"`) |
-| Sub-task failed | frontmatter `status: blocked` / `failed` (or `stepResults[NN].status: "failed"`) |
+| Sub-task done | `complete` / `completed` / `done` |
+| Sub-task failed ✗ | `failed` / `escalated` / `error` — it was attempted and did not work |
+| Sub-task blocked ⏸ | `blocked` / `needs_info` — waiting on a decision or another sub-task |
 | Task done | `- [x]` under `## Tasks` |
 | Task failed | an unchecked `## Tasks` item in a failed sub-task |
 
-A sub-task that hits a retry limit and escalates is written as failed *before* asking the
-user; when the user's choice resolves it, set it back to `in-progress` or `complete`.
-`aborted` hides the counter. Code: `hooks/lib/workflow-progress.cjs`.
+Keep failed and blocked apart: a sub-task waiting on a design answer has not failed.
+A sub-task that hits a retry limit is written `failed` *before* escalating; when the user's
+choice resolves it, set it back to `in-progress` or `complete`.
+
+The task counter is hidden unless every sub-task file has a `## Tasks` section (pre-0.6.0
+plans have none). `aborted` hides the whole line. Code: `hooks/lib/workflow-progress.cjs`,
+`hooks/lib/plan-table-status.cjs`.
 
 ## Resume after compaction
 

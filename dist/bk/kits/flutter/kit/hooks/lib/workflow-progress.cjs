@@ -7,36 +7,40 @@
  *
  * Progress is read from the plan on disk, never from Claude Tasks: tasks die with the
  * session and are skipped entirely for plans under three sub-tasks, while the plan files are
- * what bk-code syncs after every sub-task (checkboxes, frontmatter `status`, stepResults).
+ * what bk-code syncs after every sub-task. A sub-task's status comes from any of three places
+ * bk-code writes, and older plans may only have one of them:
  *
- *   sub-task done    frontmatter `status: complete`, or stepResults[NN].status complete
- *   sub-task failed  frontmatter or stepResults status in FAILED_STATUSES (and not done)
- *   task done        `- [x]` under `## Tasks`; every task of a done sub-task counts as done
- *   task failed      an unchecked task inside a failed sub-task
+ *   1. sub-task frontmatter `status:` (legacy plans: `blocked: yes`)
+ *   2. `.plan-state.json` stepResults[NN].status
+ *   3. plan.md tables — see plan-table-status.cjs
  *
- * A legacy sub-task (no `## Tasks` section) counts as one task, as bk-code tracks it.
+ * If any source says done, it is done; else failed; else blocked. Blocked is not failed: it
+ * is waiting on a decision or another sub-task, and is shown apart (⏸) from failures (✗).
+ *
+ * Tasks are the `## Tasks` checkboxes. The task counter is shown only when every sub-task has
+ * that section — for a pre-0.6.0 plan any task figure would be invented.
  */
 
 'use strict';
 
 const fs = require('fs');
 const path = require('path');
+const { readPlanTableStatuses, normalizeSubTaskId, statusCategory } = require('./plan-table-status.cjs');
 
-const DONE_STATUSES = new Set(['complete', 'completed', 'done']);
-const FAILED_STATUSES = new Set(['failed', 'blocked', 'escalated', 'needs_info', 'error']);
 // Only an implementing workflow has progress to show: right after /bk-plan every counter
 // reads 0/N, which is noise rather than information.
 const PROGRESS_WORKFLOWS = new Set(['bk-code']);
 // An aborted workflow's plan is abandoned — its half-finished counts are not "progress".
 const HIDDEN_PHASES = new Set(['aborted']);
-const SUB_TASK_FILE = /^sub-task-(\d+)[^/]*\.md$/;
+const SUB_TASK_FILE = /^sub-task-(\d+[a-z]?)(?:-[^/]*)?\.md$/i;
 
-/** Frontmatter `status:` of a sub-task file, lower-cased, or '' when absent. */
-function readFrontmatterStatus(text) {
+/** Frontmatter of a sub-task file as a key → raw value map (top-level scalars only). */
+function readFrontmatter(text) {
   const fm = /^---\r?\n([\s\S]*?)\r?\n---/.exec(text);
-  if (!fm) return '';
-  const m = /^status:\s*["']?([\w-]+)/m.exec(fm[1]);
-  return m ? m[1].toLowerCase() : '';
+  const fields = {};
+  if (!fm) return fields;
+  for (const m of fm[1].matchAll(/^([\w-]+):\s*["']?([^"'\r\n]*)/gm)) fields[m[1].toLowerCase()] = m[2].trim();
+  return fields;
 }
 
 /**
@@ -60,32 +64,39 @@ function countTaskCheckboxes(text) {
 }
 
 /**
- * stepResults entries bk-code wrote for sub-tasks, keyed by sub-task number.
+ * stepResults categories bk-code wrote for sub-tasks, keyed by normalized sub-task id.
  * bk-plan's own planning steps share the object but carry no `subTask`, so they are ignored.
  */
-function readSubTaskResults(planDir) {
-  const byNumber = new Map();
+function readStepResultStatuses(planDir) {
+  const byId = new Map();
   try {
     const planState = JSON.parse(fs.readFileSync(path.join(planDir, '.plan-state.json'), 'utf8'));
     const results = planState && planState.stepResults;
-    if (!results || typeof results !== 'object') return byNumber;
+    if (!results || typeof results !== 'object') return byId;
     for (const entry of Object.values(results)) {
       if (!entry || entry.subTask === undefined || entry.subTask === null) continue;
-      const num = parseInt(String(entry.subTask).replace(/\D/g, ''), 10);
-      if (!Number.isNaN(num) && typeof entry.status === 'string') {
-        byNumber.set(num, entry.status.toLowerCase());
-      }
+      const id = normalizeSubTaskId(String(entry.subTask).replace(/^sub-task-/i, ''));
+      const category = statusCategory(entry.status);
+      if (id && category) byId.set(id, category);
     }
-  } catch { /* no plan state yet — frontmatter alone decides */ }
-  return byNumber;
+  } catch { /* no plan state yet */ }
+  return byId;
+}
+
+/** 'done' | 'failed' | 'blocked' | null, from every source that mentions this sub-task. */
+function resolveSubTaskState(categories) {
+  if (categories.has('done')) return 'done';
+  if (categories.has('failed')) return 'failed';
+  if (categories.has('blocked')) return 'blocked';
+  return null;
 }
 
 /**
  * @param {string} root — project root
  * @param {object|null} state — workflow state (`workflow_type`/`command`, `plan_dir`, `current_phase`,
  *   `batch`, `total_batches`)
- * @returns {{subTasks: {done: number, failed: number, total: number},
- *            tasks: {done: number, failed: number, total: number},
+ * @returns {{subTasks: {done: number, failed: number, blocked: number, total: number},
+ *            tasks: {done: number, failed: number, total: number}|null,
  *            batch: number|null, totalBatches: number|null}|null}
  *          null outside /bk-code, or when there is no active plan with sub-tasks
  */
@@ -99,39 +110,44 @@ function readWorkflowProgress(root, state) {
     const files = fs.readdirSync(planDir).filter((f) => SUB_TASK_FILE.test(f));
     if (files.length === 0) return null;
 
-    const results = readSubTaskResults(planDir);
-    const subTasks = { done: 0, failed: 0, total: 0 };
+    const stepResults = readStepResultStatuses(planDir);
+    const tableStatuses = readPlanTableStatuses(planDir);
+    const subTasks = { done: 0, failed: 0, blocked: 0, total: 0 };
     const tasks = { done: 0, failed: 0, total: 0 };
+    let everyHasTasks = true;
 
     for (const file of files) {
       let text;
       try { text = fs.readFileSync(path.join(planDir, file), 'utf8'); } catch { continue; }
-      const num = parseInt(SUB_TASK_FILE.exec(file)[1], 10);
-      const fmStatus = readFrontmatterStatus(text);
-      const resultStatus = results.get(num) || '';
+      const id = normalizeSubTaskId(SUB_TASK_FILE.exec(file)[1]);
+      const fm = readFrontmatter(text);
 
-      const done = DONE_STATUSES.has(fmStatus) || DONE_STATUSES.has(resultStatus);
-      const failed = !done && (FAILED_STATUSES.has(fmStatus) || FAILED_STATUSES.has(resultStatus));
+      const categories = new Set(tableStatuses.get(id) || []);
+      const fmCategory = statusCategory(fm.status);
+      if (fmCategory) categories.add(fmCategory);
+      if (stepResults.has(id)) categories.add(stepResults.get(id));
+      if (/^(yes|true)\b/i.test(fm.blocked || '')) categories.add('blocked');
+      const subState = resolveSubTaskState(categories);
 
       subTasks.total++;
-      if (done) subTasks.done++;
-      else if (failed) subTasks.failed++;
+      if (subState) subTasks[subState]++;
 
-      const boxes = countTaskCheckboxes(text) || { checked: done ? 1 : 0, unchecked: done ? 0 : 1 };
+      const boxes = countTaskCheckboxes(text);
+      if (!boxes) { everyHasTasks = false; continue; }
       const count = boxes.checked + boxes.unchecked;
       tasks.total += count;
-      if (done) {
+      if (subState === 'done') {
         tasks.done += count; // checkbox sync may lag the status write — the status wins
       } else {
         tasks.done += boxes.checked;
-        if (failed) tasks.failed += boxes.unchecked;
+        if (subState === 'failed') tasks.failed += boxes.unchecked;
       }
     }
 
     const asCount = (v) => (typeof v === 'number' && v > 0 ? v : null);
     return {
       subTasks,
-      tasks,
+      tasks: everyHasTasks ? tasks : null,
       batch: asCount(state.batch),
       totalBatches: asCount(state.total_batches),
     };
@@ -141,26 +157,30 @@ function readWorkflowProgress(root, state) {
 }
 
 /**
- * Render progress for the statusline, e.g. `📋 sub 3/7 ✗1 · task 12/30 ✗2 · B2/4`.
- * The ✗ counts only appear when something failed.
+ * Render progress for the statusline, e.g. `📋 sub 3/7 ✗1 ⏸1 · task 12/30 ✗2 · B2/4`.
+ * ✗ (failed) and ⏸ (blocked) only appear when non-zero.
  *
  * @param {ReturnType<typeof readWorkflowProgress>} progress
- * @param {{red: Function, green: Function}} colors
+ * @param {{red?: Function, green?: Function, yellow?: Function}} [colors]
  * @returns {string} '' when there is nothing to show
  */
 function renderWorkflowProgress(progress, colors) {
   if (!progress || progress.subTasks.total === 0) return '';
-  const red = (colors && colors.red) || ((s) => s);
-  const green = (colors && colors.green) || ((s) => s);
+  const plain = (s) => s;
+  const red = (colors && colors.red) || plain;
+  const green = (colors && colors.green) || plain;
+  const yellow = (colors && colors.yellow) || plain;
 
   const counter = (label, c) => {
     const text = `${label} ${c.done}/${c.total}`;
-    const shown = c.total > 0 && c.done === c.total ? green(text) : text;
-    return c.failed > 0 ? `${shown} ${red(`✗${c.failed}`)}` : shown;
+    let shown = c.total > 0 && c.done === c.total ? green(text) : text;
+    if (c.failed > 0) shown += ` ${red(`✗${c.failed}`)}`;
+    if (c.blocked > 0) shown += ` ${yellow(`⏸${c.blocked}`)}`;
+    return shown;
   };
 
   const parts = [counter('sub', progress.subTasks)];
-  if (progress.tasks.total > 0) parts.push(counter('task', progress.tasks));
+  if (progress.tasks && progress.tasks.total > 0) parts.push(counter('task', progress.tasks));
   if (progress.batch && progress.totalBatches) {
     parts.push(`B${Math.min(progress.batch, progress.totalBatches)}/${progress.totalBatches}`);
   }
@@ -172,6 +192,4 @@ module.exports = {
   renderWorkflowProgress,
   // exported for tests
   countTaskCheckboxes,
-  readFrontmatterStatus,
-  FAILED_STATUSES,
 };

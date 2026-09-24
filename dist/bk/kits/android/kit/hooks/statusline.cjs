@@ -824,13 +824,13 @@ try {
       if (prPart) line2Parts.push(prPart);
       if (linesPart) line2Parts.push(`📝 ${linesPart}`);
 
-      // --- Plan progress line (bk-code only): sub-task / task done/total, ✗failed ---
+      // --- Plan progress line (bk-code only): sub-task / task done/total, ✗failed, ⏸blocked ---
       // Its own line: line 2 is already long enough to be cut off on a narrow terminal.
       // See lib/workflow-progress.cjs.
       let progressLine = '';
       try {
         progressLine = renderWorkflowProgress(
-          readWorkflowProgress(resolveProjectRoot(), state), { red: _red, green: _green });
+          readWorkflowProgress(resolveProjectRoot(), state), { red: _red, green: _green, yellow: _yellow });
       } catch { /* fail-open — the progress line is optional */ }
 
       // --- Line 3: Harness monitoring line ---
