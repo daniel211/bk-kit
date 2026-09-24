@@ -211,7 +211,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs no-progress-detector.cjs arch-fitness-android.cjs arch-fitness-android-native.cjs inferential-review.cjs test-generation-hook.cjs ui-snapshot-compare.cjs mutation-testing-sensor.cjs property-based-test-suggester.cjs post-edit-lint.cjs bootstrap-quality-gate.cjs post-edit-simplify.cjs"
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs fsm-guard.cjs no-progress-detector.cjs arch-fitness-android.cjs arch-fitness-android-native.cjs inferential-review.cjs test-generation-hook.cjs ui-snapshot-compare.cjs mutation-testing-sensor.cjs property-based-test-suggester.cjs post-edit-lint.cjs bootstrap-quality-gate.cjs post-edit-simplify.cjs"
           }
         ]
       },

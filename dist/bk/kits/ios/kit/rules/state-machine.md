@@ -198,7 +198,9 @@ episode instead.
 `commit`, `aborted` and `completed` have no outgoing edges inside an episode. The next workflow
 starts by writing an **opening phase** — `plan` (bk-code), `classify` (bk-debug), `analyze`
 (bk-refactor), `planning` (bk-plan)
-— straight over the terminal state. `fsm-guard.cjs` recognises that as a new episode and:
+— straight over the terminal state. `fsm-guard.cjs` recognises that as a new episode and (the
+bookkeeping is applied by its PostToolUse half, after the write lands — the guard never changes
+the file between your Read and your Write):
 
 - lets it through (`commit → plan` is not an invalid transition, it is a restart);
 - starts `phase_history[]` and `phase_recurrence_count{}` from zero, so the previous feature's

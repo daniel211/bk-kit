@@ -1,14 +1,28 @@
 #!/usr/bin/env node
 // fsm-guard.cjs - Validate FSM state transitions for .workflow-state.json writes
-// Trigger: PreToolUse (Write|Edit) — fires ONLY when target is .workflow-state.json
+// Trigger: PreToolUse (Write|Edit) — validates; fires ONLY when target is .workflow-state.json
+//          PostToolUse (Write|Edit) — applies the bookkeeping PreToolUse decided on
 // H1-04: Extended with phase-recurrence detection and escalation ladder.
+//
+// PreToolUse must never modify the state file when it lets the tool run. It used to write
+// phase_history / phase_recurrence_count / the new-episode reset right there — between the
+// conductor's Read and its Write of the same file — and Claude Code rejects such a Write with
+// "File content has changed since it was last read". In X-Game-Pro (0.10.1) the new-episode
+// reset kept `current_phase: "commit"` while changing `feature`, so each retry was again a new
+// episode, again mutated the file, and was again rejected: the conductor gave up and ran a whole
+// feature at `commit` with the previous feature's plan_dir and batch. Allowed writes now stash
+// their bookkeeping (lib/fsm-pending-bookkeeping.cjs) and the PostToolUse mode merges it onto
+// the file as the tool left it. The deny paths still write in PreToolUse — the tool never runs.
 
 'use strict';
 
 // Outer crash wrapper — fail-closed (guard must block even when broken)
 try {
   const { createHookTimer } = require('./lib/hook-logger.cjs');
-  const { isHookEnabled, readWorkflowState, writeWorkflowState } = require('./lib/bk-config-utils.cjs');
+  const {
+    isHookEnabled, readWorkflowState, writeWorkflowState, workflowStatePath
+  } = require('./lib/bk-config-utils.cjs');
+  const { pendingKey, stashPending, takePending } = require('./lib/fsm-pending-bookkeeping.cjs');
   const { loadHarnessPolicy, trackRedSignal, trackViolation } = require('./lib/harness-policy-loader.cjs');
 
   // Built-in transition table per workflow type
@@ -272,6 +286,67 @@ try {
     return { action: 'pass', newRecurrenceCount };
   }
 
+  /**
+   * Which half of the guard this event is. The event name is authoritative; a payload without
+   * one (older runtimes, hand-driven tests) is PostToolUse only if it carries the tool's result.
+   * @param {object} input
+   * @returns {boolean}
+   */
+  function isPostToolUse(input) {
+    if (typeof input.hook_event_name === 'string' && input.hook_event_name) {
+      return input.hook_event_name === 'PostToolUse';
+    }
+    return input.tool_response !== undefined;
+  }
+
+  /**
+   * Record the bookkeeping an allowed write earns, for the PostToolUse half to apply once the
+   * tool has written. Nothing here touches .workflow-state.json — see the header for why.
+   *
+   * `patch` holds ABSOLUTE values computed from the state on disk now, not deltas. A full-file
+   * Write carries whatever `phase_history` the conductor copied from its Read (or none at all);
+   * the guard's own record is what must survive, so a Write can neither erase the recurrence
+   * ladder nor leave a finished feature's history attached to a new episode.
+   *
+   * @param {object} input - The PreToolUse event
+   * @param {'new_episode'|'transition'} kind
+   * @param {string} phase - The phase the write enters; PostToolUse checks the file agrees
+   * @param {object} patch - Fields to merge after the write
+   */
+  function deferBookkeeping(input, kind, phase, patch) {
+    try {
+      stashPending(workflowStatePath(), pendingKey(input), { kind, phase, patch });
+    } catch { /* fail-open: a lost history entry never blocks a transition */ }
+  }
+
+  /**
+   * PostToolUse half: merge the stashed bookkeeping onto the file as the tool left it.
+   *
+   * Only the guard's own fields are in the patch (workflow_episode, previous_episode,
+   * phase_history, phase_recurrence_count), so everything the write set — current_phase,
+   * feature, plan_dir, batch, ... — stays exactly as written, while a history the Write copied
+   * from the previous episode is overwritten by the reset.
+   *
+   * @param {object} input - The PostToolUse event
+   * @returns {string} status for the hook log
+   */
+  function applyPendingBookkeeping(input) {
+    const record = takePending(workflowStatePath(), pendingKey(input));
+    if (!record || !record.patch) return 'no_pending';
+    let status = 'applied_' + record.kind;
+    writeWorkflowState((fresh) => {
+      // The record describes entering `record.phase`. If the file is not in that phase the
+      // write did something the PreToolUse reading did not foresee (an Edit whose new_string
+      // matched a phase string that is not the top-level one); recording it would be a lie.
+      if (record.phase && fresh.current_phase !== record.phase) {
+        status = 'phase_mismatch';
+        return null;
+      }
+      return record.patch;
+    });
+    return status;
+  }
+
   async function main() {
     const timer = createHookTimer('fsm-guard');
     try {
@@ -289,6 +364,13 @@ try {
       const targetFile = toolInput.file_path || toolInput.path || '';
       if (!targetFile.endsWith('.workflow-state.json')) {
         timer.end({ status: 'skip_non_target', exit: 0 });
+        process.exit(0);
+      }
+
+      // The tool has written: apply what PreToolUse decided, then stop — validation is over.
+      if (isPostToolUse(input)) {
+        const status = applyPendingBookkeeping(input);
+        timer.end({ status: 'post_' + status, exit: 0 });
         process.exit(0);
       }
 
@@ -337,28 +419,24 @@ try {
         workflowType: newWorkflowType
       };
       if (startsNewEpisode(currentPhase, newPhase, startType, identity)) {
-        try {
-          writeWorkflowState({
-            workflow_episode: (currentState.workflow_episode || 1) + 1,
-            previous_episode: {
-              workflow_type: workflowType,
-              feature: currentState.feature || null,
-              ended_phase: currentPhase,
-              ended_at: currentState.updated_at || null
-            },
-            // The new episode owns the state now — record what it declares, so the reset does
-            // not leave the finished feature's name attached to fresh counters.
-            ...(newFeature ? { feature: newFeature } : {}),
-            ...(newWorkflowId ? { workflowId: newWorkflowId } : {}),
-            phase_history: [{
-              phase: newPhase,
-              ts: Date.now(),
-              entered_by: input.session_id || 'unknown',
-              from_phase: currentPhase
-            }],
-            phase_recurrence_count: { [newPhase]: 1 }
-          });
-        } catch { /* fail-open on write */ }
+        // Deferred to PostToolUse. `feature` / `workflowId` are not in the patch: the write
+        // itself declares them (that is how this branch was reached), so they land with it.
+        deferBookkeeping(input, 'new_episode', newPhase, {
+          workflow_episode: (currentState.workflow_episode || 1) + 1,
+          previous_episode: {
+            workflow_type: workflowType,
+            feature: currentState.feature || null,
+            ended_phase: currentPhase,
+            ended_at: currentState.updated_at || null
+          },
+          phase_history: [{
+            phase: newPhase,
+            ts: Date.now(),
+            entered_by: input.session_id || 'unknown',
+            from_phase: currentPhase
+          }],
+          phase_recurrence_count: { [newPhase]: 1 }
+        });
         timer.end({ status: 'new_episode', from: currentPhase, to: newPhase, exit: 0 });
         process.exit(0);
       }
@@ -423,7 +501,8 @@ try {
       recurrenceCount[newPhase] = (recurrenceCount[newPhase] || 0) + 1;
 
       if (recurrenceResult.action === 'halt') {
-        // Write paused state
+        // Write paused state. Writing in PreToolUse is safe on the deny paths only: the tool
+        // never runs, so there is no Read→Write pair for this write to invalidate.
         try {
           writeWorkflowState({
             phase_history: trimmedHistory,
@@ -494,13 +573,11 @@ try {
       }
 
       if (recurrenceResult.action === 'warn') {
-        // Update state history and emit advisory
-        try {
-          writeWorkflowState({
-            phase_history: trimmedHistory,
-            phase_recurrence_count: recurrenceCount
-          });
-        } catch { /* fail-open */ }
+        // Allowed: history lands in PostToolUse, after the write. Emit the advisory now.
+        deferBookkeeping(input, 'transition', newPhase, {
+          phase_history: trimmedHistory,
+          phase_recurrence_count: recurrenceCount
+        });
 
         process.stderr.write(`[FSM-GUARD] WARN: ${recurrenceResult.message}\n`);
         const warnText = budgetedContext(recurrenceResult.message, input);
@@ -511,13 +588,11 @@ try {
         process.exit(0);
       }
 
-      // action === 'pass' — update history silently
-      try {
-        writeWorkflowState({
-          phase_history: trimmedHistory,
-          phase_recurrence_count: recurrenceCount
-        });
-      } catch { /* fail-open */ }
+      // action === 'pass' — history lands in PostToolUse, after the write
+      deferBookkeeping(input, 'transition', newPhase, {
+        phase_history: trimmedHistory,
+        phase_recurrence_count: recurrenceCount
+      });
 
       // Legacy: also check old-style phase_history for fix_loop_stuck signal
       // (keep backward compat with existing logic that used recentPhases)

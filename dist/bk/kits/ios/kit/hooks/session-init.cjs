@@ -14,6 +14,7 @@ try {
   const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');
   const { isHookEnabled, readPlatformContext, readWorkflowState, writeWorkflowState, writeEnv } = require('./lib/bk-config-utils.cjs');
   const { detectMobilePlatform, detectProjectType, detectPackageManager, getGitBranch } = require('./lib/project-detector.cjs');
+  const { hasFoundationDocs, FOUNDATION_REL } = require('./lib/foundation-docs.cjs');
 
   async function main() {
     const timer = createHookTimer('session-init');
@@ -124,7 +125,9 @@ try {
         reapStaleQueues(cwd, { currentSessionId: lintSessionId });
       } catch { /* fail-open — reaping is housekeeping, not a precondition */ }
 
-      const hasFoundation = fs.existsSync(path.join(cwd, 'docs', 'foundation', 'overview.md'));
+      // bk/docs/foundation/, where /bk-bootstrap writes — not <root>/docs/foundation/, which
+      // made every session in a bootstrapped repo report "Foundation: no" (lib/foundation-docs.cjs).
+      const hasFoundation = hasFoundationDocs(cwd);
       const hasLSP = process.env.ENABLE_LSP_TOOL === '1';
 
       // Scan bk/dev/ for active plan (.plan-state.json with status != complete)
@@ -196,12 +199,9 @@ try {
         ? `✅ Platform: ${detectedPlatform}` 
         : '⚠️  Platform: not detected');
 
-      // 2. Foundation docs
-      const foundationPath = path.join(cwd, 'docs', 'foundation');
-      const hasFoundationDocs = fs.existsSync(foundationPath) && 
-        fs.readdirSync(foundationPath).length > 0;
-      healthChecks.push(hasFoundationDocs 
-        ? '✅ Foundation docs: found' 
+      // 2. Foundation docs — same answer as the `Foundation:` line above, by construction
+      healthChecks.push(hasFoundation
+        ? `✅ Foundation docs: ${FOUNDATION_REL}/`
         : '⚠️  Foundation docs: not found (run /bk-bootstrap)');
 
       // 3. Active plan
@@ -225,7 +225,7 @@ try {
       if (fs.existsSync(statePath)) {
         try {
           const stateData = JSON.parse(fs.readFileSync(statePath, 'utf8'));
-          healthChecks.push(`✅ Workflow state: ${stateData.phase || 'idle'} (${stateData.command || 'none'})`);
+          healthChecks.push(`✅ Workflow state: ${stateData.current_phase || 'idle'} (${stateData.command || 'none'})`);
         } catch (e) {
           healthChecks.push('⚠️  Workflow state: corrupt (reset recommended)');
         }

@@ -39,7 +39,8 @@ Omit it and the guard passes everything through silently — the state file look
 while enforcing nothing.
 
 `phase_history[]` and `phase_recurrence_count{}` are appended by `fsm-guard` itself on every
-accepted transition. Do not hand-maintain them; read them.
+accepted transition, right after your write lands (the guard never changes the file before the
+write, so a Read → Write pair is not invalidated by it). Do not hand-maintain them; read them.
 
 ## When to write
 
@@ -63,9 +64,10 @@ Anything else is refused with exit 2 — that refusal is the guard working, not 
 `commit` and `aborted` end the episode, they do not end the repo. Code-Step-1 of the *next*
 feature writes `current_phase: "plan"` over the terminal state (or over the `/bk-plan` that
 produced this plan — `completed`, or still `planning` if its approval write was missed): the guard reads that as a new
-episode, allows it, and resets `phase_history[]` / `phase_recurrence_count{}` so the last
-feature's fix loops cannot block this one. It also bumps `workflow_episode` and stores the
-finished workflow under `previous_episode`.
+episode, allows it, and — once the write has landed — resets `phase_history[]` /
+`phase_recurrence_count{}` so the last feature's fix loops cannot block this one. It also bumps
+`workflow_episode` and stores the finished workflow under `previous_episode`. Those fields are
+overwritten even if your write copied the old values; everything else you wrote is kept.
 
 Write the opening phase — never delete `.workflow-state.json` to escape a terminal state.
 

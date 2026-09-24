@@ -11,6 +11,7 @@ try {
   const fs = require('fs');
   const path = require('path');
   const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');
+  const { foundationDir, hasFoundationDocs, extractSections, FOUNDATION_REL } = require('./lib/foundation-docs.cjs');
 
   async function main() {
     try {
@@ -26,7 +27,9 @@ try {
         || 'unknown';
       const projectRoot = process.env.BK_PROJECT_ROOT || resolveProjectRoot();
       const activePlan = process.env.BK_ACTIVE_PLAN || '';
-      const hasFoundation = process.env.BK_HAS_FOUNDATION === 'true';
+      // session-init exports this, but check the disk too: sessions started before a bootstrap
+      // (or by a session-init that looked in the wrong directory) carry a stale `false`.
+      const hasFoundation = process.env.BK_HAS_FOUNDATION === 'true' || hasFoundationDocs(projectRoot);
       const hasLSP = process.env.BK_LSP_AVAILABLE === 'true';
 
       // --- Task 3.3: Foundation context auto-injection ---
@@ -37,29 +40,12 @@ try {
         'bk-code-simplifier'
       ];
 
-      /**
-       * Extract complete markdown sections up to a token budget.
-       * Splits on ## headings, keeps full sections (never truncates mid-section).
-       * @param {string} content - Markdown content
-       * @param {number} maxChars - Approximate char budget (~4 chars/token)
-       * @returns {string} Truncated content with complete sections
-       */
-      function extractSections(content, maxChars) {
-        const sections = content.split(/^(?=## )/m);
-        let result = '';
-        let chars = 0;
-        for (const section of sections) {
-          if (chars + section.length > maxChars && chars > 0) break;
-          result += section;
-          chars += section.length;
-        }
-        return result;
-      }
-
+      // extractSections (lib/foundation-docs.cjs) keeps whole `## ` sections within budget, but
+      // always gives at least a truncated first section — the preamble alone told agents nothing.
       async function injectFoundationContext(agentName) {
         if (!FOUNDATION_AGENTS.includes(agentName)) return '';
 
-        const foundationPath = path.join(resolveProjectRoot(), 'bk', 'docs', 'foundation');
+        const foundationPath = foundationDir(projectRoot);
         // Budget: ~200 tokens for arch (~800 chars) + ~120 tokens for guidelines (~480 chars)
         let context = '\n\n--- Foundation Context (auto-injected) ---\n';
 
@@ -67,14 +53,14 @@ try {
           const archFile = path.join(foundationPath, 'architecture.md');
           if (fs.existsSync(archFile)) {
             const arch = fs.readFileSync(archFile, 'utf8');
-            const summary = extractSections(arch, 800);
+            const summary = extractSections(arch, 800, `${FOUNDATION_REL}/architecture.md`);
             context += '\n### Architecture Summary\n' + summary + '\n';
           }
 
           const guidelinesFile = path.join(foundationPath, 'code-guidelines.md');
           if (fs.existsSync(guidelinesFile)) {
             const guidelines = fs.readFileSync(guidelinesFile, 'utf8');
-            const summary = extractSections(guidelines, 480);
+            const summary = extractSections(guidelines, 480, `${FOUNDATION_REL}/code-guidelines.md`);
             context += '\n### Code Guidelines Summary\n' + summary + '\n';
           }
         } catch (e) {
@@ -102,7 +88,7 @@ try {
         }
       }
 
-      if (hasFoundation) lines.push(`- Foundation: bk/docs/foundation/`);
+      if (hasFoundation) lines.push(`- Foundation: ${FOUNDATION_REL}/`);
 
       lines.push(`- Platform context: platform-context.json`);
       if (hasLSP) lines.push(`- LSP: available (use for symbol navigation, references)`);
