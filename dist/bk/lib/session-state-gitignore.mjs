@@ -35,6 +35,16 @@ import { spawnSync } from 'node:child_process';
  *                         writes it under feature dirs (X-Game-Pro tracks
  *                         bk/dev/ios-project-init/.bk-metrics/), and gitignore matches a
  *                         slash-free pattern at any depth.
+ *   .claude/hooks/.logs/  the hooks' run log: hook-log.jsonl (plus the rotator's .1/.2) and
+ *                         agent-trace.jsonl. Appended on every hook run, so once tracked it
+ *                         shows as modified after every tool call — X-Game-Pro committed it
+ *                         and had to `git rm --cached` it by hand on 2026-09-24. Anchored and
+ *                         directory-only on purpose: the rest of `.claude/` is the kit and IS
+ *                         committed, so the line must not match anything beside `.logs/`.
+ *                         Where `.claude/` is already ignored (a global excludes file), git
+ *                         reports this entry as covered and no line is added; files already
+ *                         force-added are still found by trackedSessionState, which matches
+ *                         only its own patterns.
  *
  * What carries work between machines is the plan directory — `bk/dev/{feature}/` with its
  * `.plan-state.json` — which records what is *done* rather than which session did it, and
@@ -52,6 +62,7 @@ export const NEVER_COMMIT = [
   'bk/dev/shared/.statusline-cache.json',
   'bk/dev/shared/.retry-state.json',
   '.bk-metrics/',
+  '.claude/hooks/.logs/',
 ];
 
 export const GITIGNORE_HEADER =

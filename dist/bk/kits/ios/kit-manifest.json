@@ -1,7 +1,7 @@
 {
-  "version": "0.11.1",
+  "version": "0.11.2",
   "platform": "ios",
-  "builtAt": "2026-09-24T07:52:03.524Z",
+  "builtAt": "2026-09-24T08:03:58.469Z",
   "fileCount": 403,
   "files": {
     ".bk.json": "1d6d59c151741037c6269c4d80bb2da64f4560a2f609228719d068349ea070dd",
@@ -15,7 +15,7 @@
     "agents/bk-device-test-agent.md": "feed2eb8c01ab2393f239b85f4f4aae88253069b7fbb03bcbab098e9f9af634b",
     "agents/bk-docs-writer.md": "e9a8f54dcbdfaf256960145920720cfaaf5e40ad42a8c78e4cbcbcf985d7b32b",
     "agents/bk-gemini-reviewer.md": "482b2a7314851bcd47304ceea111207ae6e84e5f6729841620a3eb5863b392ee",
-    "agents/bk-git-manager.md": "67ab94539d5af94fadb43aca4a1336bf2162729a72f55ba19b15a9b8b3fff0e1",
+    "agents/bk-git-manager.md": "e9a81104879d1e7df758d5046f35e4fe3c21e6c3bb934ed34016299956db2547",
     "agents/bk-ios-developer.md": "efbf987be7fc4807f5b88a3e4535b56a8232b2429266aa70ae345615e561a5af",
     "agents/bk-performance-analyzer.md": "a1f6debd787ff763d13d429717b170be5497c673f407e710610c48b9d2259d57",
     "agents/bk-planner.md": "1d339b2d65daa8744d0732444fb9583f53c29e8ee684e8428439d2ecba01b62d",
@@ -118,7 +118,7 @@
     "hooks/parallel-safety.cjs": "4157dc3771f831c8069afd0ae1e47ff9aa4d346b811fc29683bfcc6f2a5931e5",
     "hooks/pattern-extractor.cjs": "9cefc0c73b172d08612e1ec5216d0ea42b5b4c3609a81011ffe409284c23b020",
     "hooks/plan-complete-reminder.cjs": "ea6de982e6d339b7c6a0688a3b557d79b146b5212a8597413e7014fe20fd6e63",
-    "hooks/post-commit.cjs": "4fbfa0178bbfbf520216051cc19dd0aa90679df5adc028619f73f66f00c36f1b",
+    "hooks/post-commit.cjs": "b010a8ff052871dd5a30698f08967849f257e79f53698b6d97d48099eeb506b4",
     "hooks/post-edit-lint.cjs": "cff94598aed51eac34d979b9b1ff4351cbc5f6c5487e8673f62170daaea62523",
     "hooks/post-edit-simplify.cjs": "c2671cbd88d8468ed9b2200bf8b28624820182142a295e45bdc82e71cc4416fc",
     "hooks/preference-tracker.cjs": "cdff9770223e8adc8b3776527da7cfa1249b33619cc27dd02c624117c083958b",

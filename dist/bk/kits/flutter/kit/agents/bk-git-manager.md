@@ -37,7 +37,8 @@ Before every commit:
 
 **Never stage per-machine session state**, even when asked to commit "bk state" or "everything":
 `bk/dev/shared/.workflow-state.json*`, `bk/dev/shared/checkpoints/`, `bk/dev/shared/handoff/`,
-`bk/dev/shared/.retry-state.json`, `bk/dev/shared/.statusline-cache.json`, any `.bk-metrics/`.
+`bk/dev/shared/.retry-state.json`, `bk/dev/shared/.statusline-cache.json`, any `.bk-metrics/`,
+`.claude/hooks/.logs/` (the rest of `.claude/` is the kit and is committed).
 Leave them out, commit the rest, and tell the caller why (`bk doctor` shows the fix). If they are
 already tracked, do not commit their changes — report it. Plans in `bk/dev/{feature}/` are fine.
 

@@ -68,13 +68,15 @@ try {
    * commit "the bk state" too, and 75e97db put .workflow-state.json.bak, .retry-state.json and
    * five checkpoints into history. Matched at any depth, because git reports paths from the
    * repository root and the project may be a subdirectory; `.bk-metrics/` is matched in any
-   * directory because the kit also writes it under feature dirs.
+   * directory because the kit also writes it under feature dirs. `.claude/hooks/.logs/` is the
+   * hooks' own run log — appended on every hook run, this one included.
    */
   const SESSION_STATE = [
     /(^|\/)bk\/dev\/shared\/\.workflow-state\.json(\..*)?$/,
     /(^|\/)bk\/dev\/shared\/(checkpoints|handoff)(\/|$)/,
     /(^|\/)bk\/dev\/shared\/\.(statusline-cache|retry-state)\.json$/,
     /(^|\/)\.bk-metrics(\/|$)/,
+    /(^|\/)\.claude\/hooks\/\.logs(\/|$)/,
   ];
   const isSessionState = (f) => SESSION_STATE.some((re) => re.test(f));
 
