@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // statusline.cjs - Status line for beer-kit mobile toolkit
 // Input: Claude Code JSON via stdin (context_window, model, workspace, session_id, cost)
-// Output: multi-line status (model + context bar + platform + workflow + git)
+// Output: multi-line status (model + context bar / platform + workflow + git / bk-code plan progress / ...)
 // Writes context_pct to cache for context-safety.cjs
 
 'use strict';
@@ -21,6 +21,7 @@ try {
   const { loadHarnessPolicy, readRecentRedSignals } = require('./lib/harness-policy-loader.cjs');
   // Shared with the reaper so display and data agree on what counts as an abandoned spawn.
   const { SUBAGENT_STALE_TTL_MS } = require('./lib/subagent-live-reaper.cjs');
+  const { readWorkflowProgress, renderWorkflowProgress } = require('./lib/workflow-progress.cjs');
 
   // ─── Harness statusline helpers ──────────────────────────────────────────
 
@@ -823,6 +824,15 @@ try {
       if (prPart) line2Parts.push(prPart);
       if (linesPart) line2Parts.push(`📝 ${linesPart}`);
 
+      // --- Plan progress line (bk-code only): sub-task / task done/total, ✗failed ---
+      // Its own line: line 2 is already long enough to be cut off on a narrow terminal.
+      // See lib/workflow-progress.cjs.
+      let progressLine = '';
+      try {
+        progressLine = renderWorkflowProgress(
+          readWorkflowProgress(resolveProjectRoot(), state), { red: _red, green: _green });
+      } catch { /* fail-open — the progress line is optional */ }
+
       // --- Line 3: Harness monitoring line ---
       // Build context data for token monitoring display
       // The statusline is the only hook Claude Code hands its full status payload to.
@@ -923,6 +933,9 @@ try {
 
       process.stdout.write(line1 + '\n');
       process.stdout.write(line2Parts.join('  ') + '\n');
+      if (progressLine) {
+        process.stdout.write(progressLine + '\n');
+      }
       if (harnessLine) {
         process.stdout.write(harnessLine + '\n');
       }

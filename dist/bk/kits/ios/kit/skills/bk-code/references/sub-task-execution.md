@@ -171,7 +171,9 @@ When dispatching review agents (bk-code-reviewer, bk-security-auditor, bk-perfor
 After agent completes:
 1. Run `commands.build` from platform context
 2. If build fails: resume agent with error output (max 3 retries)
-3. After 3 failures: escalate to user
+3. After 3 failures: mark the sub-task failed, then escalate to user —
+   frontmatter `status: blocked` and `.plan-state.json` `stepResults[NN].status: "failed"`
+   (the statusline counts it as ✗; see `workflow-state.md` → Statusline progress)
 
 ## Post Sub-Task Sync
 
