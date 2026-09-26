@@ -163,9 +163,11 @@ export function groupIntoWorkflows(entries) {
  * than no column.
  *
  * `clean_run_rate` replaces it and is measured: a run is clean when it recorded neither a fix
- * loop nor a reactive signal. Both counts are now real — fix_loops reads the `fix_loop_stuck`
- * signals classified from each agent's final message, and reactive_signals counts any row that
- * raised a signal at all — so this varies with what actually happened in the run.
+ * loop nor a reactive signal. Both counts are now real — fix_loops counts the `fix_loop_stuck`
+ * signals classified from each agent's final message plus the reviewer→implementer cycles in
+ * the agent order (countReviewFixCycles in hooks/lib/workflow-summary.cjs), and
+ * reactive_signals counts any row that raised a signal at all — so this varies with what
+ * actually happened in the run.
  *
  * `runs` counts WORKFLOWS, not summary rows — see groupIntoWorkflows above for why those are
  * not the same thing. `clean_run_rate` therefore means "workflows with no fix loop and no

@@ -158,7 +158,7 @@ below. Without it every transition passes through unvalidated.
 | `global_halt` | `global-kill-switch.cjs` | Red signals whose weighted sum crossed `min_signal_weight` — every guarded tool call is refused |
 | `halt_reasons[]` | `global-kill-switch.cjs` | Which signal types tripped it |
 | `halt_weight` | `global-kill-switch.cjs` | The weighted sum at the moment of the halt |
-| `red_signal_ack_ts` | `--resume` | Signals logged at or before this instant are considered seen and no longer count |
+| `red_signal_ack_ts` | `--resume`, `--reset-counts` | Signals logged at or before this instant are considered seen and no longer count |
 | `halt_override_until` | `global-kill-switch.cjs` | An override grant is open until this instant |
 | `halt_override_consumed` | `global-kill-switch.cjs` | Legacy one-shot marker; only gates anything when `override_window_minutes` is 0 |
 | `workflow_paused` | `fsm-guard.cjs` | Phase-recurrence hard block — do NOT continue, ask the user |
@@ -171,6 +171,8 @@ same lookback window and halted again within minutes.
 
 Dispatch counts are cleared with `--reset-counts [--agent <name>]`, but that is rarely the
 right move now — the cap counts iterations inside `window_minutes` and decays on its own.
+It also writes `red_signal_ack_ts`, so the `subagent_cap_exceeded` signal the cap logged when it
+blocked cannot re-trigger a global halt on the next dispatch.
 Never write any of these fields to false yourself to get past a block; surface the block and
 the command to the user.
 

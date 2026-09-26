@@ -46,7 +46,13 @@ try {
 
       // Sum existing subagent ledger entries for comparison
       const { total: subagentSum, byWorkflow } = sumLedgerSubagentCosts();
-      const cumulativeFromState = state.cumulativeCostUsd || 0;
+      // Only a tally subagent-cost-capture has stamped as this workflow's. An unowned one is
+      // a figure nobody can attribute: X-Game-Pro's state held $441.07 carried across
+      // earlier features, and with no stats-cache every session row inherited it as costUsd.
+      // Falling through to the ledger floor below is less wrong than copying that number.
+      const { resolveWorkflowId, ownedCumulativeCost } = require('./lib/workflow-identity.cjs');
+      const cumulativeFromState = ownedCumulativeCost(
+        state, resolveWorkflowId(state, data.session_id || data.sessionId || null)) || 0;
 
       // Use best available data. The subagent ledger is the last resort rather than the first
       // because it under-counts the conductor's own turns — but reporting 0 while the ledger

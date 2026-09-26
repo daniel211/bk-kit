@@ -171,7 +171,33 @@ try {
 
       // Warn if prompt missing key sections (advisory only)
       const warnings = [];
-      if (prompt && !/platform/i.test(prompt)) warnings.push('missing_platform');
+      // missing_platform is checked only where it can matter, and only when nothing else
+      // supplies the platform.
+      //
+      // X-Game-Pro, 0.12.1, one session: 72 "[DISPATCH-WARN] Prompt may be incomplete:
+      // missing_platform", mostly for agents whose work has no platform in it — bk-git-manager
+      // (7), bk-code-reviewer (5), bk-security-auditor (4), bk-project-manager (3),
+      // bk-performance-analyzer (2), bk-docs-writer, bk-planner. A warning on every dispatch is
+      // one the conductor learns to skip, including the times it is right.
+      //
+      // Two cuts:
+      //   1. Only PLATFORM_AGENTS — the ones whose output changes with the platform: the three
+      //      developers, the unit/device test agents (test command, framework, report name are
+      //      per platform) and bk-debugger (build/test commands, log locations). Reviewers and
+      //      auditors get their platform checklist baked in at build time
+      //      (agents/_platform-sections/), and git/docs/PM agents are platform-agnostic.
+      //   2. Only when `platform` above is still 'unknown'. When it resolved — BK_PLATFORM,
+      //      workflow state's `platform`, or platform-context.json — subagent-init writes
+      //      "- Platform: <platform>" into every subagent's context at SubagentStart, so a
+      //      prompt that omits it loses nothing. Warning then is noise by construction.
+      const PLATFORM_AGENTS = new Set([
+        'bk-ios-developer', 'bk-android-developer', 'bk-flutter-developer',
+        'bk-unit-test-agent', 'bk-device-test-agent', 'bk-debugger'
+      ]);
+      if (prompt && platform === 'unknown' && PLATFORM_AGENTS.has(agentType)
+        && !/platform/i.test(prompt)) {
+        warnings.push('missing_platform');
+      }
       if (prompt && !/output/i.test(prompt)) warnings.push('missing_output_path');
       if (prompt && !/task[\s:]/i.test(prompt) && !/## Task/i.test(prompt)) {
         warnings.push('missing_task_section');

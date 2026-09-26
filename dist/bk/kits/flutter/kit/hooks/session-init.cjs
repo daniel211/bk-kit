@@ -61,11 +61,13 @@ try {
         writeWorkflowState({
           command: null,
           feature: null,
-          // Stamped so the cost tally in state is visibly attributed to a workflow —
-          // subagent-cost-capture owns the value from here on and resets the tally when
-          // it changes. Deliberately NOT resetting cumulativeCostUsd here: this hook also
-          // runs on `resume` and `compact`, and zeroing there would wipe the budget on
-          // every compaction.
+          // Stamped so state names its workflow from the start. The cost tally does NOT
+          // key off this field — the conductor writes workflowId too, so it cannot tell
+          // whether the tally was reset; subagent-cost-capture keeps its own owner key
+          // (cumulativeCostWorkflowId) beside cumulativeCostUsd and resets on that.
+          // Deliberately NOT resetting cumulativeCostUsd here: this hook also runs on
+          // `resume` and `compact`, and zeroing there would wipe the budget on every
+          // compaction.
           workflowId: resolveWorkflowId(null, data.session_id || data.sessionId || null),
           current_phase: null,
           platform,

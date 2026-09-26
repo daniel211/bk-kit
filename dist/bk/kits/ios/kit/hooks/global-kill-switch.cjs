@@ -247,7 +247,8 @@ try {
       denyWithReason(reason);
     }
 
-    // Count active red signals — window first, then everything the last resume acknowledged
+    // Count active red signals — window first, then drop everything the last --resume or
+    // --reset-counts acknowledged
     const lookbackMinutes = cfg.lookback_minutes || 30;
     const ackTs = typeof state.red_signal_ack_ts === 'number' ? state.red_signal_ack_ts : 0;
     const { count, types, weight } = countActiveRedSignals(lookbackMinutes, cfg, ackTs);

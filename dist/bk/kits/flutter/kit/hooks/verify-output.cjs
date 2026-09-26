@@ -81,12 +81,18 @@ try {
    */
   function writesOutsideBk(toolUses, root) {
     const path = require('path');
+    const fs = require('fs');
+    // Compare resolved paths: the hook's root comes from cwd, which is always the realpath,
+    // while an agent may write through an alias (macOS /var → /private/var), and an unresolved
+    // comparison called a bk/ report "outside bk/".
+    const real = (p) => { try { return fs.realpathSync(p); } catch { return p; } };
+    const realRoot = real(root);
     const found = [];
     for (const use of toolUses) {
       if (use.name !== 'Write') continue;
       const target = typeof use.input.file_path === 'string' ? use.input.file_path : '';
       if (!target) continue;
-      const rel = path.relative(root, path.resolve(root, target)).split(path.sep).join('/');
+      const rel = path.relative(realRoot, real(path.resolve(root, target))).split(path.sep).join('/');
       if (!rel.startsWith('bk/')) found.push(clip(target));
     }
     return found;
@@ -99,7 +105,7 @@ try {
       const path = require('path');
       const { isHookEnabled, readWorkflowState, sharedDir } = require('./lib/bk-config-utils.cjs');
       const { readStopIdentity, isCompletion } = require('./lib/subagent-stop-identity.cjs');
-      const { readAgentRun } = require('./lib/agent-run-evidence.cjs');
+      const { readAgentRun, filesWrittenBy } = require('./lib/agent-run-evidence.cjs');
       const { resolveReport } = require('./lib/agent-report-contract.cjs');
 
       if (!isHookEnabled('verify-output')) {
@@ -207,16 +213,23 @@ try {
       // lib/agent-report-contract.cjs holds which agents owe a file and where, and why that is a
       // list of places rather than one. An agent with no contract (bk-git-manager, the platform
       // developers, Explore, …) is never rejected for a missing file.
+      //
+      // The first evidence is the agent's own Write/Edit calls: any .md it wrote under bk/ this
+      // run is its report, whatever it named it (X-Game-Pro 2026-09-25: 11 of 13 rejections were
+      // reports under a name the glob list lacked). The glob list is only the fallback.
       const report = resolveReport(agentType, {
         root,
         reportsDir: path.join(sharedDir(root), 'reports'),
         feature,
         platform,
         planDir
-      }, run.startMs);
+      }, run.startMs, filesWrittenBy(run.toolUses));
 
       if (report.status === 'missing') {
-        errors.push(`MISSING output file — expected one of: ${report.expected.join(', ')}`);
+        errors.push(
+          `MISSING output file — the agent wrote no .md under bk/ this run, and none of these exist: ` +
+          report.expected.join(', ')
+        );
       } else if (report.status === 'stale') {
         errors.push(
           `STALE output file: ${report.path} was last modified before this agent started — ` +

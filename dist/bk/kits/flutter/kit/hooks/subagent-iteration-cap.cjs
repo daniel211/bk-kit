@@ -6,7 +6,8 @@
 // sliding window (`window_minutes`) rather than for the lifetime of the project. Concurrent
 // fan-out of the same agent for the same feature (`batch_coalesce_ms`) is one iteration.
 // Iterations are further scoped to a progress signature (`progress_scoped`), so only tries
-// that committed nothing and completed no batch accumulate against the cap.
+// that committed nothing, completed no batch and stayed on the same sub-task accumulate
+// against the cap.
 // Orchestration agents (`exempt_agents`) are not capped at all — they are dispatched once
 // per commit or per doc, which a loop cap has nothing useful to say about.
 //
@@ -123,15 +124,78 @@ try {
    * phase on every lap while producing nothing, and that is exactly the loop the cap must
    * still catch — including it would hand such a loop a fresh budget every lap.
    *
+   * The unit of work is the fourth field, and it is appended only when the dispatch names
+   * one (see `extractSubTaskId`). Batch-level state cannot see progress INSIDE a batch: bk-code
+   * dispatches the developer once per sub-task, sequentially, and commits nothing until the
+   * batch ends. In the iOS field repo (X-Game-Pro, 0.12.1, /bk-code crypto-session-protocol)
+   * batch 2 ran bk-ios-developer for sub-tasks 07, 08, 09 and 10 — each finished cleanly and
+   * wrote its own impl-sub-task-NN.md — and sub-task 11 was then denied as "iteration 4",
+   * because all five shared one batch-level signature. Moving to the next sub-task is
+   * progress the state file never records; the dispatch itself says so. Retrying the SAME sub-task (implement,
+   * then "Fix sub-task 07 per debug findings", then again) keeps one signature and still
+   * climbs to the cap, so the anti-loop guarantee is unchanged. A conductor that cycles
+   * 07 → 08 → 07 → 08 is caught too: the count filters on the signature, not on adjacency.
+   *
+   * Dispatches that name no sub-task get exactly the old three-field string, so rows written
+   * by the previous version keep matching them across an upgrade. Sub-task rows written
+   * before this change carry the old string and no longer match — a one-time amnesty of the
+   * same kind as the legacy-row rule in `countWindowedIterations`, and in the lenient
+   * direction, so an upgrade never blocks anyone.
+   *
    * @param {object} state
+   * @param {string|null} [subTaskId]  from `extractSubTaskId`; null/absent = batch-level
    * @returns {string}
    */
-  function progressSignature(state) {
+  function progressSignature(state, subTaskId = null) {
     const s = state || {};
     const commit = s.last_commit_hash || '-';
     const done = Array.isArray(s.completed_batches) ? s.completed_batches.length : 0;
     const batch = s.batch ?? '-';
-    return `${commit}|${done}|${batch}`;
+    const base = `${commit}|${done}|${batch}`;
+    return subTaskId ? `${base}|st:${subTaskId}` : base;
+  }
+
+  /**
+   * Which sub-task this dispatch works on, if it names exactly one.
+   *
+   * Precision matters more than recall here: a spurious id hands a real loop a fresh budget,
+   * while a missed id only falls back to the batch-level signature the cap already had. So:
+   *
+   * 1. The prompt's `Sub-task file:` line (also `Plan sub-task file:`), which every bk-code
+   *    per-sub-task dispatch template carries — implement, parallel implement and the
+   *    debug-driven fix. Singular only: `Sub-task files:` is the plural list a reviewer or
+   *    test agent gets for a whole batch, and it identifies no single unit.
+   * 2. Otherwise the description, when it mentions exactly one `sub-task NN` ("Implement
+   *    sub-task 11: envelope receiver"). The description is one line the conductor writes
+   *    about this dispatch; the prompt body is not scanned, because it routinely lists other
+   *    sub-tasks ("Dependency note: 03, 04 done", "see sub-task-05 for the model").
+   *
+   * Two different ids from either source mean the dispatch spans several units — none is
+   * returned. Ids are normalised to their integer value so `07` and `7` agree.
+   *
+   * @param {object} toolInput
+   * @returns {string|null}
+   */
+  function extractSubTaskId(toolInput) {
+    if (!toolInput) return null;
+    const single = (ids) => {
+      const set = new Set(ids.map((id) => String(parseInt(id, 10))));
+      return set.size === 1 ? [...set][0] : null;
+    };
+
+    const prompt = typeof toolInput.prompt === 'string' ? toolInput.prompt : '';
+    const fileLines = [...prompt.matchAll(/^[ \t]*(?:plan[ \t]+)?sub-task[ \t]+file[ \t]*:[^\n]*/gim)];
+    if (fileLines.length > 0) {
+      const ids = fileLines
+        .map((m) => m[0].match(/\bsub-task-(\d+)\b/i))
+        .filter(Boolean)
+        .map((m) => m[1]);
+      if (ids.length > 0) return single(ids);
+    }
+
+    const description = typeof toolInput.description === 'string' ? toolInput.description : '';
+    const mentions = [...description.matchAll(/\bsub-?task[ \t_-]*#?(\d+)\b/gi)].map((m) => m[1]);
+    return mentions.length > 0 ? single(mentions) : null;
   }
 
   /**
@@ -290,7 +354,9 @@ try {
     // editing its policy file. `window_minutes: 0` (legacy lifetime mode) ignores it, the
     // same way it ignores windowing and coalescing.
     const progressScoped = cfg.progress_scoped !== false;
-    const currentSig = progressSignature(state);
+    // Read once from the dispatch: the decision and the write below must stamp the same unit.
+    const subTaskId = extractSubTaskId(toolInput);
+    const currentSig = progressSignature(state, subTaskId);
 
     // `window_minutes: 0` is the legacy escape hatch: no window, no coalescing, decide on
     // the lifetime counter exactly as this hook always did. Everything else decides on the
@@ -361,12 +427,25 @@ try {
       // Without this the number reads as "N units of work", and a conductor part-way through
       // a multi-batch plan concludes the cap is wrong. Scoped to the signature, the count
       // says something much narrower and much more actionable.
+      //
+      // The field list depends on whether the dispatch named a sub-task, so the message
+      // prints the one that was actually used — telling a conductor "moving to the next
+      // sub-task resets this" when it named none would send it chasing the wrong fix.
+      const sigFields = subTaskId
+        ? 'commit|completed_batches|batch|sub-task'
+        : 'commit|completed_batches|batch';
+      const unitNote = subTaskId
+        ? ` on sub-task ${subTaskId}`
+        : '';
+      const freshNote = subTaskId
+        ? `Committing, finishing a batch or moving to a different sub-task starts a fresh budget.`
+        : `Committing or finishing a batch starts a fresh budget. A per-sub-task dispatch whose ` +
+          `prompt carries a "Sub-task file: .../sub-task-NN-*.md" line is budgeted per sub-task.`;
       const progressNote = (windowMs !== 0 && progressScoped)
         ? `\nThe count is scoped to the current progress signature ` +
-          `(commit|completed_batches|batch = ${currentSig}): these are ${currentCount} tries ` +
+          `(${sigFields} = ${currentSig}): these are ${currentCount} tries${unitNote} ` +
           `with nothing committed, no batch completed and no batch advanced in between — ` +
-          `not ${currentCount} units of work. Committing or finishing a batch starts a fresh ` +
-          `budget.\n`
+          `not ${currentCount} units of work. ${freshNote}\n`
         : '';
 
       const reason =
@@ -386,7 +465,9 @@ try {
         `  • "Escalate to human review" — stop, ask specific question\n` +
         `  • "Reset the count" — RARELY the right answer now: the count decays on its own, ` +
         `so waiting out the window clears it. Only reset when the history below is stale ` +
-        `noise. This clears BOTH the tally and the matching history rows, so it does unblock: ` +
+        `noise. This clears the tally and the matching history rows, and acknowledges the red ` +
+        `signal this block just logged (so the kill-switch does not halt on it next), so it ` +
+        `does unblock: ` +
         `node .claude/cli/bk-health/index.cjs --reset-counts --agent ${agentType} ` +
         `--force\n` +
         `  • "Override cap (+5 dispatches)" — set ` +
@@ -443,7 +524,7 @@ try {
         // The signature is taken from `fresh`, not from the pre-read copy: a commit or a
         // batch completion can land between the read above and this write, and stamping the
         // stale signature would file this dispatch under progress it no longer belongs to.
-        const freshSig = progressSignature(fresh);
+        const freshSig = progressSignature(fresh, subTaskId);
         const freshHistory = pruneHistory([
           ...(fresh.agent_dispatch_history || []),
           { ts: now, agent: agentType, feature: featureKey, sig: freshSig }

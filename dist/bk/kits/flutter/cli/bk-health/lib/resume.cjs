@@ -195,7 +195,8 @@ async function resetCounts(opts = {}) {
     return { success: false, message: 'Could not write workflow state — another writer holds it. Try again.' };
   }
 
-  return { success: true, message: `Reset complete: ${descr}.` };
+  // Said out loud because it is the half of the reset the user cannot see in the counts.
+  return { success: true, message: `Reset complete: ${descr}. Red signals logged so far are acknowledged.` };
 }
 
 /**
@@ -269,7 +270,21 @@ function buildCountReset(state, targetAgent, targetFeature) {
     updated.phase_recurrence_count = {};
     updated.agent_dispatch_count = {};
   }
-  updated.counts_reset_ts = Date.now();
+  const now = Date.now();
+  updated.counts_reset_ts = now;
+  // Acknowledge the red signals too, exactly as --resume does. The cap logs a
+  // `subagent_cap_exceeded` red signal at the moment it blocks, and the kill-switch counts
+  // that entry for its whole lookback window. Without the ack the printed remedy led straight
+  // into a bigger block: X-Game-Pro (0.12.1) ran this command as the cap told it to, got
+  // "Reset complete", re-dispatched, and was stopped by GLOBAL HARNESS HALT —
+  // tool_repetition_blocked (1.0) + subagent_cap_exceeded (1.0) = 2.0 / 2.0.
+  //
+  // The ack is one timestamp, so it covers every red signal logged so far, not only the cap's.
+  // That is deliberate rather than a limitation to work around: the user has just been shown
+  // the block and chose to reset, which is the same review --resume records, and a
+  // per-type ack would leave the other half of the field pair live to re-halt on the next
+  // signal of any kind. Anything logged after this instant still counts in full.
+  updated.red_signal_ack_ts = now;
   return updated;
 }
 

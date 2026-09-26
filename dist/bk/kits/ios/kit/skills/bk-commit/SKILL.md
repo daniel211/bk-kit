@@ -162,6 +162,7 @@ Return PR URL to user.
 - Never commit `.env`, secrets, credentials, or private keys
 - bk-git-manager runs haiku (lightweight commit operation)
 - Conventional commit format required: `feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`
+- No attribution trailers (`Co-authored-by:`, `Generated with …`, session links) unless the user asked for one — the approved message is committed as-is
 
 ## References
 

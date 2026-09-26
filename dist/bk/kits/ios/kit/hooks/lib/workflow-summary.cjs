@@ -93,12 +93,109 @@ function measureDurations(metricsDir, entries) {
  * a trustcall session with two visible developer->reviewer->developer cycles. A structural
  * zero, not a measured one. The agent-name guess is gone; rows written by older kit versions
  * have no `signals` array, so the legacy `status` check stays as an OR.
+ *
+ * The `fix_loop_stuck` signal alone was still a structural zero. X-Game-Pro on 0.12.1: 18 of
+ * 18 summary rows read `fix_loops: 0`, while crypto-session-protocol's plan dir held
+ * review-fix-batch-1.md and review-security-batch-2-fix.md and its trace showed
+ * bk-code-reviewer -> bk-ios-developer twice. `fix_loop_stuck` only fires when an agent's final
+ * message says it is stuck; an ordinary review -> fix cycle says nothing of the kind. And the
+ * conductor fixes without moving current_phase back to "coding", so phase history cannot show
+ * it either. What does show it is the ORDER of agents in the trace — see countReviewFixCycles.
  */
 function countFixLoops(entries) {
-  return entries.filter((e) =>
+  const stuck = entries.filter((e) =>
     (Array.isArray(e.signals) && e.signals.includes('fix_loop_stuck')) ||
     (e.status || '').toLowerCase().includes('fix_loop')
   ).length;
+  return stuck + countReviewFixCycles(entries);
+}
+
+/** Agents whose output is a verdict on code someone else wrote. */
+const REVIEWER_AGENTS = new Set([
+  'bk-code-reviewer', 'bk-security-auditor', 'bk-performance-analyzer', 'bk-gemini-reviewer'
+]);
+
+/** Agents that change code or tests — the ones a fix is dispatched to. */
+function isImplementer(agent) {
+  return /^bk-[a-z]+-developer$/.test(agent)
+    || agent === 'bk-unit-test-agent'
+    || agent === 'bk-debugger';
+}
+
+/**
+ * Advisory agents are transparent: a reviewer's findings -> bk-brainstormer -> developer is
+ * still that review's fix. Every OTHER agent (git-manager, project-manager, docs-writer,
+ * planner, …) ends the cycle — work after a commit or a close-out is new work, not a fix.
+ */
+const ADVISORY_AGENTS = new Set([
+  'bk-brainstormer', 'bk-researcher', 'bk-problem-solving', 'bk-sequential-thinking'
+]);
+
+/**
+ * Phases in which an implementer can only be answering the review before it. bk-code writes
+ * `current_phase: "coding"` before every batch's developers (batch-execution.md § FSM State
+ * Per Batch), so an implementer still stamped "review"/"testing" was dispatched without a new
+ * batch starting. An empty phase means no workflow state at all — no batches to confuse.
+ */
+const FIX_PHASES = new Set(['review', 'testing', '']);
+
+/**
+ * Review -> fix cycles, read from the order agents finished in. One cycle = an implementer
+ * (bk-*-developer, bk-unit-test-agent, bk-debugger) whose nearest preceding non-advisory agent
+ * is a reviewer (bk-code-reviewer, bk-security-auditor, bk-performance-analyzer,
+ * bk-gemini-reviewer), with both in the same (skill, feature) — `entries` is already scoped.
+ * One review answered by several implementers (fix, then re-test) is ONE cycle.
+ *
+ * Deliberately conservative — it undercounts rather than invent loops:
+ *   - The implementer must be in a FIX_PHASE. "coding" is ambiguous: it is both the next
+ *     batch's start and the documented loop-back, and a multi-batch plan runs
+ *     reviewer -> next batch's developer once per batch boundary. X-Game-Pro's ios-project-init
+ *     (3 batches, every review "approve", no fix files) would read 2 loops without this. A
+ *     parked terminal phase ("commit" — tracking-background sat there all run) is ambiguous the
+ *     same way, and its reviewer -> developer at 07:15 -> 07:20 was batch 2 starting.
+ *   - When both rows carry a `batch` number and they differ, it is batch progress, whatever
+ *     the phase says. The batch only ever vetoes a loop: the conductor writes it by hand, and
+ *     one that never advances it must not turn every boundary into a fix.
+ *   - A reviewer followed by bk-planner (bk-plan's critic pass) is not a code fix: the planner
+ *     is not an implementer, so it ends the cycle uncounted.
+ *   - Test-failure fixes (bk-unit-test-agent -> bk-debugger -> re-test) are not counted: a
+ *     test agent reporting failures is not distinguishable in the trace from one passing.
+ *
+ * Rows are ordered by `ts`, which is when each agent FINISHED (SubagentStop), not when it was
+ * dispatched — sequential dispatches finish in dispatch order, so that is the same thing for
+ * the review -> fix sequence this reads. The sort is stable, so equal timestamps keep file
+ * order. Against the X-Game-Pro trace this reads crypto-session-protocol 2, device-identity-
+ * auth 1, every other feature 0 — and the spawn descriptions in subagent-live.jsonl agree on
+ * all three: "Fix flaky sleep in KeywrapElectionTests" and "Fix security audit medium findings
+ * batch 2" right after a review, "Fix B1 test warnings" right after one, and ios-project-init's
+ * two reviewer -> developer boundaries were "Implement … batch N". Known misses, both on the
+ * conservative side: tracking-background's "Fix flaky tracking tests" after its batch-1 review
+ * (FSM parked at "commit", a bug fixed in 0.11.1), and fixes dispatched after the close-out
+ * agents (project-manager / git-manager) had already run.
+ */
+function countReviewFixCycles(entries) {
+  const ordered = entries
+    .map((e, i) => ({ e, i, t: Date.parse(e && e.ts) || 0 }))
+    .sort((a, b) => (a.t - b.t) || (a.i - b.i))
+    .map((x) => x.e);
+
+  let cycles = 0;
+  let pendingReview = null;
+  for (const e of ordered) {
+    const agent = String((e && e.agent) || '');
+    if (REVIEWER_AGENTS.has(agent)) { pendingReview = e; continue; }
+    if (ADVISORY_AGENTS.has(agent)) continue;
+    if (pendingReview && isImplementer(agent) && answersReview(pendingReview, e)) cycles++;
+    pendingReview = null;
+  }
+  return cycles;
+}
+
+/** True when `impl` is a fix for `review` rather than the next batch starting. */
+function answersReview(review, impl) {
+  if (Number.isInteger(review.batch) && Number.isInteger(impl.batch)
+    && review.batch !== impl.batch) return false;
+  return FIX_PHASES.has(String(impl.phase || ''));
 }
 
 /**
@@ -240,4 +337,4 @@ function emitSummary({ metricsDir, skill, feature, phase, complexityTier, closed
   return summary;
 }
 
-module.exports = { emitSummary };
+module.exports = { emitSummary, countFixLoops, countReviewFixCycles };

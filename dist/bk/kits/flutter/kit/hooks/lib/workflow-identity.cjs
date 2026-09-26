@@ -31,6 +31,43 @@ function resolveWorkflowId(state, sessionId) {
   return `${command}:${feature}`;
 }
 
+/**
+ * The workflow the `cumulativeCostUsd` tally in state belongs to.
+ *
+ * The tally used to be scoped by comparing `state.workflowId` against the resolved id, on
+ * the assumption that subagent-cost-capture was the only writer of `workflowId`. It is not:
+ * the conductor now writes `workflowId` itself when it starts a feature (X-Game-Pro, 0.12.1:
+ * an Edit of .workflow-state.json setting `"workflowId": "bk-code:session-api"`), so by the
+ * time a subagent stopped the ids already matched and the reset never fired. The tally ran
+ * across features to $441.07 while the current workflow's own ledger rows summed to ~$18,
+ * and budget-guard injected "BUDGET EXCEEDED: 1574%" ~30 times a session.
+ *
+ * So the tally carries its own owner key, written only by subagent-cost-capture, next to the
+ * figure it describes. Nothing else writes it, so nothing else can make it lie.
+ */
+const COST_OWNER_KEY = 'cumulativeCostWorkflowId';
+
+/**
+ * `state.cumulativeCostUsd`, but only when it is the tally of `workflowId`.
+ *
+ * Returns null for a tally owned by another workflow and for one with no owner at all —
+ * the second case is every state written before the owner key existed, including the field
+ * state holding $441 of earlier features. Treating it as unknown rather than as this
+ * workflow's is the migration: readers fall back to the ledger, which is filtered by
+ * workflowId, and the next subagent stop replaces the tally with an owned one.
+ *
+ * @param {object|null|undefined} state - workflow state
+ * @param {string} workflowId - resolveWorkflowId() for the current workflow
+ * @returns {number|null}
+ */
+function ownedCumulativeCost(state, workflowId) {
+  if (!state || typeof state !== 'object') return null;
+  const cost = state.cumulativeCostUsd;
+  if (typeof cost !== 'number' || !isFinite(cost)) return null;
+  if (!workflowId || state[COST_OWNER_KEY] !== workflowId) return null;
+  return cost;
+}
+
 /** Coerce a state field to a trimmed non-empty string, or '' — never throws. */
 function normalize(value) {
   if (typeof value !== 'string') return '';
@@ -41,4 +78,4 @@ function normalize(value) {
   }
 }
 
-module.exports = { resolveWorkflowId };
+module.exports = { resolveWorkflowId, ownedCumulativeCost, COST_OWNER_KEY };

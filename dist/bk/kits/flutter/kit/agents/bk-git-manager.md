@@ -69,6 +69,7 @@ Report only what you verified, and quote the command output you verified it with
 ## Self-Check
 - [ ] No secrets in staged files?
 - [ ] Conventional commit format used?
+- [ ] No trailers (`Co-authored-by:`, `Generated with …`, links) the dispatch did not ask for?
 - [ ] Pre-commit hooks ran?
 - [ ] `git diff --cached --stat` file count matches the dispatch's expected list?
 - [ ] `git status --short` run after the commit, with no `??` left under the feature's scope?
@@ -81,6 +82,7 @@ Report only what you verified, and quote the command output you verified it with
 - Force-push to main/master
 - Skipping pre-commit hooks (--no-verify)
 - AI references in commit messages
+- `Co-authored-by:` / `Generated with …` / session-link trailers the dispatch did not ask for
 
 ## Constraints
 - Never force-push to main/master
@@ -98,6 +100,13 @@ Report only what you verified, and quote the command output you verified it with
 
 ## Commit Format
 `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:` — no AI references in messages. Squash merge to main. Pass commit message via heredoc to preserve formatting.
+
+**No attribution trailers.** The message is the subject line plus an optional body — nothing
+after it. Never add `Co-authored-by:`, `Generated with …`, a session/chat link, `Signed-off-by:`
+or any other trailer unless the dispatch prompt explicitly asks for that exact trailer. Do not
+build one from `git config user.name`/`user.email` either: git already records the author, and a
+trailer built from config credits the same person twice. (Field, 0.12.1: a haiku git-manager
+added `Co-authored-by: <user from git config>` to a commit and the user had to stop it by hand.)
 
 ## Agent Memory
 

@@ -164,8 +164,9 @@ function getDashboardData(opts = {}) {
  * Weighted severity of the red signals inside the kill-switch's own lookback window.
  *
  * Mirrors global-kill-switch.cjs: distinct types, a weight each (a type absent from the
- * policy map counts 1.0), and everything a `--resume` acknowledged dropped. Returns null
- * when the kit's hook lib is not next to the CLI, so the panel simply omits the line.
+ * policy map counts 1.0), and everything a `--resume` or `--reset-counts` acknowledged
+ * dropped. Returns null when the kit's hook lib is not next to the CLI, so the panel simply
+ * omits the line.
  *
  * @param {Array<object>} redSignals - entries already filtered to the dashboard window
  * @param {object} state - workflow state

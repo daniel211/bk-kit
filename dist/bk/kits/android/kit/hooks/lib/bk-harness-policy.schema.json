@@ -113,7 +113,7 @@
             },
             "per_agent_caps": {
               "type": "object",
-              "description": "Per-agent iteration cap, overriding default_cap. The unit is a windowed, fan-out-coalesced ITERATION, not a dispatch, so one concurrent wave of N agents counts as 1 — caps here are deliberately generous relative to the 3-5 waves a large feature needs. The design-* agents are per-screen batch workers rather than implementers looping on one target (the field ran 9 extractor and 16 spec-writer dispatches on a single feature), so they carry caps well above default_cap; leaving them on the default forced operators to hand-patch this file on first real use."
+              "description": "Per-agent iteration cap, overriding default_cap. The unit is a windowed, fan-out-coalesced ITERATION, not a dispatch, so one concurrent wave of N agents counts as 1 — caps here are deliberately generous relative to the 3-5 waves a large feature needs. The design-* agents are per-screen batch workers rather than implementers looping on one target (the field ran 9 extractor and 16 spec-writer dispatches on a single feature), so they carry caps well above default_cap; leaving them on the default forced operators to hand-patch this file on first real use. bk-planner is 3 because /bk-plan's own documented flow dispatches it up to three times with no commit or batch in between (synthesize, Complex-tier correction after complexity-detector, apply critic fixes); at 2 the field had the skill's third step blocked. A fourth planner dispatch in one hour of planning is past what the skill prescribes (the critic allows one retry) and is still blocked."
             },
             "bypass_env": {
               "type": "string"
@@ -131,7 +131,7 @@
             "progress_scoped": {
               "type": "boolean",
               "default": true,
-              "description": "Count only iterations that share the current progress signature (last_commit_hash | completed_batches length | batch), so a conductor that commits or completes a batch gets a fresh budget and only no-progress retries accumulate. Defaults to true when absent; ignored when window_minutes is 0."
+              "description": "Count only iterations that share the current progress signature (last_commit_hash | completed_batches length | batch, plus the sub-task id when the dispatch prompt names exactly one via a 'Sub-task file:' line or the description names one 'sub-task NN'), so sequential sub-tasks inside one batch each get their own budget while a retry of the same sub-task still counts, and so a conductor that commits or completes a batch gets a fresh budget and only no-progress retries accumulate. Defaults to true when absent; ignored when window_minutes is 0."
             },
             "exempt_agents": {
               "type": "array",

@@ -145,7 +145,12 @@ try {
         status: agentStatus,
         signals,
         complexity_tier: complexityTier,
-        phase: currentPhase
+        phase: currentPhase,
+        // bk-code's batch number at the time this agent finished. fix_loops (lib/
+        // workflow-summary.cjs) uses it to tell a reviewer followed by the NEXT batch's
+        // developer (progress) from one followed by a developer fixing its findings (a loop).
+        // null when the workflow has no batches or the conductor never wrote one.
+        batch: Number.isInteger(state.batch) ? state.batch : null
       };
 
       _appendJsonl(tracePath, JSON.stringify(traceEntry) + '\n');

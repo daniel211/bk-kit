@@ -19,7 +19,9 @@
  *   1. Sum of subagent entries in cost-ledger.jsonl matching current workflowId
  *      — append-only, resilient to subagent-cost-capture silent failures
  *   2. state.cumulativeCostUsd from .workflow-state.json
- *      — maintained inline by subagent-cost-capture; may go stale on crash
+ *      — maintained inline by subagent-cost-capture; may go stale on crash. Used only
+ *        when state.cumulativeCostWorkflowId names the current workflow (see
+ *        workflow-identity.ownedCumulativeCost); otherwise it is ignored.
  *   We use Math.max(ledger, state) so whichever sensor captured MORE wins.
  */
 
@@ -33,7 +35,7 @@ const { readWorkflowState, isHookEnabled } = require('./lib/bk-config-utils.cjs'
 const { trackViolation, loadHarnessPolicy } = require('./lib/harness-policy-loader.cjs');
 const { resolveMetricsDir } = require('./lib/cost-ledger-writer.cjs');
 const { isAgentDispatch, getToolName } = require('./lib/hook-event-accessor.cjs');
-const { resolveWorkflowId } = require('./lib/workflow-identity.cjs');
+const { resolveWorkflowId, ownedCumulativeCost } = require('./lib/workflow-identity.cjs');
 
 const FALLBACK_BUDGET_USD = 20.00;
 const FALLBACK_WARN = 0.80;
@@ -217,12 +219,19 @@ function main() {
     state = {};
   }
 
-  const stateCost = typeof state.cumulativeCostUsd === 'number' ? state.cumulativeCostUsd : 0;
   // Derive the ledger key exactly the way subagent-cost-capture stamps it, so the filter
   // below actually matches this workflow's entries and nobody else's.
   const sessionId = hookInput.session_id || hookInput.sessionId || null;
   const workflowId = resolveWorkflowId(state, sessionId);
   const ledgerCost = readLedgerSum(workflowId);
+
+  // The state tally counts only when its owner key names this workflow. A bare
+  // `cumulativeCostUsd` is not evidence of this workflow's spend: X-Game-Pro's state held
+  // $441.07 accumulated across earlier features, and taking max() with it produced
+  // "BUDGET EXCEEDED: 1574%" on every dispatch of a workflow that had spent ~$18. An unowned
+  // or foreign tally falls through to the ledger, which is already filtered by workflowId.
+  const ownedStateCost = ownedCumulativeCost(state, workflowId);
+  const stateCost = ownedStateCost === null ? 0 : ownedStateCost;
 
   // Ledger is the authoritative source (append-only, survives hook crashes).
   // State is the fast-path fallback. Take whichever is larger — underestimating
@@ -231,7 +240,7 @@ function main() {
 
   // If both sources returned 0 and we had no state file at all, stay silent —
   // this is normal for the first spawn of a fresh workflow.
-  if (cumulativeCost === 0 && !('cumulativeCostUsd' in state)) {
+  if (cumulativeCost === 0 && ownedStateCost === null) {
     process.exit(0);
   }
 

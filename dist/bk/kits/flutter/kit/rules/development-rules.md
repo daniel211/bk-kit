@@ -43,4 +43,5 @@
 
 ## Pre-commit
 - Conventional commit format, no AI references
+- No attribution trailers (`Co-authored-by:`, `Generated with …`, session links) unless the user asks for one
 - Never commit secrets (.env, API keys, credentials)

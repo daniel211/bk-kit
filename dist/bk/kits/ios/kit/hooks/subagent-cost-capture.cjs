@@ -99,7 +99,9 @@ try {
       // The ledger key must be the one budget-guard derives when it reads back, or the
       // filter there matches nothing and every entry ever written gets charged to the
       // current workflow. Both sides go through resolveWorkflowId for that reason.
-      const { resolveWorkflowId } = require('./lib/workflow-identity.cjs');
+      const {
+        resolveWorkflowId, ownedCumulativeCost, COST_OWNER_KEY
+      } = require('./lib/workflow-identity.cjs');
       const workflowId = resolveWorkflowId(state, sessionId);
       const effort = state.effort || state.current_effort || 'medium';
       const model = parsed.model || state.model || 'claude-sonnet-4-6';
@@ -157,17 +159,21 @@ try {
       // reached $17.94 and budget-guard then refused every dispatch forever. The tally is
       // now scoped to a workflow and starts over when the workflow changes. The id is
       // recomputed from `fresh` inside the lock so the comparison and the reset are atomic.
+      //
+      // The comparison is against the tally's own owner key, not `workflowId`. The conductor
+      // writes `workflowId` itself when it starts a feature, so comparing against that meant
+      // the ids already matched when the first subagent of a new feature stopped, and the
+      // previous features' spend carried over: X-Game-Pro held $441.07 against a workflow
+      // whose own ledger rows summed to ~$18. A state with no owner key (anything written
+      // before this) resets too — its figure cannot be attributed to any workflow.
       writeWorkflowState((fresh) => {
         const freshId = resolveWorkflowId(fresh, sessionId);
-        if (fresh.workflowId !== freshId) {
-          return {
-            workflowId: freshId,
-            cumulativeCostUsd: Math.round(costUsd * 1e8) / 1e8
-          };
-        }
+        const owned = ownedCumulativeCost(fresh, freshId);
+        const total = owned === null ? costUsd : owned + costUsd;
         return {
           workflowId: freshId,
-          cumulativeCostUsd: Math.round(((fresh.cumulativeCostUsd || 0) + costUsd) * 1e8) / 1e8
+          [COST_OWNER_KEY]: freshId,
+          cumulativeCostUsd: Math.round(total * 1e8) / 1e8
         };
       });
 

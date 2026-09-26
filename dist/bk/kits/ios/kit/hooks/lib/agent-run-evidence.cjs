@@ -66,4 +66,31 @@ function readAgentRun(transcriptPath) {
   return { readable: true, startMs, toolUses };
 }
 
-module.exports = { readAgentRun };
+/**
+ * Tools whose input names a file the agent wrote. NotebookEdit is left out: it edits .ipynb
+ * notebooks, which are never a report.
+ */
+const FILE_WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit']);
+
+/**
+ * Every file the agent wrote or edited through a file tool during the run, in call order,
+ * as the path it passed (absolute in practice; callers resolve relative ones).
+ *
+ * Bash writes (`cat > x <<EOF`, `tee`, `> x`) are deliberately not parsed: shell quoting makes
+ * any regex over them both leaky and wrong, and the caller keeps a filesystem fallback that
+ * covers an agent which wrote its report that way.
+ *
+ * @param {Array<{ name: string, input: object }>} toolUses
+ * @returns {string[]}
+ */
+function filesWrittenBy(toolUses) {
+  const out = [];
+  for (const u of toolUses || []) {
+    if (!u || !FILE_WRITE_TOOLS.has(u.name)) continue;
+    const p = u.input && u.input.file_path;
+    if (typeof p === 'string' && p.trim()) out.push(p.trim());
+  }
+  return out;
+}
+
+module.exports = { readAgentRun, filesWrittenBy };

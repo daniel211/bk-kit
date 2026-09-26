@@ -47,6 +47,7 @@ Rules for agents operating as teammates within a Beer Kit Agent Team.
 ### Commit Messages
 - Use conventional commits: `feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`
 - No AI references in commit messages
+- No attribution trailers (`Co-authored-by:`, `Generated with …`, session links) unless the user asks for one
 - Keep commits focused on actual code changes
 
 ### Docs Sync (Dev Teams Only)

@@ -52,6 +52,10 @@ For each batch in the Execution Batches table:
 
 Dispatch `bk-{platform}-developer` for each sub-task in the batch, respecting dependencies.
 
+Keep exactly one `Sub-task file:` line per dispatch (and `sub-task {NN}` in the description):
+the dispatch cap budgets each sub-task separately by reading it, so sequential sub-tasks in
+one batch are not mistaken for retries. Without it they share one budget and the 4th is blocked.
+
 **Sequential sub-tasks** (sub-task has `depends:` on another sub-task in same batch):
 ```
 Task(subagent_type: "bk-{platform}-developer", model: "opus",

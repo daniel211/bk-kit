@@ -478,9 +478,9 @@ try {
    * Weighted severity of the red signals the kill-switch would see right now.
    *
    * Mirrors global-kill-switch.cjs deliberately: distinct types, a weight each (absent from
-   * the map means 1.0), and everything a `--resume` already acknowledged dropped. The
-   * statusline used to warn on the raw entry count against `min_red_signals`, so a single
-   * lint warning rendered "halt imminent" for a halt that was never going to happen.
+   * the map means 1.0), and everything a `--resume` or `--reset-counts` already acknowledged
+   * dropped. The statusline used to warn on the raw entry count against `min_red_signals`, so
+   * a single lint warning rendered "halt imminent" for a halt that was never going to happen.
    *
    * @param {object} cfg - policy.kill_switch
    * @param {Array<object>} recentRed - entries inside the lookback window
