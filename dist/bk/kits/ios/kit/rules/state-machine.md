@@ -122,6 +122,7 @@ below. Without it every transition passes through unvalidated.
   "current_phase": "plan|coding|testing|review|commit|escalated|aborted|classify|analyze|brainstorm|planning|completed",
   "phase_history": [{"phase": "", "from_phase": "", "ts": 0, "entered_by": ""}],
   "phase_recurrence_count": {},
+  "recurrence_reset_ts": null,
   "batch": 1,
   "quality_fix_count": 0,
   "build_retry_count": 0,
@@ -161,7 +162,8 @@ below. Without it every transition passes through unvalidated.
 | `red_signal_ack_ts` | `--resume`, `--reset-counts` | Signals logged at or before this instant are considered seen and no longer count |
 | `halt_override_until` | `global-kill-switch.cjs` | An override grant is open until this instant |
 | `halt_override_consumed` | `global-kill-switch.cjs` | Legacy one-shot marker; only gates anything when `override_window_minutes` is 0 |
-| `workflow_paused` | `fsm-guard.cjs` | Phase-recurrence hard block — do NOT continue, ask the user |
+| `workflow_paused` | `fsm-guard.cjs` | Phase-recurrence hard block — do NOT continue, ask the user. `--resume` clears it and resets the ladder |
+| `recurrence_reset_ts` | `fsm-guard.cjs` (batch boundary), `--resume` (from a pause), `--reset-counts` | The recurrence history window counts only `phase_history` entries after this instant |
 
 None of these clear themselves, and no new session resets them. The user clears them with
 `node .claude/cli/bk-health/index.cjs --resume`, which also writes `red_signal_ack_ts` and
@@ -256,16 +258,26 @@ Before writing `current_phase`:
 4. Verify required artifact exists
 
 `phase_history[]` and `phase_recurrence_count{}` are appended by `fsm-guard.cjs` on every
-accepted transition — read them, do not hand-maintain them.
+accepted transition — read them, do not hand-maintain them. A refused transition is never
+recorded, so retrying a blocked write does not make the next decision worse. `fsm-guard`
+refuses any Write/Edit that changes `phase_history`, changes `phase_recurrence_count` other
+than resetting it to `{}`, or sets `recurrence_reset_ts`; to move the workflow, change only
+`current_phase` (plus your own fields).
 
-Phase re-entry 3+ times triggers `[REACTIVE-SIGNAL: fix_loop_stuck]`, then a hard block at 4.
-See `reactive-orchestration.md`.
+The ladder counts a phase's entries since the last reset — `phase_recurrence_count` and the
+last 5 `phase_history` entries after `recurrence_reset_ts` — and the larger number decides.
+Re-entry 3+ times blocks with `[REACTIVE-SIGNAL: fix_loop_stuck]`; 4 pauses the workflow.
+See `reactive-orchestration.md`. Remedies (the user's decision): `bk-health --reset-counts
+--force` for a block, `bk-health --resume --force` for a pause — both reset the count and the
+window. `BK_HARNESS_RECURRENCE_OVERRIDE=1` only works in a new Claude Code session started
+with it.
 
 ### Batch loops are not fix loops
 
 `/bk-code` re-enters `coding → testing → review` once per execution batch. On **successful
-batch completion**, write `batch: N+1` together with `phase_recurrence_count: {}`, leaving
-`current_phase` unchanged (a non-transition write, so the guard lets it through). Without
-that reset a 4-batch plan is blocked at batch 3 as if it were stuck. Never reset the counter
-to get out of a fix loop — only batch progress earns it.
+batch completion**, write `batch: N+1` together with `phase_recurrence_count: {}` in one write,
+leaving `current_phase` unchanged (a non-transition write, so the guard lets it through, and
+stamps `recurrence_reset_ts` so the history window restarts too). Without that reset a 4-batch
+plan is blocked at batch 3 as if it were stuck. Never reset the counter to get out of a fix
+loop — only batch progress earns it, and a reset without `batch: N+1` leaves the window armed.
 See `skills/bk-code/references/workflow-state.md`.

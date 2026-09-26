@@ -105,7 +105,7 @@ git-manager haiku. Full dispatch table with triggers and inputs:
 
 **3d. Batch Complete** — all sub-tasks implement ✓ + test ✓ + review ✓ → tick `## Tasks` `[x]`,
 TaskUpdate(completed), update `.plan-state.json`. **FSM:** write `batch: N+1` and
-`phase_recurrence_count: {}`, leaving `current_phase` unchanged. A multi-batch plan re-enters
+`phase_recurrence_count: {}` in one write, leaving `current_phase` unchanged. A multi-batch plan re-enters
 `coding` once per batch; without this reset the recurrence ladder blocks batch 3 as if it were a
 fix loop. Reset on batch *progress* only, never to escape a fix loop.
 

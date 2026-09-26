@@ -394,10 +394,13 @@ A batch is complete when ALL of these are true:
 }
 ```
 
-6. **.workflow-state.json**: write `batch: N+1` and `phase_recurrence_count: {}` — leave
-   `current_phase` unchanged so the write is not a transition. This is what stops a 4-batch
-   plan from tripping the phase-recurrence block on batch 3. Reset only on a batch that
-   actually completed; never to escape a fix loop.
+6. **.workflow-state.json**: write `batch: N+1` and `phase_recurrence_count: {}` in ONE write —
+   leave `current_phase` unchanged so the write is not a transition. Seeing both together,
+   `fsm-guard` also starts the recurrence history window afresh (`recurrence_reset_ts`), which
+   is what stops a 4-batch plan from tripping the phase-recurrence block on batch 3. Reset only
+   on a batch that actually completed; never to escape a fix loop — a reset without the batch
+   increment does not clear the window. Never touch `phase_history` or `recurrence_reset_ts`:
+   `fsm-guard` refuses writes that change them.
 7. **Log**: `"✓ Batch {N} ({name}) complete — {sub-task count} sub-tasks, {file count} files changed"`
 
 ### Proceed to Next Batch

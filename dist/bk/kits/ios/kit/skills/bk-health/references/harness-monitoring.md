@@ -18,11 +18,12 @@ node .claude/cli/bk-health/index.cjs --timeline --last 24h
 # Ashby sensor health check (detects silent sensors)
 node .claude/cli/bk-health/index.cjs --ashby
 
-# Resume a halted or paused workflow (interactive confirmation)
+# Resume a halted or paused workflow (interactive confirmation).
+# From a recurrence pause it also resets phase_recurrence_count + the history window.
 node .claude/cli/bk-health/index.cjs --resume
 node .claude/cli/bk-health/index.cjs --resume --force  # skip confirmation
 
-# Reset phase recurrence + agent dispatch counters
+# Reset phase recurrence (count + history window) + agent dispatch counters
 node .claude/cli/bk-health/index.cjs --reset-counts
 node .claude/cli/bk-health/index.cjs --reset-counts --agent bk-ios-developer  # single agent
 node .claude/cli/bk-health/index.cjs --reset-counts --force  # skip confirmation

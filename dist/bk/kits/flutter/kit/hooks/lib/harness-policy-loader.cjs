@@ -205,7 +205,7 @@ const DEFAULT_POLICY = {
     BK_HARNESS_POLICY_PATH: 'Override path to policy file (absolute)',
     BK_HARNESS_OVERRIDE: 'Bypass global kill-switch (one-time)',
     BK_HARNESS_DISPATCH_OVERRIDE: 'Format: agent=N,agent=N (raise per-agent cap)',
-    BK_HARNESS_RECURRENCE_OVERRIDE: 'Bypass phase recurrence block (one-time)',
+    BK_HARNESS_RECURRENCE_OVERRIDE: 'Bypass the phase recurrence block for a whole session — set it before starting Claude Code (hooks inherit the CLI env)',
     BK_ARCH_FITNESS_SKIP: 'Comma-separated rule IDs to skip',
     BK_INFERENTIAL_SKIP: "Set to 1 to bypass inferential review entirely",
     BK_INFERENTIAL_MODE: "Set to 'mock' to use deterministic mock results",

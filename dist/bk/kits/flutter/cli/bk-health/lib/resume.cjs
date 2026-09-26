@@ -70,6 +70,25 @@ function updateState(root, updater) {
 }
 
 /**
+ * The fields that reset fsm-guard's phase-recurrence ladder: the count AND the start of the
+ * history window it also counts (`recurrence_reset_ts`).
+ *
+ * Both remedies the guard prints used to clear at most the count. In X-Game-Pro (0.12.2) the
+ * HARD BLOCK survived `--resume --force` ("testing entered 6 times") and then `--reset-counts
+ * --force` ("testing entered 1 times"): the count was gone, but the window over the last
+ * phase_history entries still held the entries that decided. A remedy has to clear what the
+ * decision reads, so both go through the hook lib's single definition of a reset.
+ *
+ * @param {number} now
+ * @returns {{phase_recurrence_count: object, recurrence_reset_ts: number}}
+ */
+function recurrenceReset(now) {
+  const lib = requireHookLib('phase-recurrence-window.cjs');
+  if (lib && typeof lib.recurrenceResetFields === 'function') return lib.recurrenceResetFields(now);
+  return { phase_recurrence_count: {}, recurrence_reset_ts: now };
+}
+
+/**
  * Prompt user for confirmation on stdin.
  * @param {string} prompt
  * @returns {Promise<boolean>}
@@ -117,7 +136,17 @@ async function resumeWorkflow(opts = {}) {
   }
 
   // Clear the halt against the state as it is now, not as it was before the prompt.
+  const now = Date.now();
   const written = updateState(root, (fresh) => ({
+    // `workflow_paused` is only ever set by fsm-guard's recurrence HARD BLOCK, whose message
+    // offers "resume same approach (resets counter)". So resuming from a pause resets the
+    // recurrence ladder — count and window both — or the very next transition is the block
+    // again. A global_halt alone is the kill-switch's and leaves the ladder as it is.
+    ...(fresh.workflow_paused ? {
+      ...recurrenceReset(now),
+      pause_reason: null,
+      pause_ts: null
+    } : {}),
     global_halt: false,
     workflow_paused: false,
     halt_override_consumed: false,  // re-arm one-shot for next episode
@@ -150,7 +179,10 @@ async function resumeWorkflow(opts = {}) {
   const resumeEntry = { ts: Date.now(), cleared: reasons, feature: state.feature || 'unknown' };
   fs.appendFileSync(resumeLogFile, JSON.stringify(resumeEntry) + '\n', 'utf8');
 
-  return { success: true, message: `Workflow resumed. Cleared: ${reasons.join(', ')}.` };
+  const ladder = state.workflow_paused
+    ? ' Phase recurrence count and history window reset.'
+    : '';
+  return { success: true, message: `Workflow resumed. Cleared: ${reasons.join(', ')}.${ladder}` };
 }
 
 /**
@@ -174,13 +206,16 @@ async function resetCounts(opts = {}) {
 
   const targetAgent = opts.agent || null;
   const targetFeature = opts.feature || null;
+  const resetsLadder = resetsRecurrence(state, targetAgent, targetFeature);
   // The description names the history too, because that is what the cap actually decides on
   // — a user told only that "counts" were reset has no way to know the block will lift.
+  // Same for the recurrence ladder: its window over phase_history is reset with the count.
+  const ladder = resetsLadder ? 'phase_recurrence_count + recurrence history window + ' : '';
   const descr = targetAgent
     ? `agent dispatch count + history for "${targetAgent}"${targetFeature ? ` in feature "${targetFeature}"` : ' (all features)'}`
     : targetFeature
-      ? `agent dispatch counts + history for feature "${targetFeature}"`
-      : 'all phase_recurrence_count + agent_dispatch_count + agent_dispatch_history';
+      ? `${ladder}agent dispatch counts + history for feature "${targetFeature}"`
+      : `${ladder}agent_dispatch_count + agent_dispatch_history`;
 
   if (!opts.force) {
     const confirmed = await askConfirm(`This will reset ${descr}. Confirm?`);
@@ -197,6 +232,24 @@ async function resetCounts(opts = {}) {
 
   // Said out loud because it is the half of the reset the user cannot see in the counts.
   return { success: true, message: `Reset complete: ${descr}. Red signals logged so far are acknowledged.` };
+}
+
+/**
+ * Does this reset cover fsm-guard's phase-recurrence ladder?
+ *
+ * The ladder belongs to the workflow in the state file, not to an agent. So an --agent reset
+ * leaves it alone, while a reset without --agent covers it — unless --feature names some other
+ * feature than the one the workflow is on.
+ *
+ * @param {object} state
+ * @param {string|null} targetAgent
+ * @param {string|null} targetFeature
+ * @returns {boolean}
+ */
+function resetsRecurrence(state, targetAgent, targetFeature) {
+  if (targetAgent) return false;
+  if (!targetFeature) return true;
+  return Boolean(state && state.feature === targetFeature);
 }
 
 /**
@@ -267,10 +320,12 @@ function buildCountReset(state, targetAgent, targetFeature) {
     }
   } else {
     // Reset all
-    updated.phase_recurrence_count = {};
     updated.agent_dispatch_count = {};
   }
   const now = Date.now();
+  if (resetsRecurrence(state, targetAgent, targetFeature)) {
+    Object.assign(updated, recurrenceReset(now));
+  }
   updated.counts_reset_ts = now;
   // Acknowledge the red signals too, exactly as --resume does. The cap logs a
   // `subagent_cap_exceeded` red signal at the moment it blocks, and the kill-switch counts

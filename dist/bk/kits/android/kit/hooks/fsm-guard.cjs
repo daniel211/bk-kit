@@ -12,7 +12,14 @@
 // episode, again mutated the file, and was again rejected: the conductor gave up and ran a whole
 // feature at `commit` with the previous feature's plan_dir and batch. Allowed writes now stash
 // their bookkeeping (lib/fsm-pending-bookkeeping.cjs) and the PostToolUse mode merges it onto
-// the file as the tool left it. The deny paths still write in PreToolUse — the tool never runs.
+// the file as the tool left it. Of the deny paths only the recurrence HARD BLOCK writes in
+// PreToolUse (the pause flag — the tool never runs); a refused transition is never recorded as
+// history (see the recurrence deny paths below).
+//
+// Hook-owned bookkeeping — phase_history, phase_recurrence_count, recurrence_reset_ts — is
+// written by this hook only. A conductor Write/Edit that rewrites it is refused
+// (lib/workflow-state-bookkeeping-guard.cjs); the recurrence window is counted from the last
+// reset (lib/phase-recurrence-window.cjs).
 
 'use strict';
 
@@ -24,6 +31,11 @@ try {
   } = require('./lib/bk-config-utils.cjs');
   const { pendingKey, stashPending, takePending } = require('./lib/fsm-pending-bookkeeping.cjs');
   const { loadHarnessPolicy, trackRedSignal, trackViolation } = require('./lib/harness-policy-loader.cjs');
+  const { countedHistory, windowEntryCount, recurrenceResetFields } = require('./lib/phase-recurrence-window.cjs');
+  const {
+    proposedState, reviewBookkeepingWrite, bookkeepingDenyMessage
+  } = require('./lib/workflow-state-bookkeeping-guard.cjs');
+  const fs = require('fs');
 
   // Built-in transition table per workflow type
   const TRANSITIONS = {
@@ -219,7 +231,15 @@ try {
 
   /**
    * Check phase recurrence in recent history (H1-04).
-   * Returns action object: { action, message, exitCode }
+   *
+   * Two numbers decide: the recurrence count (+1 for the incoming transition) and how often
+   * the phase appears in the recent history window (+1). Both are counted from the last reset
+   * only — the window through lib/phase-recurrence-window.cjs — so a batch boundary or a
+   * `bk-health` remedy clears the whole decision, not half of it. The message reports the
+   * larger of the two, which is the one that decided; it used to print the count while the
+   * window decided, and read "entered 1 times" on a HARD BLOCK.
+   *
+   * @returns {{action: string, exitCode?: number, entered?: number, message?: string}}
    */
   function checkPhaseRecurrence(currentState, newPhase, policy) {
     const cfg = policy.deadloop.phase_recurrence;
@@ -233,57 +253,86 @@ try {
     // Check bypass env
     if (process.env[bypassEnv] === '1') return { action: 'pass' };
 
-    const history = currentState.phase_history || [];
-    // Count how many times newPhase appears in last 5 entries + the incoming
-    const windowSize = 5;
-    const window = history.slice(-windowSize);
-    const countInWindow = window.filter(e => e.phase === newPhase).length;
-    // +1 for the incoming transition
-    const totalCount = countInWindow + 1;
-
-    // Also count total from recurrence map (across all history)
-    const recurrenceCount = (currentState.phase_recurrence_count || {})[newPhase] || 0;
-    const newRecurrenceCount = recurrenceCount + 1;
+    const windowCount = windowEntryCount(currentState, newPhase);
+    const countCount = ((currentState.phase_recurrence_count || {})[newPhase] || 0) + 1;
+    const entered = Math.max(windowCount, countCount);
 
     // Counts as one compact line — the pretty-printed dump grew with the workflow and said
     // nothing the phase name and the count did not already say.
     const counts = JSON.stringify(currentState.phase_recurrence_count || {}).slice(0, 120);
+    const basis = `(since the last batch/reset: count ${countCount}, recent history ${windowCount})`;
+    const cli = 'node .claude/cli/bk-health/index.cjs';
+    // The env override is read by the hook process, which inherits the env of the running
+    // Claude Code CLI — exporting it from a Bash tool call changes nothing. In X-Game-Pro
+    // (0.12.2) that was one more printed remedy that could not work in the session at hand.
+    const override =
+      `Override: ${bypassEnv}=1 only takes effect in a NEW Claude Code session started with it.`;
+    // Said on both deny paths: the field conductor hand-edited phase_history to get past the
+    // ladder, and read each of its own refused retries as more history.
+    const notRecorded =
+      'This transition was refused and NOT recorded — retrying it does not add history. ' +
+      'Do not edit phase_history / phase_recurrence_count to get past it; fsm-guard refuses those writes.';
 
-    if (totalCount >= haltCount || newRecurrenceCount >= haltCount) {
+    if (entered >= haltCount) {
       return {
         action: 'halt',
         exitCode: 2,
-        newRecurrenceCount,
+        entered,
         message:
-          `FSM HARD BLOCK — phase "${newPhase}" entered ${newRecurrenceCount} times. Workflow paused. Counts: ${counts}\n` +
-          `AskUserQuestion with: resume same approach (resets counter) | abort + escalate (commit WIP) | reset phase, different agent.\n` +
-          `Or: node .claude/cli/bk-health/index.cjs --resume --force — Override: ${bypassEnv}=1`
+          `FSM HARD BLOCK — phase "${newPhase}" entered ${entered} times ${basis}. Workflow paused. Counts: ${counts}\n` +
+          `${notRecorded}\n` +
+          `AskUserQuestion with: resume same approach | resume with a different agent/approach | ` +
+          `stop here (WIP stays uncommitted; "escalated" can be written from review).\n` +
+          `Either resume needs the user to run: ${cli} --resume --force — clears the pause and ` +
+          `resets phase_recurrence_count and the recurrence history window.\n` +
+          override
       };
     }
 
-    if (totalCount >= blockCount || newRecurrenceCount >= blockCount) {
+    if (entered >= blockCount) {
       return {
         action: 'block',
         exitCode: 2,
-        newRecurrenceCount,
+        entered,
         message:
-          `FSM RECURRENCE BLOCK — phase "${newPhase}" entered ${newRecurrenceCount} times (limit: ${blockCount}).\n` +
+          `FSM RECURRENCE BLOCK — phase "${newPhase}" entered ${entered} times (limit: ${blockCount}) ${basis}.\n` +
           `[REACTIVE-SIGNAL: fix_loop_stuck] (HIGH) Task(bk-problem-solving), else bk-brainstormer; ` +
           `AskUserQuestion if both fail. Detail: rules/reactive-orchestration.md §3.\n` +
-          `Override: ${bypassEnv}=1`
+          `${notRecorded}\n` +
+          `If the user decides to continue: ${cli} --reset-counts --force — resets ` +
+          `phase_recurrence_count and the recurrence history window.\n` +
+          override
       };
     }
 
-    if (totalCount >= warnCount || newRecurrenceCount >= warnCount) {
+    if (entered >= warnCount) {
       return {
         action: 'warn',
         exitCode: 0,
-        newRecurrenceCount,
-        message: `[FSM-RECURRENCE-WARN] Phase "${newPhase}" entered ${newRecurrenceCount} times — expected cycle, or a fix loop?`
+        entered,
+        message: `[FSM-RECURRENCE-WARN] Phase "${newPhase}" entered ${entered} times ${basis} — expected cycle, or a fix loop?`
       };
     }
 
-    return { action: 'pass', newRecurrenceCount };
+    return { action: 'pass', entered };
+  }
+
+  /**
+   * Review a write's hook-owned fields (lib/workflow-state-bookkeeping-guard.cjs).
+   * Returns null when the write's resulting document cannot be known — then there is
+   * nothing to judge and the write goes through as it always did.
+   *
+   * @param {object} toolInput
+   * @param {object} currentState - state on disk
+   * @returns {{deny: string|null, countsReset: boolean, batchAdvanced: boolean,
+   *            restore: object, after: object}|null}
+   */
+  function reviewStateWrite(toolInput, currentState) {
+    let rawDisk = null;
+    try { rawDisk = fs.readFileSync(workflowStatePath(), 'utf8'); } catch { /* Edit → no judge */ }
+    const after = proposedState(toolInput, rawDisk);
+    if (!after) return null;
+    return { ...reviewBookkeepingWrite(currentState, after), after };
   }
 
   /**
@@ -309,7 +358,7 @@ try {
    * ladder nor leave a finished feature's history attached to a new episode.
    *
    * @param {object} input - The PreToolUse event
-   * @param {'new_episode'|'transition'} kind
+   * @param {'new_episode'|'transition'|'bookkeeping'|'batch_reset'} kind
    * @param {string} phase - The phase the write enters; PostToolUse checks the file agrees
    * @param {object} patch - Fields to merge after the write
    */
@@ -323,7 +372,7 @@ try {
    * PostToolUse half: merge the stashed bookkeeping onto the file as the tool left it.
    *
    * Only the guard's own fields are in the patch (workflow_episode, previous_episode,
-   * phase_history, phase_recurrence_count), so everything the write set — current_phase,
+   * phase_history, phase_recurrence_count, recurrence_reset_ts), so everything the write set — current_phase,
    * feature, plan_dir, batch, ... — stays exactly as written, while a history the Write copied
    * from the previous episode is overwritten by the reset.
    *
@@ -341,6 +390,16 @@ try {
       if (record.phase && fresh.current_phase !== record.phase) {
         status = 'phase_mismatch';
         return null;
+      }
+      // A batch-boundary stamp starts the history window afresh. It is only true if the count
+      // reset it goes with actually landed; otherwise stamping it would clear half the ladder.
+      if (record.kind === 'batch_reset') {
+        const counts = fresh.phase_recurrence_count;
+        if (counts && typeof counts === 'object' && Object.keys(counts).length > 0) {
+          status = 'batch_reset_not_landed';
+          const { recurrence_reset_ts: _dropped, ...rest } = record.patch;
+          return Object.keys(rest).length > 0 ? rest : null;
+        }
       }
       return record.patch;
     });
@@ -378,17 +437,11 @@ try {
       const newContent = toolInput.content || toolInput.new_string || '';
       const newPhase = extractPhase(newContent);
 
-      if (!newPhase) {
-        // No phase change detected — pass through
-        timer.end({ status: 'no_phase_change', exit: 0 });
-        process.exit(0);
-      }
-
       // Read current state from disk
       const currentState = readWorkflowState();
       if (!currentState) {
         // No existing state — allow first write
-        timer.end({ status: 'no_current_state', exit: 0 });
+        timer.end({ status: newPhase ? 'no_current_state' : 'no_phase_change', exit: 0 });
         process.exit(0);
       }
 
@@ -418,7 +471,7 @@ try {
         workflowId: newWorkflowId,
         workflowType: newWorkflowType
       };
-      if (startsNewEpisode(currentPhase, newPhase, startType, identity)) {
+      if (newPhase && startsNewEpisode(currentPhase, newPhase, startType, identity)) {
         // Deferred to PostToolUse. `feature` / `workflowId` are not in the patch: the write
         // itself declares them (that is how this branch was reached), so they land with it.
         deferBookkeeping(input, 'new_episode', newPhase, {
@@ -435,15 +488,64 @@ try {
             entered_by: input.session_id || 'unknown',
             from_phase: currentPhase
           }],
-          phase_recurrence_count: { [newPhase]: 1 }
+          phase_recurrence_count: { [newPhase]: 1 },
+          // A fresh history needs no window start; this also drops one a Write carried over.
+          recurrence_reset_ts: null
         });
         timer.end({ status: 'new_episode', from: currentPhase, to: newPhase, exit: 0 });
         process.exit(0);
       }
 
-      // Ordinary case: same phase, same feature — nothing to validate.
-      if (currentPhase === newPhase) {
-        timer.end({ status: 'same_phase', exit: 0 });
+      // --- Hook-owned bookkeeping is the hook's (lib/workflow-state-bookkeeping-guard.cjs) ---
+      // Runs on every write that is not a new episode, including Edits that name no phase at
+      // all: the field conductor's fabricated history came in exactly that way.
+      const review = reviewStateWrite(toolInput, currentState);
+      if (review && review.deny) {
+        trackViolation({
+          hook: 'fsm-guard',
+          violation_type: 'bookkeeping_tamper',
+          tool: input.tool_name || 'Write',
+          target: targetFile,
+          blocked: true,
+          severity: 'error',
+          context: { field: review.deny, phase: currentPhase }
+        });
+        process.stderr.write(`[FSM-GUARD] BLOCK: write rewrites hook-owned "${review.deny}"\n`);
+        process.stdout.write(JSON.stringify({
+          hookSpecificOutput: {
+            hookEventName: 'PreToolUse',
+            permissionDecision: 'deny',
+            permissionDecisionReason: bookkeepingDenyMessage(review.deny)
+          }
+        }) + '\n');
+        timer.end({ status: 'bookkeeping_tamper', field: review.deny, exit: 2 });
+        process.exit(2);
+      }
+
+      // The state the ladder judges: the one on disk, with this write's count reset applied
+      // first. A reset that comes with batch progress also starts the history window afresh
+      // (recurrence_reset_ts) — that is the batch boundary the skill defines. A reset WITHOUT
+      // batch progress clears the count only, so the window still catches a fix loop that
+      // tries to reset its way out.
+      let effectiveState = currentState;
+      const extraPatch = review ? { ...review.restore } : {};
+      if (review && review.countsReset) {
+        const resetFields = review.batchAdvanced
+          ? recurrenceResetFields()
+          : { phase_recurrence_count: {} };
+        effectiveState = { ...currentState, ...resetFields };
+        delete extraPatch.phase_recurrence_count;
+        if (resetFields.recurrence_reset_ts) extraPatch.recurrence_reset_ts = resetFields.recurrence_reset_ts;
+      }
+
+      // Not a transition — nothing to validate. Restore what the write dropped and stamp a
+      // batch-boundary reset, after the write lands.
+      if (!newPhase || currentPhase === newPhase) {
+        if (Object.keys(extraPatch).length > 0) {
+          const kind = review.countsReset && review.batchAdvanced ? 'batch_reset' : 'bookkeeping';
+          deferBookkeeping(input, kind, review.after.current_phase || null, extraPatch);
+        }
+        timer.end({ status: newPhase ? 'same_phase' : 'no_phase_change', exit: 0 });
         process.exit(0);
       }
 
@@ -484,29 +586,21 @@ try {
 
       // --- H1-04: Phase recurrence detection ---
       const policy = loadHarnessPolicy();
-      const recurrenceResult = checkPhaseRecurrence(currentState, newPhase, policy);
+      const recurrenceResult = checkPhaseRecurrence(effectiveState, newPhase, policy);
 
-      // Update phase_history and phase_recurrence_count in state
-      const phaseHistory = [...(currentState.phase_history || [])];
-      phaseHistory.push({
-        phase: newPhase,
-        ts: Date.now(),
-        entered_by: input.session_id || 'unknown',
-        from_phase: currentPhase
-      });
-      // Cap at 50 entries
-      const trimmedHistory = phaseHistory.slice(-50);
-
-      const recurrenceCount = { ...(currentState.phase_recurrence_count || {}) };
-      recurrenceCount[newPhase] = (recurrenceCount[newPhase] || 0) + 1;
-
+      // A refused transition never happened, so it is not history. Both deny paths used to
+      // append the attempt to phase_history and bump its count, so every retry of a blocked
+      // write made the next decision worse: in X-Game-Pro (0.12.2) three retries of
+      // coding→testing turned a block into a HARD BLOCK and left `testing, testing, testing`
+      // in the history of a workflow still sitting at `coding`, and the conductor reported
+      // "each time I edit this file fsm-guard adds a new testing entry". The red signal and the
+      // violation are still logged per attempt — those are what a repeated attempt is — and
+      // repeated denials do not climb the ladder on their own.
       if (recurrenceResult.action === 'halt') {
-        // Write paused state. Writing in PreToolUse is safe on the deny paths only: the tool
-        // never runs, so there is no Read→Write pair for this write to invalidate.
+        // Only the pause is written. Writing in PreToolUse is safe on the deny paths only: the
+        // tool never runs, so there is no Read→Write pair for this write to invalidate.
         try {
           writeWorkflowState({
-            phase_history: trimmedHistory,
-            phase_recurrence_count: recurrenceCount,
             workflow_paused: true,
             pause_reason: 'phase_recurrence_hard_block',
             pause_ts: Date.now()
@@ -515,7 +609,7 @@ try {
 
         trackRedSignal('phase_recurrence_blocked', {
           phase: newPhase,
-          count: recurrenceResult.newRecurrenceCount,
+          count: recurrenceResult.entered,
           from: currentPhase
         });
         trackViolation({
@@ -523,7 +617,7 @@ try {
           violation_type: 'phase_recurrence_halt',
           blocked: true,
           severity: 'red',
-          context: { phase: newPhase, count: recurrenceResult.newRecurrenceCount }
+          context: { phase: newPhase, count: recurrenceResult.entered }
         });
 
         process.stderr.write(`[FSM-GUARD] HALT: phase recurrence hard block on "${newPhase}"\n`);
@@ -534,22 +628,15 @@ try {
             permissionDecisionReason: recurrenceResult.message
           }
         }) + '\n');
-        timer.end({ status: 'recurrence_halt', phase: newPhase, count: recurrenceResult.newRecurrenceCount, exit: 2 });
+        timer.end({ status: 'recurrence_halt', phase: newPhase, count: recurrenceResult.entered, exit: 2 });
         process.exit(2);
       }
 
       if (recurrenceResult.action === 'block') {
-        // Write state but don't set workflow_paused yet
-        try {
-          writeWorkflowState({
-            phase_history: trimmedHistory,
-            phase_recurrence_count: recurrenceCount
-          });
-        } catch { /* fail-open */ }
-
+        // Nothing is written — see above.
         trackRedSignal('phase_recurrence_blocked', {
           phase: newPhase,
-          count: recurrenceResult.newRecurrenceCount,
+          count: recurrenceResult.entered,
           from: currentPhase
         });
         trackViolation({
@@ -557,10 +644,10 @@ try {
           violation_type: 'phase_recurrence_block',
           blocked: true,
           severity: 'red',
-          context: { phase: newPhase, count: recurrenceResult.newRecurrenceCount }
+          context: { phase: newPhase, count: recurrenceResult.entered }
         });
 
-        process.stderr.write(`[FSM-GUARD] BLOCK: phase recurrence on "${newPhase}" (count=${recurrenceResult.newRecurrenceCount})\n`);
+        process.stderr.write(`[FSM-GUARD] BLOCK: phase recurrence on "${newPhase}" (count=${recurrenceResult.entered})\n`);
         process.stdout.write(JSON.stringify({
           hookSpecificOutput: {
             hookEventName: 'PreToolUse',
@@ -568,35 +655,54 @@ try {
             permissionDecisionReason: recurrenceResult.message
           }
         }) + '\n');
-        timer.end({ status: 'recurrence_block', phase: newPhase, count: recurrenceResult.newRecurrenceCount, exit: 2 });
+        timer.end({ status: 'recurrence_block', phase: newPhase, count: recurrenceResult.entered, exit: 2 });
         process.exit(2);
       }
 
+      // Allowed: the transition is recorded — in PostToolUse, after the write lands.
+      const phaseHistory = [...(effectiveState.phase_history || [])];
+      phaseHistory.push({
+        phase: newPhase,
+        ts: Date.now(),
+        entered_by: input.session_id || 'unknown',
+        from_phase: currentPhase
+      });
+      // Cap at 50 entries
+      const trimmedHistory = phaseHistory.slice(-50);
+
+      const recurrenceCount = { ...(effectiveState.phase_recurrence_count || {}) };
+      recurrenceCount[newPhase] = (recurrenceCount[newPhase] || 0) + 1;
+
+      // Absolute values, so a Write that dropped or copied them cannot win (see deferBookkeeping).
+      const transitionPatch = {
+        phase_history: trimmedHistory,
+        phase_recurrence_count: recurrenceCount
+      };
+      if (typeof effectiveState.recurrence_reset_ts === 'number') {
+        transitionPatch.recurrence_reset_ts = effectiveState.recurrence_reset_ts;
+      }
+
       if (recurrenceResult.action === 'warn') {
-        // Allowed: history lands in PostToolUse, after the write. Emit the advisory now.
-        deferBookkeeping(input, 'transition', newPhase, {
-          phase_history: trimmedHistory,
-          phase_recurrence_count: recurrenceCount
-        });
+        deferBookkeeping(input, 'transition', newPhase, transitionPatch);
 
         process.stderr.write(`[FSM-GUARD] WARN: ${recurrenceResult.message}\n`);
         const warnText = budgetedContext(recurrenceResult.message, input);
         if (warnText) {
           process.stdout.write(JSON.stringify({ additionalContext: warnText }) + '\n');
         }
-        timer.end({ status: 'recurrence_warn', phase: newPhase, count: recurrenceResult.newRecurrenceCount, exit: 0 });
+        timer.end({ status: 'recurrence_warn', phase: newPhase, count: recurrenceResult.entered, exit: 0 });
         process.exit(0);
       }
 
       // action === 'pass' — history lands in PostToolUse, after the write
-      deferBookkeeping(input, 'transition', newPhase, {
-        phase_history: trimmedHistory,
-        phase_recurrence_count: recurrenceCount
-      });
+      deferBookkeeping(input, 'transition', newPhase, transitionPatch);
 
       // Legacy: also check old-style phase_history for fix_loop_stuck signal
-      // (keep backward compat with existing logic that used recentPhases)
-      const recentPhases = trimmedHistory.slice(-6).map(h => h.phase);
+      // (keep backward compat with existing logic that used recentPhases). Counted from the
+      // last reset, like the ladder itself.
+      const recentPhases = [
+        ...countedHistory(effectiveState).map(h => h.phase), newPhase
+      ].slice(-6);
       const currentPhaseCount = recentPhases.filter(p => p === newPhase).length;
 
       if (currentPhaseCount >= 3 && recurrenceResult.action === 'pass') {

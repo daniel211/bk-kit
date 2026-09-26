@@ -40,7 +40,11 @@ while enforcing nothing.
 
 `phase_history[]` and `phase_recurrence_count{}` are appended by `fsm-guard` itself on every
 accepted transition, right after your write lands (the guard never changes the file before the
-write, so a Read → Write pair is not invalidated by it). Do not hand-maintain them; read them.
+write, so a Read → Write pair is not invalidated by it). A refused transition is not recorded.
+Do not hand-maintain them; read them. `fsm-guard` **refuses** any Write/Edit that changes
+`phase_history`, changes `phase_recurrence_count` other than resetting it to `{}`, or sets
+`recurrence_reset_ts` — copy them unchanged or leave them out (a Write that leaves them out
+gets them restored). To move the workflow, change `current_phase` and nothing of the guard's.
 
 ## When to write
 
@@ -73,17 +77,21 @@ Write the opening phase — never delete `.workflow-state.json` to escape a term
 
 ## Batch boundary reset (important)
 
-The recurrence ladder counts how many times a phase is entered. A 4-batch plan legitimately
-enters `coding` four times, which would trip the block at 3. So on **successful batch
-completion only**, reset the counter in the same write that advances the batch:
+The recurrence ladder counts how many times a phase is entered — from `phase_recurrence_count`
+and from the last 5 `phase_history` entries. A 4-batch plan legitimately enters `coding` four
+times, which would trip the block at 3. So on **successful batch completion only**, reset the
+counter in the **same write** that advances the batch:
 
 ```
 Write bk/dev/shared/.workflow-state.json:
   { ...state, "batch": N+1, "phase_recurrence_count": {} }
 ```
 
-Leave `current_phase` unchanged in that write — the guard skips writes that do not change the
-phase, so the reset lands untouched and the next `review → coding` starts from zero.
+Leave `current_phase` unchanged in that write — it is not a transition. When a write both
+advances `batch` and resets the counter, the guard also stamps `recurrence_reset_ts` after it
+lands, and the history window only counts entries after that instant — so the next
+`review → coding` starts from zero on both halves. A reset *without* `batch: N+1` clears the
+count only; the window still sees the loop.
 
 Never reset the counter to escape a fix loop. Progress between batches earns the reset;
 re-entering the same batch does not.
@@ -135,4 +143,6 @@ plans have none). `aborted` hides the whole line. Code: `hooks/lib/workflow-prog
 4. Check `quality_fix_count` / `build_retry_count` before re-entering `coding`
 5. Verify the artifacts the phase requires exist before proceeding
 6. If `workflow_paused: true` — the recurrence hard block fired. Do NOT continue; use
-   AskUserQuestion with the options in the block message.
+   AskUserQuestion with the options in the block message. Resuming needs the user to run
+   `node .claude/cli/bk-health/index.cjs --resume --force`, which clears the pause and resets
+   the ladder (count + history window). Never edit the state file to get past it.
