@@ -99,8 +99,9 @@ function measureDurations(metricsDir, entries) {
  * review-fix-batch-1.md and review-security-batch-2-fix.md and its trace showed
  * bk-code-reviewer -> bk-ios-developer twice. `fix_loop_stuck` only fires when an agent's final
  * message says it is stuck; an ordinary review -> fix cycle says nothing of the kind. And the
- * conductor fixes without moving current_phase back to "coding", so phase history cannot show
- * it either. What does show it is the ORDER of agents in the trace — see countReviewFixCycles.
+ * conductor sometimes fixes without moving current_phase back to "coding" (and when it does,
+ * "coding" is also every batch's start), so phase history cannot show it either. What does show
+ * it is the ORDER of agents in the trace — see countReviewFixCycles.
  */
 function countFixLoops(entries) {
   const stuck = entries.filter((e) =>
@@ -136,6 +137,7 @@ const ADVISORY_AGENTS = new Set([
  * `current_phase: "coding"` before every batch's developers (batch-execution.md § FSM State
  * Per Batch), so an implementer still stamped "review"/"testing" was dispatched without a new
  * batch starting. An empty phase means no workflow state at all — no batches to confuse.
+ * "coding" is not here: it counts only with a same-batch stamp — see answersReview.
  */
 const FIX_PHASES = new Set(['review', 'testing', '']);
 
@@ -147,15 +149,27 @@ const FIX_PHASES = new Set(['review', 'testing', '']);
  * One review answered by several implementers (fix, then re-test) is ONE cycle.
  *
  * Deliberately conservative — it undercounts rather than invent loops:
- *   - The implementer must be in a FIX_PHASE. "coding" is ambiguous: it is both the next
- *     batch's start and the documented loop-back, and a multi-batch plan runs
- *     reviewer -> next batch's developer once per batch boundary. X-Game-Pro's ios-project-init
- *     (3 batches, every review "approve", no fix files) would read 2 loops without this. A
- *     parked terminal phase ("commit" — tracking-background sat there all run) is ambiguous the
- *     same way, and its reviewer -> developer at 07:15 -> 07:20 was batch 2 starting.
+ *   - The implementer must be in a FIX_PHASE, or in "coding" with the batch to disambiguate.
+ *     "coding" alone is ambiguous: it is both the next batch's start and the documented
+ *     loop-back, and a multi-batch plan runs reviewer -> next batch's developer once per batch
+ *     boundary. X-Game-Pro's ios-project-init (3 batches, every review "approve", no fix files)
+ *     would read 2 loops without this. A parked terminal phase ("commit" — tracking-background
+ *     sat there all run) is ambiguous the same way, and its reviewer -> developer at
+ *     07:15 -> 07:20 was batch 2 starting.
  *   - When both rows carry a `batch` number and they differ, it is batch progress, whatever
- *     the phase says. The batch only ever vetoes a loop: the conductor writes it by hand, and
- *     one that never advances it must not turn every boundary into a fix.
+ *     the phase says.
+ *   - When both rows carry a `batch` number and it is the SAME batch, a "coding" implementer is
+ *     the loop-back, not a batch start. 0.12.2 left "coding" out entirely, which missed the
+ *     main fix path: batch-execution.md § FSM State Per Batch documents "review fix loop →
+ *     coding". X-Game-Pro on 0.12.3, quick-session-create: security-auditor + code-reviewer
+ *     (review, batch 2) -> bk-unit-test-agent (coding, batch 2, "Fix loop hoàn tất") ->
+ *     bk-ios-developer (coding, batch 3) — the summary read fix_loops 0 for a real loop. A
+ *     batch start cannot look like this: the boundary write is `batch: N+1` together with the
+ *     recurrence reset (workflow-state.md), so the next batch's developer carries N+1. The
+ *     remaining risk is a conductor that never advances `batch` — every boundary would then
+ *     read as a loop — but that conductor also trips the phase-recurrence block on its third
+ *     `coding`, so it does not get far. Rows without a batch on either side (pre-0.12.2 traces,
+ *     workflows the conductor never stamped) keep the old rule: "coding" is not counted.
  *   - A reviewer followed by bk-planner (bk-plan's critic pass) is not a code fix: the planner
  *     is not an implementer, so it ends the cycle uncounted.
  *   - Test-failure fixes (bk-unit-test-agent -> bk-debugger -> re-test) are not counted: a
@@ -191,11 +205,18 @@ function countReviewFixCycles(entries) {
   return cycles;
 }
 
-/** True when `impl` is a fix for `review` rather than the next batch starting. */
+/**
+ * True when `impl` is a fix for `review` rather than the next batch starting. The batch is only
+ * trusted when BOTH rows carry one; a single-sided stamp falls back to the phase rule.
+ */
 function answersReview(review, impl) {
-  if (Number.isInteger(review.batch) && Number.isInteger(impl.batch)
-    && review.batch !== impl.batch) return false;
-  return FIX_PHASES.has(String(impl.phase || ''));
+  const phase = String(impl.phase || '');
+  if (Number.isInteger(review.batch) && Number.isInteger(impl.batch)) {
+    if (review.batch !== impl.batch) return false;
+    // Same batch: "coding" is the documented review -> fix loop-back, not a batch start.
+    if (phase === 'coding') return true;
+  }
+  return FIX_PHASES.has(phase);
 }
 
 /**

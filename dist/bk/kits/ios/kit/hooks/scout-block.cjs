@@ -31,9 +31,10 @@ try {
         process.exit(0);
       }
 
-      // Secret scanning for Bash commands with output redirects (CR-P1-03)
       const { getToolName } = require('./lib/hook-event-accessor.cjs');
       const toolName = getToolName(data);
+
+      // Secret scanning for Bash commands with output redirects (CR-P1-03)
       if (toolName === 'Bash' && subject.length > 50) {
         const hasRedirect = /[>|]|tee\s/.test(subject);
         const hasEcho = /\b(echo|printf|cat\s*<<)\b/.test(subject);
@@ -56,7 +57,9 @@ try {
         }
       }
 
-      const result = checkScout(subject);
+      // toolName lets the checker ignore exclusions (`-not -path "*/node_modules/*"`,
+      // `grep -v node_modules`, a `!`-negated glob) — only positive references block.
+      const result = checkScout(subject, { toolName });
 
       if (result) {
         process.stderr.write(

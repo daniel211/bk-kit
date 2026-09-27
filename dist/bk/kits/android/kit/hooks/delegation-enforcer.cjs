@@ -40,13 +40,53 @@ try {
     if (out) process.stdout.write(JSON.stringify({ additionalContext: out }) + '\n');
   }
 
+  // Agents whose output changes with the platform: the three developers, the unit/device test
+  // agents (test command, framework, report name are per platform) and bk-debugger (build/test
+  // commands, log locations). Reviewers and auditors get their platform checklist baked in at
+  // build time (agents/_platform-sections/), and git/docs/PM agents are platform-agnostic.
+  const PLATFORM_AGENTS = new Set([
+    'bk-ios-developer', 'bk-android-developer', 'bk-flutter-developer',
+    'bk-unit-test-agent', 'bk-device-test-agent', 'bk-debugger'
+  ]);
+
+  /**
+   * Whether the dispatch prompt itself has to name the platform. Only for PLATFORM_AGENTS, and
+   * only when `platform` could not be resolved (BK_PLATFORM → workflow state → platform-context).
+   * When it resolved, subagent-init writes "- Platform: <platform>" into every subagent's
+   * context at SubagentStart, so a prompt that omits it loses nothing.
+   */
+  function promptNeedsPlatform(agentType, platform) {
+    return platform === 'unknown' && PLATFORM_AGENTS.has(agentType);
+  }
+
+  // Agents that edit source files. "Files:" is what parallel-safety reads to take a lock, and
+  // only a writer's lock prevents a conflict: a read-only agent (disallowedTools contains Edit —
+  // reviewers, auditors, bk-debugger) takes a read lock that never blocks another reader, and
+  // the Write-only report agents (researcher, planner, test-architect, brainstormer) touch only
+  // their own report. bk-project-manager and bk-docs-writer can Edit, but only plans and docs,
+  // never code another agent is working on; bk-git-manager commits rather than edits.
+  // X-Game-Pro, 0.12.3, one session: 18 "Recommended sections missing: Platform:, Files:" for
+  // bk-project-manager, bk-docs-writer, bk-code-reviewer, bk-git-manager and the rest.
+  const CODE_WRITING_AGENTS = new Set([
+    'bk-ios-developer', 'bk-android-developer', 'bk-flutter-developer',
+    'bk-unit-test-agent', 'bk-device-test-agent', 'bk-code-simplifier'
+  ]);
+
   // --- Task 3.1A: Required sections validation for dispatch prompts ---
   const REQUIRED_PROMPT_SECTIONS = ['Task:', 'Output:'];
-  const RECOMMENDED_PROMPT_SECTIONS = ['Platform:', 'Files:'];
 
-  function validateDispatchPrompt(prompt) {
+  /** Recommended sections that are worth asking this agent's prompt for (see the sets above). */
+  function recommendedSectionsFor(agentType, platform) {
+    const sections = [];
+    if (promptNeedsPlatform(agentType, platform)) sections.push('Platform:');
+    if (CODE_WRITING_AGENTS.has(agentType)) sections.push('Files:');
+    return sections;
+  }
+
+  function validateDispatchPrompt(prompt, agentType, platform) {
     const missing = REQUIRED_PROMPT_SECTIONS.filter(s => !prompt.includes(s));
-    const missingRecommended = RECOMMENDED_PROMPT_SECTIONS.filter(s => !prompt.includes(s));
+    const missingRecommended = recommendedSectionsFor(agentType, platform)
+      .filter(s => !prompt.includes(s));
 
     return {
       valid: missing.length === 0,
@@ -180,22 +220,10 @@ try {
       // bk-performance-analyzer (2), bk-docs-writer, bk-planner. A warning on every dispatch is
       // one the conductor learns to skip, including the times it is right.
       //
-      // Two cuts:
-      //   1. Only PLATFORM_AGENTS — the ones whose output changes with the platform: the three
-      //      developers, the unit/device test agents (test command, framework, report name are
-      //      per platform) and bk-debugger (build/test commands, log locations). Reviewers and
-      //      auditors get their platform checklist baked in at build time
-      //      (agents/_platform-sections/), and git/docs/PM agents are platform-agnostic.
-      //   2. Only when `platform` above is still 'unknown'. When it resolved — BK_PLATFORM,
-      //      workflow state's `platform`, or platform-context.json — subagent-init writes
-      //      "- Platform: <platform>" into every subagent's context at SubagentStart, so a
-      //      prompt that omits it loses nothing. Warning then is noise by construction.
-      const PLATFORM_AGENTS = new Set([
-        'bk-ios-developer', 'bk-android-developer', 'bk-flutter-developer',
-        'bk-unit-test-agent', 'bk-device-test-agent', 'bk-debugger'
-      ]);
-      if (prompt && platform === 'unknown' && PLATFORM_AGENTS.has(agentType)
-        && !/platform/i.test(prompt)) {
+      // Two cuts, both in promptNeedsPlatform(): only PLATFORM_AGENTS, and only when `platform`
+      // above is still 'unknown' — otherwise subagent-init already supplies it and the warning
+      // is noise by construction. The "Platform:" recommendation below follows the same rule.
+      if (prompt && promptNeedsPlatform(agentType, platform) && !/platform/i.test(prompt)) {
         warnings.push('missing_platform');
       }
       if (prompt && !/output/i.test(prompt)) warnings.push('missing_output_path');
@@ -212,7 +240,7 @@ try {
 
       // --- Task 3.1A+B: Validate required/recommended sections, block if critical ---
       if (prompt) {
-        const validation = validateDispatchPrompt(prompt);
+        const validation = validateDispatchPrompt(prompt, agentType, platform);
         if (!validation.valid && validation.missing.length > 1) {
           // More than 1 required section missing → block dispatch (exit 2)
           process.stderr.write(
@@ -237,8 +265,10 @@ try {
           // Exactly 1 required section missing → advisory warning
           contextParts.push(`[DISPATCH-WARN] ${validation.message}`);
         }
+        // Already filtered to what this agent needs, so an empty list means no advisory at all.
         if (validation.missingRecommended.length > 0) {
-          contextParts.push(`[DISPATCH-ADVISORY] Recommended sections missing: ${validation.missingRecommended.join(', ')}. Consider adding Platform: and Files: sections.`);
+          const names = validation.missingRecommended.join(', ');
+          contextParts.push(`[DISPATCH-ADVISORY] Recommended sections missing: ${names}. Consider adding them.`);
         }
       }
 
