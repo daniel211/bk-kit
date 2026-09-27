@@ -1,7 +1,4 @@
----
-paths:
-  - bk/dev/**
----
+<!-- Always-on for the main session; kit agents skip it (omitClaudeMd). See docs/kit-dev/add-rule.md. -->
 
 # Skill Chain Registry
 

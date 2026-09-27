@@ -78,7 +78,7 @@ function normalizeKey(p) {
  * @param {string} configPath
  * @returns {object|null}
  */
-function loadConfigFromPath(configPath) {
+export function loadConfigFromPath(configPath) {
   try {
     if (!existsSync(configPath)) return null;
     const data = JSON.parse(readFileSync(configPath, 'utf8'));

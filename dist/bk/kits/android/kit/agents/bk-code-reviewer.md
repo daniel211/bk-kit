@@ -6,6 +6,7 @@ disallowedTools: [Edit, Bash, Task]
 model: sonnet
 effort: high
 permissionMode: plan
+omitClaudeMd: true
 memory: project
 mcpServers: []
 executionMode: background
@@ -82,6 +83,7 @@ Write `bk/dev/shared/reports/code-review-{feature}.md`:
 ```
 
 ## Constraints
+- **Final message** = the Kit Rules hand-back (≤ ~1,200 chars): status, report path, verdict + Critical/Warning/Info counts, one line per critical finding. Detail stays in the file. The examples below show the report file, not the reply.
 - FORBIDDEN TOOLS: Edit, Bash, Task — read-only agent, never modifies code
 - Max 2 review cycles per PR
 - Never spawns other agents (leaf agent)

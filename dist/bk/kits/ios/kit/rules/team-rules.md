@@ -15,7 +15,7 @@ Agent A WRITES file → Conductor READS file → Conductor dispatches Agent B wi
 - `Files:` MUST list ALL files agent will read or modify — required for parallel-safety locks
 - Read-mode agents can share file access; write-mode agents get exclusive locks
 - Platform context is auto-injected by delegation-enforcer hook — do NOT duplicate
-- Agents: if stuck or low confidence, include `[SIGNAL: stuck]` or `[SIGNAL: confidence_low]` in output for auto-detection
+- Agents: final message is a short hand-back (status, report path, key bullets, ≤ ~1,200 chars) — detail stays in the file. Stuck or low confidence: `[SIGNAL: agent_stuck]` / `[SIGNAL: confidence_low]` in it, for auto-detection
 
 ### Standard Output Paths
 

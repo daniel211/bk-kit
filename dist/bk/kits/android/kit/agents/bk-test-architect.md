@@ -6,6 +6,7 @@ disallowedTools: [Bash, Task]
 model: sonnet
 effort: medium
 permissionMode: plan
+omitClaudeMd: true
 memory: project
 mcpServers: []
 executionMode: background
@@ -83,6 +84,7 @@ Write `bk/dev/shared/reports/test-strategy-{feature}.md`:
 ```
 
 ## Constraints
+- **Final message** = the Kit Rules hand-back (≤ ~1,200 chars): status, report path, coverage targets at risk, gaps that block dispatch. Detail stays in the file. The examples below show the report file, not the reply.
 - FORBIDDEN TOOLS: Bash, Task — planning agent, never executes tests or spawns agents
 - Never reduce test scope without explicitly flagging the gap
 - Every test case maps to a REQ-xxx — no orphan tests

@@ -46,16 +46,38 @@ Do not hand-maintain them; read them. `fsm-guard` **refuses** any Write/Edit tha
 `recurrence_reset_ts` — copy them unchanged or leave them out (a Write that leaves them out
 gets them restored). To move the workflow, change `current_phase` and nothing of the guard's.
 
+## How to write a phase change — the CLI first
+
+```
+node .claude/cli/bk-health/index.cjs --set-phase <phase> [--inc quality_fix_count] [--field reviewer_agent_id=<id>]
+node .claude/cli/bk-health/index.cjs --batch next          # batch boundary: batch N+1 + counts reset
+```
+
+One Bash call, no Read of the state file. It runs `fsm-guard`'s own decision
+(`hooks/lib/fsm-phase-transition.cjs`) — same transition table, new-episode rule, recurrence
+ladder, `phase_history` / count bookkeeping and batch-boundary `recurrence_reset_ts` — and
+writes the phase with its bookkeeping in one locked write. It prints one line (plus a
+`[FSM-RECURRENCE-WARN]` / `[REACTIVE-SIGNAL]` line when the ladder has something to say). On a
+refusal it prints the message `fsm-guard` would give, changes nothing (a HARD BLOCK writes only
+the pause) and exits 2 — handle it exactly as a refused Edit. `--inc` / `--field` carry the
+"Also write" fields below; hook-owned fields passed through `--field` are refused.
+
+Why: Read + Edit of `current_phase` cost the X-Game-Pro conductor 47 Reads (~24k tokens) over 6
+sessions, and the Edit often failed with "File has been modified since read" because hooks
+write the same file. The Edit path still works and is still guarded — use it for the
+multi-field writes (Code-Step-1 opening a workflow) or when the CLI is unavailable. The CLI never
+applies the recurrence override env; in a session started with it, Edit instead.
+
 ## When to write
 
 | Workflow point | `current_phase` | Also write |
 |----------------|-----------------|-----------|
-| Code-Step-1, after plan.md parsed | `plan` | `workflow_type`, `feature`, `plan_dir`, `platform`, `complexity_tier`, `total_batches` |
+| Code-Step-1, after plan.md parsed (full Write) | `plan` | `workflow_type`, `feature`, `plan_dir`, `platform`, `complexity_tier`, `total_batches` |
 | Code-Step-3a, first dispatch of a batch | `coding` | `batch`, `dev_agent_id` |
 | Code-Step-3b, before test dispatch | `testing` | — |
 | Code-Step-3c, before review dispatch | `review` | `reviewer_agent_id` |
-| Code-Step-3c, critical findings → re-implement | `coding` | `quality_fix_count += 1` |
-| Code-Step-3d, batch complete → next batch | *(unchanged)* | `batch += 1`, `phase_recurrence_count: {}` |
+| Code-Step-3c, critical findings → re-implement | `coding` | `quality_fix_count += 1` (`--inc quality_fix_count`) |
+| Code-Step-3d, batch complete → next batch | *(unchanged)* | `batch += 1`, `phase_recurrence_count: {}` (`--batch next`) |
 | Code-Step-4, before bk-git-manager | `commit` | — |
 | Fix loop / build retry limit exceeded | `escalated` | reason + options presented to user |
 
@@ -83,9 +105,10 @@ times, which would trip the block at 3. So on **successful batch completion only
 counter in the **same write** that advances the batch:
 
 ```
-Write bk/dev/shared/.workflow-state.json:
-  { ...state, "batch": N+1, "phase_recurrence_count": {} }
+node .claude/cli/bk-health/index.cjs --batch next
 ```
+
+(Edit fallback: `{ ...state, "batch": N+1, "phase_recurrence_count": {} }` in one write.)
 
 Leave `current_phase` unchanged in that write — it is not a transition. When a write both
 advances `batch` and resets the counter, the guard also stamps `recurrence_reset_ts` after it

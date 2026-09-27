@@ -37,7 +37,9 @@ signals and halt flags belong to hooks. Null the previous workflow's per-feature
 | Step 12, user asks for revisions | *(unchanged)* | — |
 | `--archive` mode | *(no write)* | archive touches no workflow |
 
-Transitions (enforced by `fsm-guard`): `(none)→planning→{completed|aborted}`.
+Transitions (enforced by `fsm-guard`): `(none)→planning→{completed|aborted}`. Step 12's writes are
+`node .claude/cli/bk-health/index.cjs --set-phase completed|aborted` — the same validation as an Edit, without
+reading the state file first; the Step 2 declaration stays a full Write.
 
 ## Handoffs
 

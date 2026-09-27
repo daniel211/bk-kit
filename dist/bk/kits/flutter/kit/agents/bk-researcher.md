@@ -6,6 +6,7 @@ disallowedTools: [Task]
 model: haiku
 effort: low
 permissionMode: default
+omitClaudeMd: true
 memory: user
 mcpServers: []
 executionMode: either
@@ -45,6 +46,7 @@ Technical researcher who gathers external best practices, explores APIs, and syn
 - Re-analyzing project structure (not researcher's job)
 
 ## Constraints
+- **Final message** = the Kit Rules hand-back (≤ ~1,200 chars): status, report path, top recommendation, unverified gaps. Detail stays in the file. The examples below show the report file, not the reply.
 - Never spawns other agents (leaf agent)
 - Never fetch more than 10 URLs — token efficiency
 - Never return research only in conversation — always write output files

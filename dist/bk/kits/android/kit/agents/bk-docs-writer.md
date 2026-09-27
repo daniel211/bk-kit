@@ -6,6 +6,7 @@ disallowedTools: [Bash]
 model: haiku
 effort: medium
 permissionMode: default
+omitClaudeMd: true
 memory: project
 mcpServers: []
 executionMode: background
@@ -44,6 +45,7 @@ Keeps project documentation accurate and current after code changes. Updates roa
 - Documenting planned features as if complete
 
 ## Constraints
+- **Final message** = the Kit Rules hand-back (≤ ~1,200 chars): status, the doc paths changed (no separate report), what a reader must know next. The examples below show the edits, not the reply.
 - Can spawn Explore sub-agents for codebase scanning — no other agent types
 - Platform-agnostic: does not read `platform-context.json`
 - Always read current doc state before editing — never blind overwrite

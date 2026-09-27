@@ -6,6 +6,7 @@ disallowedTools: [Bash, Task]
 model: haiku
 effort: low
 permissionMode: plan
+omitClaudeMd: true
 memory: project
 mcpServers: []
 executionMode: background
@@ -46,6 +47,7 @@ Cross-feature coordinator reading plans, reports, and artifacts to synthesize pr
   sections, and a background agent's truncation is not noticed until much later
 
 ## Constraints
+- **Final message** = the Kit Rules hand-back (≤ ~1,200 chars): status, report path, blockers and the next step. Detail stays in the file. The examples below show the report file, not the reply.
 - FORBIDDEN TOOLS: Bash, Task — coordination and reporting only, never modifies code
 - Write scope: `bk/dev/**` and `bk/docs/**` only. Never touches implementation files,
   tests, or config — report the need instead.

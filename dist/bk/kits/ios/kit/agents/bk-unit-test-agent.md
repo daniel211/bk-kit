@@ -6,6 +6,7 @@ tools: [Read, Edit, Write, Bash, Glob, Grep, TaskCreate, TaskGet, TaskUpdate, Ta
 model: haiku
 effort: medium
 permissionMode: default
+omitClaudeMd: true
 memory: project
 mcpServers: []
 executionMode: background
@@ -79,6 +80,7 @@ Write `bk/dev/shared/reports/unit-test-{platform}-{feature}.md`:
 ```
 
 ## Constraints
+- **Final message** = the Kit Rules hand-back (≤ ~1,200 chars): status, report path, pass/fail counts, failing test names, build result. Detail stays in the file. The examples below show the report file, not the reply.
 - execution_mode: write_and_run — always execute tests after writing, never write-only
 - >80% target for business logic; test error scenarios and edge cases
 - Use real fakes / in-memory implementations, not excessive mocking

@@ -127,6 +127,19 @@ try {
         reapStaleQueues(cwd, { currentSessionId: lintSessionId });
       } catch { /* fail-open — reaping is housekeeping, not a precondition */ }
 
+      // prompt-context-inject injects its workflow block only when it changed since this session
+      // last saw it (lib/prompt-inject-state.cjs). `clear` and `compact` take the earlier copy
+      // out of the context, so "unchanged" no longer means "already seen": forget it, and the
+      // next prompt gets the full block and reminders again. Other sessions' files idle for a
+      // day are swept here, like the lint queues above.
+      try {
+        const promptInject = require('./lib/prompt-inject-state.cjs');
+        if (lintSessionId && (source === 'clear' || source === 'compact')) {
+          promptInject.resetPromptInjectState(cwd, lintSessionId);
+        }
+        promptInject.reapStalePromptInjectStates(cwd, { currentSessionId: lintSessionId });
+      } catch { /* fail-open — housekeeping, not a precondition */ }
+
       // bk/docs/foundation/, where /bk-bootstrap writes — not <root>/docs/foundation/, which
       // made every session in a bootstrapped repo report "Foundation: no" (lib/foundation-docs.cjs).
       const hasFoundation = hasFoundationDocs(cwd);

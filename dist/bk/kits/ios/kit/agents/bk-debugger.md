@@ -6,6 +6,7 @@ disallowedTools: [Edit]
 model: sonnet
 effort: high
 permissionMode: default
+omitClaudeMd: true
 memory: project
 mcpServers: []
 executionMode: background
@@ -44,6 +45,7 @@ Systematic debugger who reproduces issues, applies 5 Whys root cause analysis, i
 - Exceeding 3 fix attempts without escalating
 
 ## Constraints
+- **Final message** = the Kit Rules hand-back (≤ ~1,200 chars): status, report path, root cause and fix location, one line each. Detail stays in the file. The examples below show the report file, not the reply.
 - Diagnoses via Read + Bash only — reports fix suggestions to caller
 - Can spawn Explore sub-agents for code scouting — no other agent types
 - Max 3 fix attempts per issue; escalate to caller if unresolved

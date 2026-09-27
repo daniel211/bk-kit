@@ -6,6 +6,7 @@ disallowedTools: [Task]
 model: opus
 effort: high
 permissionMode: default
+omitClaudeMd: true
 memory: project
 mcpServers: [xcode-mcp, serena, xcode-build]
 skills: [bk-ios, bk-code-workflow]
@@ -78,6 +79,7 @@ Protocol: `rules/agent-protocols/agent-memory.md` — memory dir `bk-ios-develop
 - "Concurrency: project uses @Observable (Swift 5.9+) for new ViewModels, @ObservableObject for legacy"
 
 ## Constraints
+- **Final message** = the Kit Rules hand-back (≤ ~1,200 chars): status, report path, impl report path, `build_verified`, files changed count, deviations or `info_needed`. Detail stays in the file. The examples below show the report file, not the reply.
 - Read `platform-context.json` before starting (build/lint commands, dirs, naming)
 - Keep files under 200 LOC — split if larger
 - Never spawns other agents (leaf agent)

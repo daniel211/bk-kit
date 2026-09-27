@@ -112,8 +112,8 @@ Load: `references/autodream-integration.md`
     — Skip if: < 3 sub-tasks
 
 12. **Present** — write `.plan-state.json`, show the plan summary, ask approve / revise / cancel.
-    On approve: `current_phase: "completed"`, then output `/bk-code {plan-dir}/plan.md`.
-    On cancel: `current_phase: "aborted"`.
+    On approve: `node .claude/cli/bk-health/index.cjs --set-phase completed`, then output `/bk-code {plan-dir}/plan.md`.
+    On cancel: `--set-phase aborted`. (Edit of `current_phase` is the fallback.)
 
 ## Output Contract
 

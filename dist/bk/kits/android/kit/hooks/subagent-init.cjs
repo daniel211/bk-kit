@@ -12,6 +12,8 @@ try {
   const path = require('path');
   const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');
   const { foundationDir, hasFoundationDocs, extractSections, FOUNDATION_REL } = require('./lib/foundation-docs.cjs');
+  const { agentContextMode, buildSubagentRuleDigest } = require('./lib/subagent-rule-digest.cjs');
+  const { buildSubagentUserContext } = require('./lib/subagent-user-context.cjs');
 
   async function main() {
     try {
@@ -94,12 +96,27 @@ try {
       if (hasLSP) lines.push(`- LSP: available (use for symbol navigation, references)`);
       lines.push(``);
 
-      lines.push(`## Rules`);
-      lines.push(`- Follow ${platform} naming conventions`);
-      lines.push(`- Use localized string keys, never hardcoded UI text`);
-      lines.push(`- Run lint after editing code files`);
-      lines.push(`- File size < 200 LOC per file`);
-      lines.push(`- Verify implementation covers reqs from phase YAML (if declared)`);
+      // Kit agents set `omitClaudeMd: true`, so they no longer load CLAUDE.md or the always-on
+      // rules (~58k chars per subagent in the X-Game-Pro field sessions, ~10.5k tokens of it
+      // conductor procedure). They get the subagent-facing part here instead — per-rule
+      // decisions and the field numbers are in lib/subagent-rule-digest.cjs — plus what the
+      // flag also dropped that is the USER's: their CLAUDE.md files and the auto-memory index
+      // (lib/subagent-user-context.cjs, capped). With `.bk.json` subagents.fullContext the kit
+      // agents are installed without the flag and load all of that natively, so they get the
+      // digest alone. Other agents (Explore, general-purpose, user agents without the flag)
+      // still load every rule, so they keep the short generic block.
+      const contextMode = agentContextMode(projectRoot, agentType);
+      if (contextMode === 'omit' || contextMode === 'full') {
+        lines.push(...buildSubagentRuleDigest({ agentType, platform, fullContext: contextMode === 'full' }));
+        if (contextMode === 'omit') lines.push(...buildSubagentUserContext({ projectRoot }));
+      } else {
+        lines.push(`## Rules`);
+        lines.push(`- Follow ${platform} naming conventions`);
+        lines.push(`- Use localized string keys, never hardcoded UI text`);
+        lines.push(`- Run lint after editing code files`);
+        lines.push(`- File size < 200 LOC per file`);
+        lines.push(`- Verify implementation covers reqs from phase YAML (if declared)`);
+      }
 
       // Inject foundation context for eligible agents (Task 3.3)
       const foundationCtx = await injectFoundationContext(agentType);

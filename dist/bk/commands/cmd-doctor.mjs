@@ -13,6 +13,8 @@ import { reportHookPerf } from '../lib/hook-perf-measure.mjs';
 import { packageRootFrom } from '../lib/package-layout.mjs';
 import { addKitOption, resolveKitOrExit } from '../lib/kit-resolver.mjs';
 import { detectDrift, formatDriftList, readDoctorIgnore } from '../lib/kit-drift.mjs';
+import { OMIT_CLAUDE_MD_MIN_VERSION, compareVersions, detectClaudeVersion } from '../lib/claude-code-version.mjs';
+import { agentsOutOfMode, readSubagentContextMode } from '../lib/subagent-context-mode.mjs';
 import {
   appendIgnoreCommand, missingIgnoreEntries, trackedSessionState, untrackCommand,
 } from '../lib/session-state-gitignore.mjs';
@@ -348,6 +350,44 @@ export async function runDoctor(targetDir, platform) {
     const result = await reportDesignEngine(targetDir);
     return result.status === 'ok' ? true : 'warn';
   });
+
+  // 9b. Claude Code new enough for `omitClaudeMd` (see lib/claude-code-version.mjs). Older
+  //     versions still work — kit subagents just keep loading CLAUDE.md and every always-on
+  //     rule — so this is a warning. An undetectable version is not reported at all: doctor
+  //     often runs from a shell or CI where `claude` is not on PATH.
+  //     Not asked in full subagent context mode: no kit agent carries the flag then.
+  const contextMode = readSubagentContextMode(targetDir);
+  const claudeVersion = contextMode === 'lean' ? detectClaudeVersion() : null;
+  if (claudeVersion) {
+    check(`Claude Code ${claudeVersion} skips conductor rules in kit subagents`, () => {
+      if (compareVersions(claudeVersion, OMIT_CLAUDE_MD_MIN_VERSION) >= 0) return true;
+      console.log(`    Kit agents set omitClaudeMd, which needs Claude Code >= ${OMIT_CLAUDE_MD_MIN_VERSION}.`);
+      console.log('    Until then every subagent also loads CLAUDE.md and all always-on rules (~14k tokens');
+      console.log('    per request). Update with: claude update');
+      return 'warn';
+    });
+  }
+
+  // 9c. Which subagent context mode is active, and whether the installed agents follow it.
+  //     `.bk.json` subagents.fullContext is applied to the agent frontmatter by init/update
+  //     (lib/subagent-context-mode.mjs), so a toggled setting does nothing until `bk update`
+  //     runs — and a kit agent kept through a conflict can disagree with it. A warning: either
+  //     mode works, the agents just load what their own frontmatter says.
+  if (existsSync(versionPath)) {
+    const recorded = JSON.parse(readFileSync(versionPath, 'utf8')).files || {};
+    const { total, mismatched } = agentsOutOfMode(claudeDir, recorded, contextMode);
+    const label = contextMode === 'full'
+      ? 'Subagent context: full (.bk.json subagents.fullContext) — kit agents load CLAUDE.md, rules and auto memory'
+      : 'Subagent context: lean — kit agents get the rule digest + your CLAUDE.md/auto memory (capped) from subagent-init';
+    check(label, () => {
+      if (mismatched.length === 0) return true;
+      const want = contextMode === 'full' ? 'still set omitClaudeMd: true' : 'lack omitClaudeMd: true';
+      console.log(`    ${mismatched.length} of ${total} kit agent(s) ${want}:`);
+      for (const line of formatDriftList(mismatched)) console.log(`      ${line}`);
+      console.log(`    Apply the mode with: bk update --kit ${platform}`);
+      return 'warn';
+    });
+  }
 
   // 10. Per-machine session state kept out of git — see lib/session-state-gitignore.mjs for the
   //     field case (X-Game-Pro, commit 75e97db) that no check here caught. Tracked state is an

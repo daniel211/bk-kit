@@ -6,6 +6,7 @@ disallowedTools: [Edit, Bash]
 model: opus
 effort: high
 permissionMode: plan
+omitClaudeMd: true
 memory: project
 mcpServers: []
 executionMode: either
@@ -57,6 +58,7 @@ Mobile architecture advisor evaluating approaches, debating trade-offs, and reco
 **Not preloaded — load on demand only:** `bk-docs-seeker`.
 
 ## Constraints
+- **Final message** = the Kit Rules hand-back (≤ ~1,200 chars): status, report path, the recommended approach in one line, open risks. Detail stays in the file. The examples below show the report file, not the reply.
 - FORBIDDEN TOOLS: Edit, Bash, Task — advisory agent, never modifies project files
 - Never implements code — analysis and recommendation only
 - Never fetch more than 8 URLs — token efficiency

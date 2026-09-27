@@ -15,7 +15,8 @@ paths:
    recorded on the task.
 3. **Do the work** allowed by your role class (below) — nothing outside it.
 4. **When done:** `TaskUpdate(status: "completed")`, then `SendMessage` your summary to the
-   lead. Your agent section says what that summary must contain.
+   lead. Your agent section says what that summary must contain; keep it the same short
+   hand-back as a final message (status, report path, key bullets) — the lead reads the file.
 5. **On `shutdown_request`:** approve via `SendMessage(type: "shutdown_response")` unless you
    are mid-critical-operation (a running build, an in-flight commit, a partial file write).
 6. **Peer coordination:** use `SendMessage(type: "message")` when another teammate needs to

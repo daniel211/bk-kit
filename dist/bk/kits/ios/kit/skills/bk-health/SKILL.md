@@ -25,7 +25,8 @@ drift. Output: `bk/docs/health-report.md`.
 
 `bk-health` also fronts the harness monitor: `node .claude/cli/bk-health/index.cjs` with
 `--dashboard` (`--last 7d`, `--json`), `--timeline`, `--ashby` (silent-sensor check), `--resume`
-and `--reset-counts` (`--agent`, `--force`). Durations: `24h`, `7d`, `30m`.
+and `--reset-counts` (`--agent`, `--force`), `--set-phase <phase>` / `--batch next` (FSM-validated
+phase change for the conductor — see bk-code `references/workflow-state.md`). Durations: `24h`, `7d`, `30m`.
 Flags, the `.bk-metrics/*.jsonl` files each one reads, and the source path:
 `references/harness-monitoring.md`
 

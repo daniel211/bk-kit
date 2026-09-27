@@ -1,8 +1,10 @@
 ---
 paths:
-  - bk/dev/**
+  - .bk-dispatch-queue.json
   - .autodream/**
 ---
+
+<!-- Scoped to the queue file, not bk/dev/**. See docs/kit-dev/add-rule.md. -->
 
 # Dispatch Integration Guide
 

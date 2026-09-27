@@ -5,12 +5,15 @@
  * Auto-updates safe files, prompts for conflicts.
  */
 
-import { existsSync, readFileSync, cpSync, writeFileSync, mkdirSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { hashFile } from '../lib/hash-tracker.mjs';
 import { buildPackageInventory, kitLayout, packageRootFrom, sourceFor } from '../lib/package-layout.mjs';
 import { addKitOption, resolveKitOrExit } from '../lib/kit-resolver.mjs';
+import {
+  installFileForMode, inventoryForMode, readSubagentContextMode, reconcileModeOnly,
+} from '../lib/subagent-context-mode.mjs';
 import {
   gitPrefix, trackedSessionState, untrackCommand, writeGitignoreEntries,
 } from '../lib/session-state-gitignore.mjs';
@@ -85,6 +88,126 @@ async function promptConflict(filePath, strategy = 'prompt') {
 }
 
 /**
+ * Bring every file in .claude/ to the package version, file by file, from three hashes
+ * (classifyChange). Mutates `installedFiles` into the record to write back.
+ *
+ * `mode` is the `.bk.json` subagent context mode: in 'full' a kit agent installs without its
+ * `omitClaudeMd: true` line, and its package hash is taken of THAT content, so recorded, disk
+ * and package hashes stay comparable and a toggle never reads as a local edit (see
+ * lib/subagent-context-mode.mjs).
+ *
+ * @param {{ claudeDir: string, kitDir: string, packageRoot: string,
+ *           packageFiles: Record<string,string>, installedFiles: Record<string,string>,
+ *           mode?: 'lean'|'full', conflict?: 'prompt'|'keep'|'take' }} opts
+ * @returns {Promise<{ updated: number, added: number, skipped: number, conflicts: number }>}
+ */
+export async function syncKitFiles({
+  claudeDir, kitDir, packageRoot, packageFiles, installedFiles, mode = 'lean', conflict = 'prompt',
+}) {
+  const sourceOf = (relPath) => sourceFor(relPath, { kitDir, packageRoot });
+  const kitFiles = inventoryForMode(packageFiles, sourceOf, mode);
+  const install = (relPath, targetPath) => installFileForMode(relPath, sourceOf(relPath), targetPath, mode);
+
+  // Classify all files
+  const allPaths = new Set([...Object.keys(kitFiles), ...Object.keys(installedFiles)]);
+  let updated = 0;
+  let added = 0;
+  let skipped = 0;
+  let conflicts = 0;
+  let skipAll = false;
+
+  for (const relPath of allPaths) {
+    const kitHash = kitFiles[relPath];
+    const installHash = installedFiles[relPath];
+    const targetPath = join(claudeDir, relPath);
+    const currentHash = existsSync(targetPath) ? hashFile(targetPath) : undefined;
+
+    const state = classifyChange(kitHash, installHash, currentHash);
+
+    switch (state) {
+      case 'unchanged':
+        // No file to copy, but the record may be the stale one that made this look like a
+        // conflict (see classifyChange). Refreshing it here is what stops the phantom
+        // conflict from coming back on every subsequent update; it is a no-op whenever the
+        // recorded hash already agrees with the package.
+        installedFiles[relPath] = kitHash;
+        break;
+
+      case 'new': {
+        if (existsSync(sourceOf(relPath))) {
+          install(relPath, targetPath);
+          installedFiles[relPath] = kitHash;
+          added++;
+          console.log(`  + ${relPath} (new)`);
+        }
+        break;
+      }
+
+      case 'safe_update': {
+        if (existsSync(sourceOf(relPath))) {
+          install(relPath, targetPath);
+          installedFiles[relPath] = kitHash;
+          updated++;
+          console.log(`  ↑ ${relPath} (updated)`);
+        }
+        break;
+      }
+
+      case 'conflict': {
+        // A kit agent the user edited, whose only package-side change is the subagent context
+        // mode: toggle the flag line in their copy instead of asking them to choose between
+        // their edits and the mode.
+        const modeHash = reconcileModeOnly({
+          relPath, srcPath: sourceOf(relPath), targetPath, installHash, mode,
+        });
+        if (modeHash) {
+          installedFiles[relPath] = modeHash;
+          updated++;
+          console.log(`  ↻ ${relPath} (kept your edits; omitClaudeMd ${mode === 'full' ? 'removed' : 'restored'} for subagent context "${mode}")`);
+          break;
+        }
+        if (skipAll) {
+          skipped++;
+          console.log(`  ⊘ ${relPath} (skipped)`);
+          break;
+        }
+
+        const choice = await promptConflict(relPath, conflict);
+        if (choice === 'skip_all') {
+          skipAll = true;
+          skipped++;
+          break;
+        }
+        if (choice === 'take') {
+          if (existsSync(sourceOf(relPath))) {
+            install(relPath, targetPath);
+            installedFiles[relPath] = kitHash;
+            updated++;
+            console.log(`  ↑ ${relPath} (took package version)`);
+          }
+        } else {
+          skipped++;
+          console.log(`  ⊘ ${relPath} (kept yours)`);
+        }
+        conflicts++;
+        break;
+      }
+
+      case 'user_deleted':
+        console.log(`  ⚠ ${relPath} (you deleted this file, skipping)`);
+        break;
+
+      case 'deleted':
+        console.log(`  ⚠ ${relPath} (removed from package, keeping local copy)`);
+        delete installedFiles[relPath];
+        break;
+    }
+  }
+
+  return { updated, added, skipped, conflicts };
+}
+
+/**
  * Register the update command with commander.
  * @param {import('commander').Command} program
  */
@@ -136,98 +259,18 @@ export function registerUpdate(program) {
       // package had dropped — update reported 18 "removed from package" warnings and
       // never upgraded a single CLI file. Inventory both, and resolve each path against
       // the tree it actually came from.
-      const kitFiles = buildPackageInventory(kitManifest.files, packageRoot);
+      const packageFiles = buildPackageInventory(kitManifest.files, packageRoot);
+
+      // `.bk.json` subagents.fullContext changes what a kit agent installs as (see
+      // lib/subagent-context-mode.mjs); a toggled setting takes effect here.
+      const mode = readSubagentContextMode(targetDir);
 
       console.log(`Updating ${platform} kit in ${claudeDir}...\n`);
+      if (mode === 'full') console.log('  Subagent context: full (.bk.json subagents.fullContext) — kit agents install without omitClaudeMd\n');
 
-      // Classify all files
-      const allPaths = new Set([...Object.keys(kitFiles), ...Object.keys(installedFiles)]);
-      let updated = 0;
-      let added = 0;
-      let skipped = 0;
-      let conflicts = 0;
-      let skipAll = false;
-
-      for (const relPath of allPaths) {
-        const kitHash = kitFiles[relPath];
-        const installHash = installedFiles[relPath];
-        const targetPath = join(claudeDir, relPath);
-        const currentHash = existsSync(targetPath) ? hashFile(targetPath) : undefined;
-
-        const state = classifyChange(kitHash, installHash, currentHash);
-
-        switch (state) {
-          case 'unchanged':
-            // No file to copy, but the record may be the stale one that made this look like a
-            // conflict (see classifyChange). Refreshing it here is what stops the phantom
-            // conflict from coming back on every subsequent update; it is a no-op whenever the
-            // recorded hash already agrees with the package.
-            installedFiles[relPath] = kitHash;
-            break;
-
-          case 'new': {
-            const srcPath = sourceFor(relPath, { kitDir, packageRoot });
-            if (existsSync(srcPath)) {
-              mkdirSync(join(targetPath, '..'), { recursive: true });
-              cpSync(srcPath, targetPath);
-              installedFiles[relPath] = kitHash;
-              added++;
-              console.log(`  + ${relPath} (new)`);
-            }
-            break;
-          }
-
-          case 'safe_update': {
-            const srcPath = sourceFor(relPath, { kitDir, packageRoot });
-            if (existsSync(srcPath)) {
-              mkdirSync(join(targetPath, '..'), { recursive: true });
-              cpSync(srcPath, targetPath);
-              installedFiles[relPath] = kitHash;
-              updated++;
-              console.log(`  ↑ ${relPath} (updated)`);
-            }
-            break;
-          }
-
-          case 'conflict': {
-            if (skipAll) {
-              skipped++;
-              console.log(`  ⊘ ${relPath} (skipped)`);
-              break;
-            }
-
-            const choice = await promptConflict(relPath, opts.conflict);
-            if (choice === 'skip_all') {
-              skipAll = true;
-              skipped++;
-              break;
-            }
-            if (choice === 'take') {
-              const srcPath = sourceFor(relPath, { kitDir, packageRoot });
-              if (existsSync(srcPath)) {
-                cpSync(srcPath, targetPath);
-                installedFiles[relPath] = kitHash;
-                updated++;
-                console.log(`  ↑ ${relPath} (took package version)`);
-              }
-            } else {
-              skipped++;
-              console.log(`  ⊘ ${relPath} (kept yours)`);
-            }
-            conflicts++;
-            break;
-          }
-
-          case 'user_deleted':
-            console.log(`  ⚠ ${relPath} (you deleted this file, skipping)`);
-            break;
-
-          case 'deleted':
-            console.log(`  ⚠ ${relPath} (removed from package, keeping local copy)`);
-            delete installedFiles[relPath];
-            break;
-        }
-      }
+      const { updated, added, skipped, conflicts } = await syncKitFiles({
+        claudeDir, kitDir, packageRoot, packageFiles, installedFiles, mode, conflict: opts.conflict,
+      });
 
       // Update .bk-version.json
       versionData.version = kitManifest.version;

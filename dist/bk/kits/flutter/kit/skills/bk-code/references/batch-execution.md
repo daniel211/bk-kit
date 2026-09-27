@@ -39,7 +39,9 @@ Build batch execution queue. Process batches in table order (top → bottom).
 
 Each dispatch phase below changes `current_phase` in `bk/dev/shared/.workflow-state.json`
 before the dispatch: Implement → `coding`, Test → `testing`, Review → `review`, review fix
-loop → `coding` (with `quality_fix_count += 1`). See `references/workflow-state.md` for the
+loop → `coding` (with `quality_fix_count += 1`). Change it with
+`node .claude/cli/bk-health/index.cjs --set-phase <phase>` (fix loop: add `--inc quality_fix_count`) — no Read
+of the state file; Edit is the fallback. See `references/workflow-state.md` for the
 field list, the batch-boundary recurrence reset, and why `.plan-state.json` alone is not enough.
 
 ## Per-Batch Execution
@@ -394,8 +396,9 @@ A batch is complete when ALL of these are true:
 }
 ```
 
-6. **.workflow-state.json**: write `batch: N+1` and `phase_recurrence_count: {}` in ONE write —
-   leave `current_phase` unchanged so the write is not a transition. Seeing both together,
+6. **.workflow-state.json**: run `node .claude/cli/bk-health/index.cjs --batch next` — it writes `batch: N+1`
+   and `phase_recurrence_count: {}` in ONE write (Edit fallback: the same two fields in one
+   write) and leaves `current_phase` unchanged so the write is not a transition. Seeing both together,
    `fsm-guard` also starts the recurrence history window afresh (`recurrence_reset_ts`), which
    is what stops a 4-batch plan from tripping the phase-recurrence block on batch 3. Reset only
    on a batch that actually completed; never to escape a fix loop — a reset without the batch

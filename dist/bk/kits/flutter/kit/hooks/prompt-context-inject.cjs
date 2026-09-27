@@ -7,55 +7,51 @@
  * Non-blocking (exit 0). Output via stdout injected into Claude context.
  *
  * Tiered injection:
- * - T0 (every prompt): workflow state + plan dir (~30 tokens)
- * - T1 (every 4th prompt OR after compact): full reminders (~120 tokens)
+ * - T0: language + workflow state + plan dir + effort guidance + reactive signals — injected
+ *   only when it CHANGED since this session last injected it (lib/prompt-inject-state.cjs)
+ * - T1 (every 4th user prompt, and the first after start / clear / compact): full reminders
+ * - T2 (every 8th user prompt): proactive insights
+ *
+ * Why "only when changed": in X-Game-Pro (0.12.x, 6 conductor sessions) this hook injected 499
+ * times at ~660 chars, almost always the identical T0 block, and every copy stayed in the
+ * conductor's history to be re-read on every later request. Most of those prompts were Claude
+ * Code's own `<task-notification>` / subagent hand-back turns, which now get nothing at all —
+ * and no longer advance the T1/T2 cadence either.
  */
 try {
   const fs = require('fs');
   const path = require('path');
-  const os = require('os');
   const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');
   const { loadConfig, buildLanguageSection } = require('./lib/bk-config-utils.cjs');
+  const injectState = require('./lib/prompt-inject-state.cjs');
+  const { currentPlanDir } = require('./lib/current-plan.cjs');
 
   const FULL_INJECT_INTERVAL = 4;
-  const COUNTER_FILE = path.join(os.tmpdir(), 'bk-prompt-inject-counter.json');
-
-  function readCounter() {
-    try {
-      if (fs.existsSync(COUNTER_FILE)) {
-        const data = JSON.parse(fs.readFileSync(COUNTER_FILE, 'utf8'));
-        // Reset counter if stale (>30 min = likely new session)
-        if (Date.now() - (data.timestamp || 0) > 1800000) return 0;
-        return data.count || 0;
-      }
-    } catch { /* ignore */ }
-    return 0;
-  }
-
-  function writeCounter(count) {
-    try {
-      fs.writeFileSync(COUNTER_FILE, JSON.stringify({ count, timestamp: Date.now() }));
-    } catch { /* ignore */ }
-  }
 
   async function main() {
     try {
       const stdin = fs.readFileSync(0, 'utf-8').trim();
       if (!stdin) process.exit(0);
 
-      // Detect compact event from session-init env
-      let isPostCompact = false;
-      try {
-        const data = JSON.parse(stdin);
-        isPostCompact = (data.source === 'compact');
-      } catch { /* not JSON, ignore */ }
+      let data = {};
+      try { data = JSON.parse(stdin) || {}; } catch { /* not JSON — treat as a bare prompt */ }
 
-      const promptCount = readCounter();
-      const needsFullInject = (promptCount % FULL_INJECT_INTERVAL === 0) || isPostCompact;
-      writeCounter(promptCount + 1);
+      // Claude Code's own turns (background task notifications, subagent hand-backs) are not
+      // the user asking anything, and cannot have changed what this hook would say.
+      if (injectState.isAutomatedPrompt(data.prompt)) process.exit(0);
+
+      const root = resolveProjectRoot();
+      const sessionId = data.session_id || data.sessionId || null;
+
+      // Per-session cadence and last-injected hash. No session id → no memory: T0 every
+      // prompt, as before (fail-open), and no T1/T2 cadence to keep.
+      const session = sessionId ? injectState.readPromptInjectState(root, sessionId) : null;
+      const promptCount = session ? session.count : 1;
+      // count 0 = first user prompt of this session, or the first after /clear or compaction
+      // (session-init resets the file on those) — the moment the full reminders belong.
+      const needsFullInject = session !== null && promptCount % FULL_INJECT_INTERVAL === 0;
 
       const lines = [];
-      const root = resolveProjectRoot();
 
       // T0: Locale/language section — always inject when configured
       try {
@@ -79,17 +75,13 @@ try {
         } catch (e) { /* ignore corrupt state */ }
       }
 
-      const plansDir = path.join(root, 'bk', 'dev');
-      if (fs.existsSync(plansDir)) {
-        try {
-          const dirs = fs.readdirSync(plansDir)
-            .filter(d => !d.startsWith('.') && d !== 'shared')
-            .sort().reverse();
-          if (dirs.length > 0) {
-            lines.push(`Plan: bk/dev/${dirs[0]}/`);
-          }
-        } catch (e) { /* ignore */ }
-      }
+      // The current workflow's plan, not the reverse-alphabetical first dir under bk/dev/ —
+      // that printed `Plan: bk/dev/tracking-background/` next to `Feature: quick-session-create`
+      // (lib/current-plan.cjs currentPlanDir has the field case).
+      try {
+        const planDir = currentPlanDir(root, state);
+        if (planDir) lines.push(`Plan: ${planDir}/`);
+      } catch { /* ignore */ }
 
       // T0.5b: Effort guidance injection — when complexity tier is complex/architectural
       const effortTier = (state.complexity_tier || '').toLowerCase();
@@ -137,7 +129,14 @@ try {
         }
       }
 
-      // T1: Full reminders + workflow-specific rules — every Nth prompt or after compact
+      // Everything above is T0. It goes out only when it differs from what this session was
+      // last given; T1/T2 below keep their own cadence.
+      const t0Text = lines.join('\n');
+      const t0Hash = injectState.contentHash(t0Text);
+      if (session && session.hash === t0Hash) lines.length = 0;
+
+      // T1: Full reminders + workflow-specific rules — every Nth user prompt, and the first one
+      // after start / clear / compact
       if (needsFullInject) {
         lines.push('');
         lines.push('## Reminders');
@@ -167,7 +166,7 @@ try {
       }
 
       // T2: Proactive insights — every 8th prompt
-      const needsT2 = (promptCount % 8 === 0);
+      const needsT2 = session !== null && (promptCount % 8 === 0);
       if (needsT2) {
         // Project profile
         const profilePath = path.join(root, '.bk-project-profile.json');
@@ -196,6 +195,12 @@ try {
         }
       }
 
+      if (sessionId) {
+        injectState.writePromptInjectState(root, sessionId, { hash: t0Hash, count: promptCount + 1 });
+      }
+
+      // A T1/T2 block after a suppressed T0 must not open with the blank separator line.
+      while (lines.length > 0 && lines[0] === '') lines.shift();
       if (lines.length > 0) {
         process.stdout.write(lines.join('\n') + '\n');
       }

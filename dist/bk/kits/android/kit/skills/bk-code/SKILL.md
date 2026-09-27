@@ -30,7 +30,8 @@ loops). Terminal: commit (success) | escalated (fix-loop exceeded) | aborted.
 
 **Every transition writes BOTH state files** — `bk/dev/shared/.workflow-state.json`
 (`current_phase` + `workflow_type: "bk-code"`) and `{plan-dir}/.plan-state.json`.
-`.plan-state.json` alone leaves `fsm-guard` inert: no transition validation, no phase-recurrence
+Phase changes: `node .claude/cli/bk-health/index.cjs --set-phase <phase>` (validated like an Edit, no Read
+needed); batch boundary: `--batch next`. `.plan-state.json` alone leaves `fsm-guard` inert: no transition validation, no phase-recurrence
 ladder, nothing for `compact-recovery` to restore. Load: `references/workflow-state.md`
 
 ### Approval Gates
@@ -104,8 +105,8 @@ git-manager haiku. Full dispatch table with triggers and inputs:
 `references/batch-execution.md` § Agent Dispatch Table.
 
 **3d. Batch Complete** — all sub-tasks implement ✓ + test ✓ + review ✓ → tick `## Tasks` `[x]`,
-TaskUpdate(completed), update `.plan-state.json`. **FSM:** write `batch: N+1` and
-`phase_recurrence_count: {}` in one write, leaving `current_phase` unchanged. A multi-batch plan re-enters
+TaskUpdate(completed), update `.plan-state.json`. **FSM:** `node .claude/cli/bk-health/index.cjs --batch next`
+(= `batch: N+1` + `phase_recurrence_count: {}` in one write, `current_phase` unchanged). A multi-batch plan re-enters
 `coding` once per batch; without this reset the recurrence ladder blocks batch 3 as if it were a
 fix loop. Reset on batch *progress* only, never to escape a fix loop.
 

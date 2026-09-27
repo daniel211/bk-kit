@@ -6,6 +6,7 @@ tools: [Read, Glob, Grep, Bash, WebSearch, WebFetch, TaskCreate, TaskGet, TaskUp
 model: opus
 effort: high
 permissionMode: plan
+omitClaudeMd: true
 memory: project
 mcpServers: [serena]
 executionMode: foreground
@@ -65,6 +66,7 @@ Analyzes requirements, scouts existing codebase patterns, researches technical a
 **Not preloaded — load on demand only:** `bk-sequential-thinking`, `bk-docs-seeker`. Plain planning runs must not load them.
 
 ## Constraints
+- **Final message** = the Kit Rules hand-back (≤ ~1,200 chars): status, report path, `plan.md` path, sub-task count, open questions. Detail stays in the file. The examples below show the report file, not the reply.
 - Never calls bk-cook or bk-fix skills (leaf agent, no orchestration)
 - Can spawn Explore and bk-researcher sub-agents for scouting and research — no orchestration skills (bk-code, bk-debug, etc.)
 - When spawning a sub-agent via `Task(Explore)` / `Task(bk-researcher)`, the dispatch prompt MUST include a `Task:` line (what to do) and an `Output:` line (where results are written) — the delegation-enforcer hook blocks dispatches missing both.

@@ -6,6 +6,7 @@ disallowedTools: [Task]
 model: haiku
 effort: low
 permissionMode: default
+omitClaudeMd: true
 memory: project
 mcpServers: []
 executionMode: background
@@ -56,6 +57,9 @@ Report only what you verified, and quote the command output you verified it with
   pushed, quote `git log --oneline origin/<branch> -1`.
 - If an operation partly failed, report the failure. A partial commit reported as complete is
   worse than a reported failure, because nothing downstream will catch it.
+- Your final message IS the report — there is no report file. Keep it to the Kit Rules hand-back
+  cap (≤ ~1,200 chars): status, commit hash + subject, and the verifying output quoted above; a
+  listing longer than ~10 paths goes in as a count plus the first few.
 
 ## Quality Bar
 | Dimension | Good | Bad |
@@ -143,65 +147,12 @@ Commit and create PR for the payment feature. Changed files are in Sources/Featu
 </dispatch_prompt>
 
 <agent_output>
-## Git Operations: qr-payment
-
-### Branch Status
-- Current branch: `feature/qr-payment`
-- Base: `main` (up to date, no conflicts)
-
-### Staged Files
-```
-Sources/Features/Payment/Views/QRScannerView.swift          (new)
-Sources/Features/Payment/Views/PaymentConfirmationView.swift (new)
-Sources/Features/Payment/Views/PaymentResultView.swift       (new)
-Sources/Features/Payment/ViewModels/QRScannerViewModel.swift (new)
-Sources/Features/Payment/ViewModels/PaymentProcessingViewModel.swift (new)
-Sources/Features/Payment/QRPaymentCoordinator.swift          (new)
-Sources/Features/Payment/Models/QRPaymentData.swift          (new)
-Sources/Core/Navigation/AppCoordinator.swift                 (modified)
-Tests/Features/Payment/QRScannerViewModelTests.swift         (new)
-Tests/Features/Payment/PaymentProcessingViewModelTests.swift (new)
-```
-
-### Secret Scan
-- ✓ No API keys, tokens, passwords, .env files, or .pem files in staged changes
-
-### Commit
-```
-feat(payment): add QR code payment flow
-
-- QR scanner with AVFoundation camera integration
-- Payment confirmation screen with amount + merchant display
-- PIN entry reusing existing auth component
-- Payment processing with loading + result screens
-- QRPaymentCoordinator managing full navigation flow
-- Unit tests for QRScannerViewModel and PaymentProcessingViewModel
-```
-
-### PR Created
-```
-$ gh pr create --base main --head feature/qr-payment   --title "feat(payment): QR code payment flow"   --body "## Summary
-Implements QR code payment: scan → confirm → PIN → process → result.
-
-## Changes
-- 7 new files in Sources/Features/Payment/
-- 2 new test files
-- 1 modified file (AppCoordinator route registration)
-
-## Checklist
-- [x] Code compiles with zero warnings
-- [x] Unit tests pass (7/7)
-- [x] No hardcoded secrets
-- [x] Files under 200 LOC
-- [x] Follows Clean Architecture / MVVM pattern"
-```
-
-### Result
-- Commit SHA: `a1b2c3d`
-- PR: #142 — `feat(payment): QR code payment flow`
-- Status: Ready for review
-
-<!-- metadata: {"schema_type":"git-ops","agent":"bk-git-manager","feature":"qr-payment","status":"complete"} -->
+Status: complete — 1 commit, PR opened
+- Commit `a1b2c3d` feat(payment): add QR code payment flow — 10 files (9 new, 1 modified: AppCoordinator.swift)
+- Secret scan: clean (no keys, tokens, .env or .pem staged)
+- `git status --short` after commit: empty — nothing under Sources/Features/Payment or Tests/Features/Payment left untracked
+- `git log --oneline origin/feature/qr-payment -1`: a1b2c3d feat(payment): add QR code payment flow
+- PR #142 "feat(payment): QR code payment flow" → main
 </agent_output>
 </example>
 

@@ -13,6 +13,7 @@ import { copyDirFiltered } from '../lib/file-utils.mjs';
 import { mergeSettings } from '../lib/settings-merger.mjs';
 import { kitLayout, packageRootFrom } from '../lib/package-layout.mjs';
 import { addKitOption, resolveKitOrExit } from '../lib/kit-resolver.mjs';
+import { applyModeToInstalledAgents, readSubagentContextMode } from '../lib/subagent-context-mode.mjs';
 import {
   gitPrefix, writeGitignoreEntries,
 } from '../lib/session-state-gitignore.mjs';
@@ -123,6 +124,17 @@ export function registerInit(program) {
 
       // Copy kit → .claude/ (excluding settings.json — handled separately via merge)
       copyDirFiltered(kitDir, claudeDir, ['settings.json']);
+
+      // `.bk.json` subagents.fullContext: kit agents without omitClaudeMd. Read after the copy,
+      // so it is the .bk.json this install leaves behind, and applied before hashing, so
+      // .bk-version.json records what is on disk — the hash `update` computes for the same mode
+      // (lib/subagent-context-mode.mjs). Today that is always lean: init refuses an existing
+      // .claude/, and --force replaces .bk.json with the template. `bk update` applies a toggle.
+      const contextMode = readSubagentContextMode(targetDir);
+      const modeChanged = applyModeToInstalledAgents(claudeDir, contextMode);
+      if (modeChanged.length > 0) {
+        console.log(`  ✓ Subagent context: full — omitClaudeMd removed from ${modeChanged.length} kit agent(s)`);
+      }
 
       // Copy cli/ → .claude/cli/ (CLI binaries like bk-health, bk-harness-ci)
       const cliDir = join(layout.packageRoot, 'cli');

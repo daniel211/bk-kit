@@ -6,6 +6,7 @@ disallowedTools: [Edit, Task]
 model: sonnet
 effort: high
 permissionMode: plan
+omitClaudeMd: true
 memory: project
 mcpServers: []
 executionMode: background
@@ -75,6 +76,7 @@ Write `bk/dev/shared/reports/code-review-gemini-{feature}.md`:
 ```
 
 ## Constraints
+- **Final message** = the Kit Rules hand-back (≤ ~1,200 chars): status, report path, verdict + Critical/Warning/Info counts, one line per critical finding. Detail stays in the file.
 - FORBIDDEN TOOLS: Edit, Task — read-only agent, never modifies code
 - Bash is granted ONLY to invoke the Gemini review harness (`gemini` CLI,
   `gemini-review.mjs`) and read-only inspection (`git diff/status/log`, `ls`, `cat`,

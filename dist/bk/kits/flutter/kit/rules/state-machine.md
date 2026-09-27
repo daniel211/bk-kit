@@ -1,8 +1,9 @@
 ---
 paths:
   - bk/dev/shared/.workflow-state.json
-  - bk/dev/**
 ---
+
+<!-- Scoped to the state file only: bk/dev/** loaded it into every subagent reading a plan. See docs/kit-dev/add-rule.md. -->
 
 # Workflow State Machine
 
@@ -251,7 +252,16 @@ opening phase (or `planning` for another feature) replaces it. Never delete
 
 ## Validation
 
-Before writing `current_phase`:
+Prefer the CLI to move the phase. It applies the same validation and bookkeeping as
+`fsm-guard`, so there is no Read+Edit of this file and no "modified since read" retry:
+
+```bash
+node .claude/cli/bk-health/index.cjs --set-phase <phase>   # e.g. testing; add --inc quality_fix_count on a fix loop
+node .claude/cli/bk-health/index.cjs --batch next           # batch completed: batch N+1 + counts reset
+```
+
+A refusal prints fsm-guard's own message and changes nothing. The Edit path below remains the
+fallback. Before writing `current_phase` by hand:
 1. Read current phase from file
 2. Check transition table for current command
 3. Verify transition is valid
@@ -275,7 +285,7 @@ with it.
 ### Batch loops are not fix loops
 
 `/bk-code` re-enters `coding → testing → review` once per execution batch. On **successful
-batch completion**, write `batch: N+1` together with `phase_recurrence_count: {}` in one write,
+batch completion**, run `bk-health --batch next`, or write `batch: N+1` together with `phase_recurrence_count: {}` in one write,
 leaving `current_phase` unchanged (a non-transition write, so the guard lets it through, and
 stamps `recurrence_reset_ts` so the history window restarts too). Without that reset a 4-batch
 plan is blocked at batch 3 as if it were stuck. Never reset the counter to get out of a fix

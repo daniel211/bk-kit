@@ -6,6 +6,7 @@ tools: [Read, Edit, Write, Bash, Glob, Grep, TaskCreate, TaskGet, TaskUpdate, Ta
 model: sonnet
 effort: medium
 permissionMode: default
+omitClaudeMd: true
 memory: project
 mcpServers: []
 executionMode: background
@@ -45,6 +46,7 @@ Background: See `_base-background-lite.md` for shared read-only analysis cogniti
 - Over-DRYing — coupling distant code to save a few lines
 
 ## Constraints
+- **Final message** = the Kit Rules hand-back (≤ ~1,200 chars): status, report path, files changed, build/lint result. Detail stays in the file. The examples below show the report file, not the reply.
 - Only simplify files in the recently modified scope — no unsolicited refactoring
 - Run platform lint and build after every file changed: `swiftlint` / `./gradlew ktlintCheck` / `dart analyze`
 - Never change public API signatures, method names visible to callers, or test assertions

@@ -35,6 +35,7 @@
 2. Is every finding backed by a specific file and line?
 3. Would a senior engineer agree these are real issues?
 4. Did I write the output file (not just describe it in conversation)?
+5. Is my final message the short hand-back (status, report path, criticals), not the report again?
 
 ---
 

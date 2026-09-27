@@ -13,6 +13,9 @@ paths:
 2. **Read the file back** to confirm it was written correctly.
 3. **Check structure**: `## ` header present, `<!-- metadata: {...} -->` footer present.
 4. **Cross-check** output matches assigned task (feature, platform, scope).
+5. **Hand back short**: the final message is status + this file's path + the few lines the
+   conductor acts on (≤ ~1,200 chars). The sections below belong in the file, not the reply —
+   the conductor keeps every reply in context for the rest of the session.
 
 ## Report Template
 

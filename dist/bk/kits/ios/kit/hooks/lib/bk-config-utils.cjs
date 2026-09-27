@@ -97,6 +97,13 @@ const DEFAULT_CONFIG = {
     minLines: 50,
     shrinkTolerance: 0.25
   },
+  // fullContext: true → `bk init/update` install kit agents without `omitClaudeMd: true`, so
+  // subagents load CLAUDE.md, every always-on rule and auto memory natively (pre-0.13 cost).
+  // Applied to the agent files by the CLI, not read by a hook — see
+  // cli/user-cli/lib/subagent-context-mode.mjs.
+  subagents: {
+    fullContext: false
+  },
   platform: 'auto'
 };
 

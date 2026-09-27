@@ -6,6 +6,7 @@ disallowedTools: [Bash, Task]
 model: haiku
 effort: low
 permissionMode: default
+omitClaudeMd: true
 memory: project
 mcpServers: []
 executionMode: background
@@ -69,6 +70,7 @@ Write `bk/dev/shared/reports/device-test-{platform}-{feature}.md`:
 ```
 
 ## Constraints
+- **Final message** = the Kit Rules hand-back (≤ ~1,200 chars): status, report path, pass/fail counts, failing scenarios. Detail stays in the file.
 - No Bash — never execute tests or capture screenshots; main handles execution
 - Never skip device matrix — minimum 3 devices with different screen sizes
 - Never guess accessibility identifiers — use `needs_info` if not found in source

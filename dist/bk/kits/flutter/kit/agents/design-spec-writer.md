@@ -5,6 +5,7 @@ tools: [Read, Glob, Grep, Write, Bash, TaskCreate, TaskGet, TaskUpdate, TaskList
 disallowedTools: [Edit, Task]
 model: sonnet
 permissionMode: default
+omitClaudeMd: true
 memory: project
 mcpServers: []
 executionMode: either

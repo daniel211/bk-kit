@@ -7,6 +7,11 @@ Path: `bk/dev/shared/.workflow-state.json`
 `workflow_type` (alias `command`) is what `fsm-guard.cjs` matches against the transition
 table in `rules/state-machine.md`. Omit it and every transition passes unvalidated.
 
+Phase changes after classify: `node .claude/cli/bk-health/index.cjs --set-phase <phase>` (add
+`--inc quality_fix_count` on a review→code loop, `--field key=value` for the other fields a
+phase writes) — `fsm-guard`'s validation and bookkeeping without a Read + Edit of this file.
+The Edit path remains valid and guarded.
+
 ```json
 {
   "workflow_type": "bk-debug",

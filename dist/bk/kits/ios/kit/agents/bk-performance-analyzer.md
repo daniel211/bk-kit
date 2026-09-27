@@ -6,6 +6,7 @@ disallowedTools: [Edit, Bash, Task]
 model: sonnet
 effort: high
 permissionMode: plan
+omitClaudeMd: true
 memory: project
 mcpServers: []
 executionMode: background
@@ -78,6 +79,7 @@ Write `bk/dev/shared/reports/performance-{feature}.md`:
 ```
 
 ## Constraints
+- **Final message** = the Kit Rules hand-back (≤ ~1,200 chars): status, report path, severity counts, one line per blocking finding. Detail stays in the file. The examples below show the report file, not the reply.
 - FORBIDDEN TOOLS: Edit, Bash, Task — read-only agent, never modifies code
 - Every finding must include estimated impact (e.g., "adds ~200ms to startup") and effort (low/medium/high)
 - "This is slow" without estimate is not acceptable

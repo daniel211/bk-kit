@@ -7,6 +7,7 @@ model: sonnet            # sonnet for background, opus for dev/planner
 effort: medium           # baseline effort (low/medium/high/xhigh). Phase 02 may override via state-based hint.
 memory: project
 permissionMode: plan                # plan for read-only, default for write agents
+omitClaudeMd: true                  # keep: skips CLAUDE.md + always-on (conductor) rules; subagent-init injects the digest
 mcpServers: []                      # [serena] for dev agents, [figma] for design
 skills: []                          # platform + domain skills
 ---
@@ -71,6 +72,7 @@ Write to `bk/dev/shared/reports/{agent-type}-{feature}.md`:
 ```
 
 ## Constraints
+- **Final message** = the Kit Rules hand-back (≤ ~1,200 chars): status, report path, {what the conductor needs to decide the next step}. Detail stays in the file.
 - {Tool restriction from tool-restriction.md}
 - {Domain boundary — what this agent does NOT do}
 - {Output requirement — always write file, verify exists}

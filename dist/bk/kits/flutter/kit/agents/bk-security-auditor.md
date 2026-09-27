@@ -6,6 +6,7 @@ disallowedTools: [Edit, Bash, Task]
 model: sonnet
 effort: high
 permissionMode: plan
+omitClaudeMd: true
 memory: project
 mcpServers: []
 executionMode: background
@@ -79,6 +80,7 @@ Write `bk/dev/shared/reports/security-{feature}.md`:
 ```
 
 ## Constraints
+- **Final message** = the Kit Rules hand-back (≤ ~1,200 chars): status, report path, severity counts, one line per critical/high vulnerability. Detail stays in the file. The examples below show the report file, not the reply.
 - FORBIDDEN TOOLS: Edit, Bash, Task — read-only agent, never modifies code
 - Always grep for secrets regardless of feature scope — non-negotiable
 - Severity reflects exploitability, not theoretical risk

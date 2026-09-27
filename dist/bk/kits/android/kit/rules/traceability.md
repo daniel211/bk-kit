@@ -1,7 +1,12 @@
 ---
 paths:
-  - bk/dev/**
+  - bk/dev/*/srs.md
+  - bk/dev/*/srs/**
+  - bk/dev/*/inputs/requirements.json
+  - bk/dev/*/traceability-matrix.md
 ---
+
+<!-- Scoped to requirement sources + matrix, not plan/sub-task files. See docs/kit-dev/add-rule.md. -->
 
 # Requirement Traceability Protocol
 

@@ -5,6 +5,7 @@ tools: [Read, Glob, Grep, Write, Bash]
 disallowedTools: [Edit, Task]
 model: sonnet
 permissionMode: default
+omitClaudeMd: true
 mcpServers: []
 executionMode: either
 ---

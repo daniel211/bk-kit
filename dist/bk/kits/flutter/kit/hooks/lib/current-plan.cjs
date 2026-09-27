@@ -45,4 +45,44 @@ function currentPlanFile(root, state) {
   return null;
 }
 
-module.exports = { currentPlanFile };
+/**
+ * The plan directory of the workflow in `state`, as a project-relative path — for the
+ * `Plan:` line prompt-context-inject shows the conductor on every prompt.
+ *
+ * That line used to be the reverse-alphabetical first directory under bk/dev/, with no regard
+ * for the workflow at all. In X-Game-Pro (0.12.x) it read `Plan: bk/dev/tracking-background/`
+ * on the very line that said `Feature: quick-session-create` ("t" sorts after "q"), for a whole
+ * feature. So the answer now follows the workflow state:
+ *   1. `plan_dir`, when it exists and agrees with `feature` (or no feature is named);
+ *   2. bk/dev/<feature>, when it exists — a stale plan_dir must not beat the feature on the
+ *      same line (plan_dir lagged a feature before; see the header);
+ *   3. `plan_dir` as written, when it exists;
+ *   4. only with no workflow identity at all, the newest plan.md on disk.
+ * Null when none of that exists — no line beats a wrong line.
+ *
+ * @param {string} root
+ * @param {object|null} state
+ * @returns {string|null} e.g. "bk/dev/quick-session-create"
+ */
+function currentPlanDir(root, state) {
+  const s = state && typeof state === 'object' ? state : {};
+  const rel = (abs) => path.relative(root, abs).split(path.sep).join('/');
+  const isDir = (abs) => { try { return fs.statSync(abs).isDirectory(); } catch { return false; } };
+
+  const planDir = typeof s.plan_dir === 'string' && s.plan_dir ? path.resolve(root, s.plan_dir) : null;
+  const feature = typeof s.feature === 'string' && s.feature ? s.feature : null;
+
+  if (planDir && isDir(planDir) && (!feature || path.basename(planDir) === feature)) return rel(planDir);
+  if (feature && !/[\\/]/.test(feature)) {
+    const featureDir = path.join(root, 'bk', 'dev', feature);
+    if (isDir(featureDir)) return rel(featureDir);
+  }
+  if (planDir && isDir(planDir)) return rel(planDir);
+  if (!feature && !planDir) {
+    const newest = currentPlanFile(root, null);
+    if (newest) return rel(path.dirname(newest));
+  }
+  return null;
+}
+
+module.exports = { currentPlanFile, currentPlanDir };

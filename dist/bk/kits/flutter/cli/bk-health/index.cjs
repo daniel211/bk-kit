@@ -10,6 +10,9 @@
  *   node .claude/cli/bk-health/index.cjs --resume [--force]
  *   node .claude/cli/bk-health/index.cjs --reset-counts [--agent <name>] [--force]
  *   node .claude/cli/bk-health/index.cjs --steer [--apply|--dry-run]
+ *   node .claude/cli/bk-health/index.cjs --set-phase <phase> [--batch <N|next>] [--inc <field>]...
+ *                                        [--field key=value]... [--session <id>]
+ *   node .claude/cli/bk-health/index.cjs --batch <N|next>
  *
  * Duration format: Nh | Nd | Nm (e.g. 24h, 7d, 30m)
  */
@@ -24,6 +27,7 @@ const { runSteerer } = require('../steerer-lib/index.cjs');
 const { buildBehaviourPanel, renderBehaviourPanel } = require('./lib/behaviour.cjs');
 const { verifySensors, renderVerifySensors } = require('./lib/verify-sensors.cjs');
 const { drillDown } = require('./lib/subagent-drill-down.cjs');
+const { setPhase } = require('./lib/set-phase.cjs');
 
 // ─── Arg parsing ──────────────────────────────────────────────────────────
 
@@ -68,10 +72,15 @@ function parseArgs(argv) {
     else if (a === '--steer') flags.steer = true;
     else if (a === '--apply') flags.apply = true;
     else if (a === '--dry-run') flags.dryRun = true;
+    else if (a === '--set-phase' && args[i + 1]) { flags.setPhase = args[++i]; }
+    else if (a === '--batch' && args[i + 1]) { flags.batch = args[++i]; }
+    else if (a === '--inc' && args[i + 1]) { (flags.inc = flags.inc || []).push(args[++i]); }
+    else if (a === '--field' && args[i + 1]) { (flags.fields = flags.fields || []).push(args[++i]); }
   }
 
   // Default: --dashboard if no subcommand
-  if (!flags.dashboard && !flags.timeline && !flags.ashby && !flags.resume && !flags.resetCounts && !flags.steer && !flags.mutationCheck && !flags.verifySensors && !flags.subagentDrillDown) {
+  if (!flags.dashboard && !flags.timeline && !flags.ashby && !flags.resume && !flags.resetCounts && !flags.steer && !flags.mutationCheck && !flags.verifySensors && !flags.subagentDrillDown &&
+      !flags.setPhase && flags.batch === undefined) {
     flags.dashboard = true;
   }
 
@@ -83,6 +92,29 @@ function parseArgs(argv) {
 async function main() {
   const flags = parseArgs(process.argv);
   const projectRoot = resolveCliProjectRoot();
+
+  // ── Set phase / advance batch (lib/set-phase.cjs) ─────────────────────
+  // Before everything else: it is the one subcommand the conductor runs on every phase change,
+  // so it prints one line (plus a recurrence advisory when there is one) and nothing more.
+  if (flags.setPhase || flags.batch !== undefined) {
+    const result = setPhase({
+      projectRoot,
+      phase: flags.setPhase || null,
+      batch: flags.batch === undefined ? null : flags.batch,
+      inc: flags.inc || [],
+      fields: flags.fields || [],
+      sessionId: flags.session || null
+    });
+    if (flags.json) {
+      process.stdout.write(JSON.stringify(result) + '\n');
+    } else if (result.success) {
+      process.stdout.write(result.message + '\n' + (result.advisory ? result.advisory + '\n' : ''));
+    } else {
+      process.stderr.write(result.message + '\n');
+    }
+    process.exit(result.exitCode);
+    return;
+  }
 
   // ── Subagent Drill-Down ────────────────────────────────────────────────
   if (flags.subagentDrillDown) {
