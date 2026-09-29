@@ -30,6 +30,13 @@ after your agent (e.g. `bk-planner/`). Never read or write another agent's memor
 - **`memory: user`** — the directory lives under the user's home directory, never inside
   the project. Never derive it from the current working directory either.
 
+**Always use the absolute path.** Build memory paths from the project-root absolute path
+(`<project-root>/.claude/agent-memory/<agent>/`) or the exact directory in your system prompt.
+Never `mkdir -p .claude/agent-memory/...` (or `touch`, `cp`, redirect into it) with a relative
+path: relative to `bk/dev/<feature>/` or a source folder it creates a stray directory that the
+guard then refuses to let you use. The memory directory already exists — just write the file.
+The guard denies such Bash commands as well as Write/Edit.
+
 **Git worktrees:** if you are working inside a git worktree, the project root is still the
 **main repository**, not the worktree. A worktree has its own `.claude/` directory and
 looks like a project root, but memory written there is invisible to every other worktree

@@ -161,6 +161,7 @@ function refreshUsageRollup(opts = {}) {
   const state = readJson(paths.statePath, null) || { version: SUMMARY_VERSION, files: {}, seen: {} };
   if (!state.files) state.files = {};
   if (!state.seen) state.seen = {};
+  if (!state.outs) state.outs = {};
 
   // Remember the newest reset we have seen, so the week window survives a
   // payload that omits rate_limits entirely.
@@ -192,17 +193,33 @@ function refreshUsageRollup(opts = {}) {
       if (day < cutoffDay) return; // outside the retained window — nothing can read it
 
       const key = entryKey(entry);
-      if (key && state.seen[key]) return; // same request, seen via another transcript
-
       const cost = entryCost(entry);
       if (!cost) return;
+
+      if (key && state.seen[key]) {
+        // Same request seen again — via another transcript, or as the final row that follows a
+        // streaming placeholder (same message.id, small output_tokens). Input and cache figures
+        // repeat across those rows, so only an output increase is new: fold in just the delta.
+        const prevOut = state.outs[key] || 0;
+        const delta = cost.tokensOut - prevOut;
+        if (delta > 0) {
+          const dayBucket = summary.days[state.seen[key]];
+          if (dayBucket) {
+            const pricing = resolvePricing(entry.message.model) || unknownPricing();
+            dayBucket.costUsd = Math.round((dayBucket.costUsd + computeCost(pricing, 0, 0, 0, delta)) * 1e8) / 1e8;
+            dayBucket.tokensOut += delta;
+          }
+          state.outs[key] = cost.tokensOut;
+        }
+        return;
+      }
 
       const bucket = summary.days[day] || (summary.days[day] = { costUsd: 0, tokensIn: 0, tokensOut: 0, entries: 0 });
       bucket.costUsd = Math.round((bucket.costUsd + cost.costUsd) * 1e8) / 1e8;
       bucket.tokensIn += cost.tokensIn;
       bucket.tokensOut += cost.tokensOut;
       bucket.entries += 1;
-      if (key) state.seen[key] = day;
+      if (key) { state.seen[key] = day; state.outs[key] = cost.tokensOut; }
       entriesAdded += 1;
     });
 
@@ -212,7 +229,7 @@ function refreshUsageRollup(opts = {}) {
   // Prune: days past retention, their de-duplication keys, and cursors for
   // transcripts that no longer exist.
   for (const day of Object.keys(summary.days)) if (day < cutoffDay) delete summary.days[day];
-  for (const [key, day] of Object.entries(state.seen)) if (day < cutoffDay) delete state.seen[key];
+  for (const [key, day] of Object.entries(state.seen)) if (day < cutoffDay) { delete state.seen[key]; delete state.outs[key]; }
   for (const file of Object.keys(state.files)) if (!alive.has(file)) delete state.files[file];
 
   summary.updated = now;

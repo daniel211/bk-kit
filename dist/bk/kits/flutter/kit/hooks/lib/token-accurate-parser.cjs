@@ -190,11 +190,11 @@ async function parseTranscriptAccurate(filePath, opts = {}) {
 
   try {
     // Accumulators
-    let sumCacheRead = 0;
-    let sumCacheCreation = 0;
-    let sumInput = 0;
-    let lastOutputTokens = 0;
-    let sumThinking = 0;
+    // Transcripts repeat one API message across several rows (streaming placeholders with a
+    // small output_tokens, then the final row). Fold rows sharing a message.id into one entry
+    // holding the per-field max, then sum entries. Rows without an id count as unique.
+    const perMessage = new Map();
+    let anonSeq = 0;
     let foundNonZeroUsage = false;
     let lastModel = null;
     let lastAgentType = null;
@@ -257,13 +257,16 @@ async function parseTranscriptAccurate(filePath, opts = {}) {
             const out = usage.output_tokens || 0;
             const thinking = usage.thinking_tokens || 0;
 
-            // Sum cumulative (matching Claude's billing — each turn accumulates)
-            sumCacheRead += cacheRead;
-            sumCacheCreation += cacheCreation;
-            sumInput += inp;
-            // Output: take the last value (each message replaces previous)
-            lastOutputTokens = out;
-            sumThinking += thinking;
+            const mid = msg.id || obj.id;
+            const key = mid ? `id:${mid}` : `anon:${anonSeq++}`;
+            const cur = perMessage.get(key)
+              || { cacheRead: 0, cacheCreation: 0, inp: 0, out: 0, thinking: 0 };
+            cur.cacheRead = Math.max(cur.cacheRead, cacheRead);
+            cur.cacheCreation = Math.max(cur.cacheCreation, cacheCreation);
+            cur.inp = Math.max(cur.inp, inp);
+            cur.out = Math.max(cur.out, out);
+            cur.thinking = Math.max(cur.thinking, thinking);
+            perMessage.set(key, cur);
 
             if (cacheRead > 0 || cacheCreation > 0 || inp > 1 || out > 1) {
               foundNonZeroUsage = true;
@@ -278,6 +281,19 @@ async function parseTranscriptAccurate(filePath, opts = {}) {
     });
 
     clearTimeout(timer);
+
+    let sumCacheRead = 0;
+    let sumCacheCreation = 0;
+    let sumInput = 0;
+    let sumOutputTokens = 0;
+    let sumThinking = 0;
+    for (const m of perMessage.values()) {
+      sumCacheRead += m.cacheRead;
+      sumCacheCreation += m.cacheCreation;
+      sumInput += m.inp;
+      sumOutputTokens += m.out;
+      sumThinking += m.thinking;
+    }
 
     result.model = lastModel;
     result.modelFamily = modelFamily(lastModel);
@@ -297,12 +313,12 @@ async function parseTranscriptAccurate(filePath, opts = {}) {
       result.cacheReadTokens = sumCacheRead;
       result.cacheCreationTokens = sumCacheCreation;
       result.tokensIn = sumCacheRead + sumCacheCreation + sumInput;
-      result.tokensOut = lastOutputTokens;
+      result.tokensOut = sumOutputTokens;
       result.accuracy = 'high';
 
       // Compute cost
       const pricing = resolvePricing(lastModel);
-      result.costUsd = computeCost(pricing, sumCacheRead, sumCacheCreation, sumInput, lastOutputTokens);
+      result.costUsd = computeCost(pricing, sumCacheRead, sumCacheCreation, sumInput, sumOutputTokens);
     } else if (totalTextLength > 0) {
       // Fallback: text-length / 4
       const estimated = Math.ceil(totalTextLength / 4);

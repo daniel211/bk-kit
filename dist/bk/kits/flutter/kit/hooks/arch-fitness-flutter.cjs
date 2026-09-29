@@ -96,7 +96,14 @@ async function main() {
   const skipIds = skipEnv ? skipEnv.split(',').map(s => s.trim()).filter(Boolean) : [];
 
   // Run rules
-  const violations = runRules(content, filePath, FLUTTER_RULES, platformConfig, skipIds, 'flutter');
+  const allViolations = runRules(content, filePath, FLUTTER_RULES, platformConfig, skipIds, 'flutter');
+
+  // Same warning on the same construct is reported once per session window, whatever line it is on.
+  const { filterRepeatedWarnings } = require(path.join(libDir, 'arch-violation-dedupe.cjs'));
+  const violations = filterRepeatedWarnings(allViolations, {
+    sessionId: parsed.event && (parsed.event.session_id || parsed.event.sessionId),
+    cwd: parsed.event && parsed.event.cwd
+  });
 
   if (violations.length === 0) process.exit(0);
 

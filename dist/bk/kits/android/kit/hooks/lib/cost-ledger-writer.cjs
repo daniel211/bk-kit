@@ -43,7 +43,17 @@ function getPricing() {
 function resolveModel(model) {
   const pricing = getPricing();
   const aliases = pricing.aliases || {};
-  return aliases[model] || model;
+  const resolved = aliases[model] || model;
+  const models = pricing.models || {};
+  if (models[resolved] || typeof resolved !== 'string') return resolved;
+  // A new point release (claude-opus-5-5, or a dated suffix) has no table entry yet: fall back
+  // to the longest known model id that prefixes it on a `-` boundary, before giving up.
+  let best = null;
+  for (const key of Object.keys(models)) {
+    if (key === 'unknown') continue;
+    if (resolved.startsWith(`${key}-`) && (!best || key.length > best.length)) best = key;
+  }
+  return best || resolved;
 }
 
 /**
@@ -156,4 +166,4 @@ function appendEntry(entry) {
   }
 }
 
-module.exports = { computeCost, appendEntry, resolveMetricsDir };
+module.exports = { computeCost, appendEntry, resolveMetricsDir, resolveModel };

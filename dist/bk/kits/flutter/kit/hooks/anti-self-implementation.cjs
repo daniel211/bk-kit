@@ -72,6 +72,30 @@ try {
     return require('./lib/hook-caller-context.cjs').isSubagentEvent(data);
   }
 
+  /**
+   * Is this a small metadata Edit to a plan document that the bk-plan / bk-code skills tell the
+   * conductor to make itself?
+   *
+   * Sanctioned: flipping `status:` / `validated:` / `execution:` frontmatter keys (archive,
+   * validate and parallel modes), updating a Sub-Tasks table status cell (task hydration), and
+   * ticking a `[ ]` checkbox. Those are bookkeeping on a document bk-planner authored, not
+   * synthesis. Full `Write`s and large or prose `Edit`s still count as self-implementation.
+   * Only plan documents reach this check (see DELEGATION_PATHS), never source files.
+   */
+  const METADATA_EDIT_MAX_CHARS = 300;
+  function isSanctionedMetadataEdit(toolName, toolInput) {
+    if (toolName !== 'Edit') return false;
+    const oldStr = typeof toolInput.old_string === 'string' ? toolInput.old_string : '';
+    const newStr = typeof toolInput.new_string === 'string' ? toolInput.new_string : '';
+    if (!oldStr || oldStr.length > METADATA_EDIT_MAX_CHARS || newStr.length > METADATA_EDIT_MAX_CHARS) return false;
+    const lines = `${oldStr}\n${newStr}`.split('\n').map((l) => l.trim()).filter(Boolean);
+    const isMetaLine = (l) =>
+      /^(status|validated|execution|updated|completed|archived)\s*:/i.test(l) || // frontmatter key
+      /^\|.*\|$/.test(l) ||                                                       // table row
+      /^[-*]\s*\[[ xX]\]/.test(l);                                                // checkbox
+    return lines.length > 0 && lines.every(isMetaLine);
+  }
+
   async function main() {
     const timer = createHookTimer('anti-self-implementation');
     try {
@@ -114,6 +138,10 @@ try {
 
       // Check if path matches a delegation target
       const match = DELEGATION_PATHS.find((entry) => entry.test(normalizedPath));
+      if (match && isSanctionedMetadataEdit(getToolName(data), toolInput)) {
+        timer.end({ status: 'sanctioned_metadata_edit', path: normalizedPath, exit: 0 });
+        process.exit(0);
+      }
       if (match) {
         // Check if reactive signals are active — stronger warning
         let reactiveNote = '';

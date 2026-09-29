@@ -1,9 +1,9 @@
 {
   "kit": "beer-kit",
   "platform": "flutter",
-  "version": "0.13.0",
-  "commit": "a2d1073d97834b5b2567d8ec8b9545058339ce6d",
-  "builtAt": "2026-09-27T04:40:40.926Z",
+  "version": "0.13.1",
+  "commit": "d7bab963a05951ed362192e1746ee60b46687a4e",
+  "builtAt": "2026-09-29T09:08:45.521Z",
   "nodeVersion": "v22.15.0",
   "stats": {
     "agents": 22,

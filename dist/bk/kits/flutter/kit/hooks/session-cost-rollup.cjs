@@ -96,6 +96,11 @@ try {
         tokensIn: state.totalTokensIn || 0,
         tokensOut: state.totalTokensOut || 0,
         costUsd: finalCost != null ? Math.round(finalCost * 1e8) / 1e8 : null,
+        // Sum of subagent rows across ALL workflows in the session. `subagentSumUsd` is the
+        // legacy name for the same figure (it read as if per-workflow); kept so existing
+        // readers and older ledger rows stay valid. Prefer `allWorkflowsSubagentUsd` and, for
+        // one feature, `workflowSubagentUsd`.
+        allWorkflowsSubagentUsd: Math.round(subagentSum * 1e8) / 1e8,
         subagentSumUsd: Math.round(subagentSum * 1e8) / 1e8,
         source: source || (cumulativeFromState ? 'state' : (subagentSum ? 'subagent-ledger' : 'state')),
         accuracy: sessionCost != null ? 'high' : 'approx',
