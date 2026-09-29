@@ -1,8 +1,8 @@
 {
-  "version": "0.13.1",
+  "version": "0.13.2",
   "platform": "ios",
-  "builtAt": "2026-09-29T09:08:45.228Z",
-  "fileCount": 411,
+  "builtAt": "2026-09-29T09:14:01.735Z",
+  "fileCount": 412,
   "files": {
     ".bk.json": "1d6d59c151741037c6269c4d80bb2da64f4560a2f609228719d068349ea070dd",
     "CLAUDE.md": "574114b07c04f0177aa0a12d7dd9ba3cef7ca6a005c947f1f9b75a80d1a4f0f2",
@@ -32,7 +32,7 @@
     "hooks/agent-signal-detector.cjs": "940d77d4bad0dd55717ffd318c1ac1e228fdb140eca099af8a1471198c16da45",
     "hooks/anti-self-implementation.cjs": "391a88d0f3c85c125b70a22d2d1c93bbf9633135489680e8362029b3488813eb",
     "hooks/arch-fitness-ios-native.cjs": "ac25d44e2efb18e450fb6317f653d543aeb3e55cbe17a5001a6f71609a9e0230",
-    "hooks/arch-fitness-ios.cjs": "a014d89213921769777846197ab868178be3650b3d482d313f5d0d44bfde4082",
+    "hooks/arch-fitness-ios.cjs": "4616342a0d36fb0ca5b2c6904b29477f6beb09db73892730379c2a4e8f7b0bcd",
     "hooks/bk-dispatch.cjs": "003d7f52f04c2217f718f7b53b2aec61c464166efa0da75ad58b428734854e7d",
     "hooks/bootstrap-quality-gate.cjs": "73a022b58e6451b626537809875ca2393eb1e01eda80fac6542e389634c0e1ef",
     "hooks/budget-guard.cjs": "43c2c471d56722c1123123fbfdc30789ac9b4e0516c6f6caedae334a3c9def40",
@@ -58,6 +58,7 @@
     "hooks/lib/arch-rules-android.cjs": "c3ed7aaee48f615e4a0beb3bc80c161543c4695ddf14d1c88a7773b7a1b33366",
     "hooks/lib/arch-rules-flutter.cjs": "de34b5e0f791a93275dc5df1842973b7f77231e0bb4085653c6ec02080f7b153",
     "hooks/lib/arch-rules-ios.cjs": "5ee7c0fd28a095ee9e21aeb6fca3a6d00650f77b6eee4cd828432a7a1beee033",
+    "hooks/lib/arch-violation-dedupe.cjs": "d1ce0d1d955d1f05f455508db27a3dd6f429ec7bc4183a418a4749a570463c59",
     "hooks/lib/bk-config-utils.cjs": "ba9d33fc2677dc22870b15ec7a95cf11f5eaffbd5b340c3ae4dcb804791ececc",
     "hooks/lib/bk-harness-policy.json": "3739f17d696d26ce475049706d8520f2d67cdd364bd19d2b08260c85066042ba",
     "hooks/lib/bk-harness-policy.schema.json": "d9bf4287c64034ced984e0e5fef5f8b64dd4c71694a3853280dba1a31f4e8b1b",

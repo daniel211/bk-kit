@@ -1,8 +1,8 @@
 {
-  "version": "0.13.1",
+  "version": "0.13.2",
   "platform": "android",
-  "builtAt": "2026-09-29T09:08:45.382Z",
-  "fileCount": 411,
+  "builtAt": "2026-09-29T09:14:01.892Z",
+  "fileCount": 412,
   "files": {
     ".bk.json": "1d6d59c151741037c6269c4d80bb2da64f4560a2f609228719d068349ea070dd",
     "CLAUDE.md": "41225f7579dac4ec6da24d2c401f660921ac00dff8ff2a32b8b35a2502a80e52",
@@ -32,7 +32,7 @@
     "hooks/agent-signal-detector.cjs": "940d77d4bad0dd55717ffd318c1ac1e228fdb140eca099af8a1471198c16da45",
     "hooks/anti-self-implementation.cjs": "391a88d0f3c85c125b70a22d2d1c93bbf9633135489680e8362029b3488813eb",
     "hooks/arch-fitness-android-native.cjs": "e3fa1206fed376e811c0b09987262426ef9d7755c376295a56e156e73ac63a55",
-    "hooks/arch-fitness-android.cjs": "3a89fc0abaaf209a1c1b62bb1c2678bba57198f9b38d9e73991242bf58cadb7c",
+    "hooks/arch-fitness-android.cjs": "7b377fa62175a2dd434ea1e7b8a935ac19a29ff1b79797aa10c7f2a1dfb4abe4",
     "hooks/bk-dispatch.cjs": "003d7f52f04c2217f718f7b53b2aec61c464166efa0da75ad58b428734854e7d",
     "hooks/bootstrap-quality-gate.cjs": "73a022b58e6451b626537809875ca2393eb1e01eda80fac6542e389634c0e1ef",
     "hooks/budget-guard.cjs": "43c2c471d56722c1123123fbfdc30789ac9b4e0516c6f6caedae334a3c9def40",
@@ -58,6 +58,7 @@
     "hooks/lib/arch-rules-android.cjs": "c3ed7aaee48f615e4a0beb3bc80c161543c4695ddf14d1c88a7773b7a1b33366",
     "hooks/lib/arch-rules-flutter.cjs": "de34b5e0f791a93275dc5df1842973b7f77231e0bb4085653c6ec02080f7b153",
     "hooks/lib/arch-rules-ios.cjs": "5ee7c0fd28a095ee9e21aeb6fca3a6d00650f77b6eee4cd828432a7a1beee033",
+    "hooks/lib/arch-violation-dedupe.cjs": "d1ce0d1d955d1f05f455508db27a3dd6f429ec7bc4183a418a4749a570463c59",
     "hooks/lib/bk-config-utils.cjs": "ba9d33fc2677dc22870b15ec7a95cf11f5eaffbd5b340c3ae4dcb804791ececc",
     "hooks/lib/bk-harness-policy.json": "3739f17d696d26ce475049706d8520f2d67cdd364bd19d2b08260c85066042ba",
     "hooks/lib/bk-harness-policy.schema.json": "d9bf4287c64034ced984e0e5fef5f8b64dd4c71694a3853280dba1a31f4e8b1b",

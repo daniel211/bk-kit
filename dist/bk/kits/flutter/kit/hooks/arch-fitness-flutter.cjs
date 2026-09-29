@@ -99,11 +99,15 @@ async function main() {
   const allViolations = runRules(content, filePath, FLUTTER_RULES, platformConfig, skipIds, 'flutter');
 
   // Same warning on the same construct is reported once per session window, whatever line it is on.
-  const { filterRepeatedWarnings } = require(path.join(libDir, 'arch-violation-dedupe.cjs'));
-  const violations = filterRepeatedWarnings(allViolations, {
-    sessionId: parsed.event && (parsed.event.session_id || parsed.event.sessionId),
-    cwd: parsed.event && parsed.event.cwd
-  });
+  // Optional lib: a hook must never crash on it — fall back to reporting everything.
+  let violations = allViolations;
+  try {
+    const { filterRepeatedWarnings } = require(path.join(libDir, 'arch-violation-dedupe.cjs'));
+    violations = filterRepeatedWarnings(allViolations, {
+      sessionId: parsed.event && (parsed.event.session_id || parsed.event.sessionId),
+      cwd: parsed.event && parsed.event.cwd
+    });
+  } catch { /* unfiltered */ }
 
   if (violations.length === 0) process.exit(0);
 
