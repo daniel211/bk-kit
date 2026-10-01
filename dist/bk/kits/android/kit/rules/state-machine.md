@@ -24,9 +24,20 @@ paths:
 | (none) | plan | — |
 | plan | coding | Plan approved, skills loaded |
 | coding | testing | Impl report exists for every sub-task in the batch |
-| testing | review | Test agents complete |
+| testing | review | Test agents complete, or test evidence recorded (advisory, never blocks — see below) |
 | review | commit | All post-tasks complete |
 | review | coding | Fix loop: `quality_fix_count < 2` AND critical/major findings |
+
+### Testing evidence (`/bk-code`, advisory)
+
+`testing` may be satisfied by developer-run test sub-tasks, but the evidence must be recorded. On
+`testing → review` the FSM looks for a test-agent/`bk-debugger` dispatch since coding began or a
+tests sub-task report with a result line (sub-task in the current batch, or report newer than the
+batch's coding start; numbers/tool outcome tokens only, not prose); the finding is stored as
+`testing_evidence_result.kind` (`recorded|test_agent_dispatch|test_subtask_report|none`) and
+`phase_history[].evidence`. With none, one `[TESTING-WITHOUT-EVIDENCE]` advisory per batch tells
+the conductor to dispatch `bk-unit-test-agent` or write
+`--set-phase review --field testing_evidence="<report path or note>"`. Never blocks.
 
 ### Complexity Routing
 
@@ -138,7 +149,8 @@ below. Without it every transition passes through unvalidated.
   "research_complete": false,
   "skills_loaded": [],
   "platform": "ios|android|flutter",
-  "fix_guidance": null
+  "fix_guidance": null,
+  "testing_evidence": "optional (bk-code): report path/note proving tests ran"
 }
 ```
 

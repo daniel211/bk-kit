@@ -194,6 +194,10 @@ function setPhase(opts = {}) {
       newFeature: typeof fields.feature === 'string' ? fields.feature : null,
       newWorkflowId: typeof fields.workflowId === 'string' ? fields.workflowId : null,
       review: { ...guard.reviewBookkeepingWrite(fresh, after), after },
+      // testing -> review evidence check (warn + record): the plan dir lives under the root, and
+      // `--field testing_evidence=…` is how the conductor points at the report that holds the run.
+      root,
+      newTestingEvidence: typeof fields.testing_evidence === 'string' ? fields.testing_evidence : null,
       getPolicy,
       enteredBy: opts.sessionId || 'bk-health-cli',
       // Never from this process's env: see checkPhaseRecurrence() — a Bash prefix would do it.
@@ -240,6 +244,15 @@ function setPhase(opts = {}) {
     advisory = decision.recurrence && decision.recurrence.action === 'warn'
       ? decision.recurrence.message
       : decision.signal;
+    const testing = decision.testing;
+    if (testing && testing.advisory) {
+      advisory = [advisory, testing.advisory].filter(Boolean).join('\n');
+      try {
+        if (testing.signal && policyLib.trackWarnSignal) {
+          policyLib.trackWarnSignal(testing.signal.type, testing.signal.meta);
+        }
+      } catch { /* telemetry never changes the verdict */ }
+    }
   }
   return { success: true, exitCode: 0, verdict: decision.verdict, message: describe(decision, fields, before), advisory };
 }

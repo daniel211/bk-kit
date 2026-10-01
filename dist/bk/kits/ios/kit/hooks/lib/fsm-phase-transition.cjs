@@ -21,6 +21,11 @@
 const { countedHistory, windowEntryCount, recurrenceResetFields } = require('./phase-recurrence-window.cjs');
 const { bookkeepingDenyMessage } = require('./workflow-state-bookkeeping-guard.cjs');
 
+// Optional: the testing-evidence advisory (WARN + RECORD, never a refusal). A kit without the lib
+// keeps the FSM exactly as it was — a missing lib must never crash the guard (0.13.1 did).
+let testingEvidence = null;
+try { testingEvidence = require('./testing-evidence.cjs'); } catch { /* optional */ }
+
 // Built-in transition table per workflow type
 const TRANSITIONS = {
   'bk-code': {
@@ -321,6 +326,8 @@ function invalidTransitionMessage(workflowType, currentPhase, newPhase, allowed,
  * @param {function(): object} p.getPolicy - harness policy, only called when the ladder runs
  * @param {string} [p.enteredBy] - recorded as phase_history[].entered_by
  * @param {boolean} [p.honorBypassEnv] - false: ignore the recurrence override env (CLI callers)
+ * @param {string|null} [p.root] - project root, to find the plan dir for testing-evidence
+ * @param {string|null} [p.newTestingEvidence] - `testing_evidence` the write declares
  * @returns {object} one of
  *   { verdict: 'new_episode', phase, patch }
  *   { verdict: 'tamper', field, message }
@@ -328,7 +335,8 @@ function invalidTransitionMessage(workflowType, currentPhase, newPhase, allowed,
  *   { verdict: 'unknown_workflow' }
  *   { verdict: 'invalid', workflowType, from, to, allowed, message }
  *   { verdict: 'halt'|'block', from, to, recurrence }
- *   { verdict: 'transition', from, to, patch, recurrence, signal, loopCount }
+ *   { verdict: 'transition', from, to, patch, recurrence, signal, loopCount, testing }
+ *     testing: null, or the testing-evidence verdict ({kind, ref, advisory, signal}) on testing -> review
  */
 function decidePhaseWrite(p) {
   const currentState = p.currentState;
@@ -414,6 +422,16 @@ function decidePhaseWrite(p) {
       const kind = review.countsReset && review.batchAdvanced ? 'batch_reset' : 'bookkeeping';
       pending = { kind, phase: review.after.current_phase || null, patch: extraPatch };
     }
+    // Evidence declared AFTER the testing-without-evidence advisory (same-phase write in
+    // `review`): upgrade this batch's "none" record so metrics see it as satisfied.
+    if (testingEvidence && workflowType === 'bk-code' && p.newTestingEvidence) {
+      const upgrade = testingEvidence.decideTestingRecord({ state: currentState, declared: p.newTestingEvidence });
+      if (upgrade) {
+        pending = pending
+          ? { ...pending, patch: { ...pending.patch, ...upgrade } }
+          : { kind: 'bookkeeping', phase: currentPhase, patch: upgrade };
+      }
+    }
     return { verdict: 'no_transition', status: newPhase ? 'same_phase' : 'no_phase_change', from: currentPhase, pending };
   }
 
@@ -459,6 +477,19 @@ function decidePhaseWrite(p) {
     entered_by: enteredBy,
     from_phase: currentPhase
   });
+
+  // Leaving `testing` for `review` in /bk-code: was anything tested? WARN + RECORD only — the
+  // verdict stays a plain transition whatever the answer (see lib/testing-evidence.cjs).
+  let testing = null;
+  if (testingEvidence && workflowType === 'bk-code' && currentPhase === 'testing' && newPhase === 'review') {
+    testing = testingEvidence.decideTestingExit({
+      state: effectiveState,
+      root: p.root || null,
+      declared: p.newTestingEvidence || null,
+      healthCli: HEALTH_CLI
+    });
+    if (testing) phaseHistory[phaseHistory.length - 1].evidence = testing.annotate;
+  }
   // Cap at 50 entries
   const trimmedHistory = phaseHistory.slice(-50);
 
@@ -473,6 +504,7 @@ function decidePhaseWrite(p) {
   if (typeof effectiveState.recurrence_reset_ts === 'number') {
     patch.recurrence_reset_ts = effectiveState.recurrence_reset_ts;
   }
+  if (testing) Object.assign(patch, testing.patch);
 
   // Legacy: also check old-style phase_history for fix_loop_stuck signal
   // (keep backward compat with existing logic that used recentPhases). Counted from the
@@ -491,7 +523,7 @@ function decidePhaseWrite(p) {
     }
   }
 
-  return { verdict: 'transition', from: currentPhase, to: newPhase, patch, recurrence, signal, loopCount };
+  return { verdict: 'transition', from: currentPhase, to: newPhase, patch, recurrence, signal, loopCount, testing };
 }
 
 /** Pause fields a HARD BLOCK writes — the only state a refusal ever writes. */

@@ -35,7 +35,7 @@ try {
     isHookEnabled, readWorkflowState, writeWorkflowState, workflowStatePath
   } = require('./lib/bk-config-utils.cjs');
   const { pendingKey, stashPending, takePending } = require('./lib/fsm-pending-bookkeeping.cjs');
-  const { loadHarnessPolicy, trackRedSignal, trackViolation } = require('./lib/harness-policy-loader.cjs');
+  const { loadHarnessPolicy, trackRedSignal, trackViolation, trackWarnSignal } = require('./lib/harness-policy-loader.cjs');
   const { proposedState, reviewBookkeepingWrite } = require('./lib/workflow-state-bookkeeping-guard.cjs');
   const {
     extractStringField, decidePhaseWrite, haltPausePatch, recordRefusal
@@ -47,6 +47,12 @@ try {
   // reason must always reach the model. Optional lib: absent → text goes out unchanged.
   let injectionBudget = null;
   try { injectionBudget = require('./lib/injection-budget.cjs'); } catch { /* optional */ }
+
+  // Optional: the project root the testing-evidence check reads the plan dir from. Without it
+  // the check still sees recorded evidence and agent dispatches, just not plan reports.
+  function projectRootOrNull(input) {
+    try { return require('./lib/resolve-project-root.cjs').resolveProjectRoot(input); } catch { return null; }
+  }
 
   /** @returns {string|null} the text to inject, or null when the budget says stay quiet. */
   function budgetedContext(text, input) {
@@ -221,6 +227,9 @@ try {
         // the next workflow starting, even when the phase string has not moved.
         newFeature: extractStringField(newContent, 'feature'),
         newWorkflowId: extractStringField(newContent, 'workflowId'),
+        // Evidence the write itself declares (an Edit adding "testing_evidence": "...").
+        newTestingEvidence: extractStringField(newContent, 'testing_evidence'),
+        get root() { return projectRootOrNull(input); },
         // A new episode decides before any review — its reset overwrites the bookkeeping the
         // write carried — so the review is only computed when it is needed.
         get review() { return reviewStateWrite(toolInput, currentState); },
@@ -291,11 +300,24 @@ try {
           deferBookkeeping(input, 'transition', decision.to, decision.patch);
           const { recurrence } = decision;
 
+          // testing -> review without test evidence: advise and record, never block. Delivered
+          // here (PreToolUse additionalContext reaches the conductor, whose Edit this is) rather
+          // than through the conductor inbox, which exists for SubagentStop output.
+          const testing = decision.testing;
+          let testingText = null;
+          if (testing && testing.advisory) {
+            if (testing.signal) {
+              try { trackWarnSignal(testing.signal.type, testing.signal.meta); } catch { /* best-effort */ }
+            }
+            testingText = budgetedContext(testing.advisory, input);
+          }
+
           if (recurrence.action === 'warn') {
             process.stderr.write(`[FSM-GUARD] WARN: ${recurrence.message}\n`);
             const warnText = budgetedContext(recurrence.message, input);
-            if (warnText) {
-              process.stdout.write(JSON.stringify({ additionalContext: warnText }) + '\n');
+            const both = [warnText, testingText].filter(Boolean).join('\n');
+            if (both) {
+              process.stdout.write(JSON.stringify({ additionalContext: both }) + '\n');
             }
             timer.end({ status: 'recurrence_warn', phase: decision.to, count: recurrence.entered, exit: 0 });
             process.exit(0);
@@ -303,14 +325,21 @@ try {
 
           if (decision.signal) {
             const signalText = budgetedContext(decision.signal, input);
-            if (signalText) {
-              process.stdout.write(JSON.stringify({ additionalContext: signalText }) + '\n');
+            const both = [signalText, testingText].filter(Boolean).join('\n');
+            if (both) {
+              process.stdout.write(JSON.stringify({ additionalContext: both }) + '\n');
             }
             timer.end({ status: 'ok_with_signal', from: decision.from, to: decision.to, loopCount: decision.loopCount, exit: 0 });
             process.exit(0);
           }
 
-          timer.end({ status: 'ok', from: decision.from, to: decision.to, exit: 0 });
+          if (testingText) {
+            process.stdout.write(JSON.stringify({ additionalContext: testingText }) + '\n');
+          }
+          timer.end({
+            status: 'ok', from: decision.from, to: decision.to, exit: 0,
+            ...(testing ? { testing_evidence: testing.kind } : {})
+          });
           process.exit(0);
         }
       }

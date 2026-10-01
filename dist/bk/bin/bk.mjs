@@ -4,7 +4,7 @@
  *
  * One binary for all three kits. The platform is no longer baked in at build time: each command
  * resolves it from --kit, the project's .bk-version.json, or the project's own layout — see
- * lib/kit-resolver.mjs. Only '0.13.3' is still substituted by the build.
+ * lib/kit-resolver.mjs. Only '0.13.4' is still substituted by the build.
  */
 
 import { Command } from 'commander';
@@ -18,7 +18,7 @@ const program = new Command();
 program
   .name('bk')
   .description('beer-kit — iOS, Android and Flutter development kits for Claude Code')
-  .version('0.13.3');
+  .version('0.13.4');
 
 registerInit(program);
 registerDoctor(program);

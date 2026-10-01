@@ -97,7 +97,7 @@ For each batch in the `## Execution Batches` table (top → bottom):
 | Phase | Action | FSM write before dispatch |
 |-------|--------|---------------------------|
 | **3a. Implement** | `bk-{platform}-developer` per sub-task (`parallel-with:` → concurrent background, `depends:` → after dependency) | `current_phase: "coding"` + `batch: N` |
-| **3b. Test** | `bk-unit-test-agent` over the batch's `## Test Plan` sections; failures → `bk-debugger` → fix → re-test (max 2 cycles) | `current_phase: "testing"` |
+| **3b. Test** | `bk-unit-test-agent` over the batch's `## Test Plan` sections; failures → `bk-debugger` → fix → re-test (max 2 cycles). Plan test sub-tasks run by the developer may count, but record it: `--field testing_evidence=<report>` (workflow-state.md) | `current_phase: "testing"` |
 | **3c. Review** | `bk-code-reviewer` over the batch's `## Review Checklist` (+ `bk-security-auditor` if the batch touches auth/security); critical findings → fix → re-test → re-review (max 2 cycles) | `current_phase: "review"`; on a fix loop back, `current_phase: "coding"` + `quality_fix_count += 1` |
 
 Models: developer opus, unit-test haiku, debugger/reviewer/auditor sonnet, docs-writer sonnet,

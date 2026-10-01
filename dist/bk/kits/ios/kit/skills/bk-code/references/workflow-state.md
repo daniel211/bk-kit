@@ -30,9 +30,35 @@ a compaction `compact-recovery` restores nothing. Both writes, every transition.
   "test_fix_count": 0,
   "skills_loaded": [],
   "dev_agent_id": null,
-  "reviewer_agent_id": null
+  "reviewer_agent_id": null,
+  "testing_evidence": "optional: report path or note proving the batch's tests ran"
 }
 ```
+
+### Testing evidence (warn + record, never a block)
+
+Leaving `testing` for `review` is checked for evidence that tests ran for the batch: a
+`bk-unit-test-agent` / `bk-device-test-agent` / `bk-debugger` dispatch since coding began, or a
+tests sub-task (`sub-task-NN-…tests…`) whose `research/impl-sub-task-NN.md` (or `fix-` / `test-` /
+`review-`) report holds a result line. The sub-task must belong to the CURRENT batch (plan.md batch
+table, an inline `**Batches:**` line, or `batch: B2` front-matter), or its report must be newer than
+this batch's first `coding` entry (tests living in a later batch); a previous batch's report never
+counts. A plan with no parseable batches accepts any tests sub-task. A result line carries a number
+or a tool outcome token (`N tests, M failures`, `TEST SUCCEEDED`/`FAILED`, `Executed N tests`,
+flutter `+N: …`, a gradle test task then `BUILD SUCCESSFUL`); bare prose such as "tests passed" does
+not. Which
+kind was found is recorded — `testing_evidence_result: {batch, kind, ref, ts}` (kind is
+`recorded|test_agent_dispatch|test_subtask_report|none`) and `phase_history[].evidence` on the
+`review` entry — so a real test phase can be told from a pass-through. With none, a
+`[TESTING-WITHOUT-EVIDENCE]` advisory and a `testing_without_evidence` yellow signal fire, once
+per batch. Satisfy it by dispatching `bk-unit-test-agent`, or by pointing at the report:
+
+```
+node .claude/cli/bk-health/index.cjs --set-phase review --field testing_evidence="research/impl-sub-task-08.md"
+```
+
+`testing_evidence` is yours to write (on the `testing → review` call itself, or afterwards as a
+same-phase write); `testing_evidence_result` and `testing_evidence_warned_batch` are the hooks'.
 
 `workflow_type` (or `command`) is what `fsm-guard` matches against its transition table.
 Omit it and the guard passes everything through silently — the state file looks healthy
@@ -75,6 +101,7 @@ applies the recurrence override env; in a session started with it, Edit instead.
 | Code-Step-1, after plan.md parsed (full Write) | `plan` | `workflow_type`, `feature`, `plan_dir`, `platform`, `complexity_tier`, `total_batches` |
 | Code-Step-3a, first dispatch of a batch | `coding` | `batch`, `dev_agent_id` |
 | Code-Step-3b, before test dispatch | `testing` | — |
+| Code-Step-3b, tests already ran as plan sub-tasks | `review` | `testing_evidence` (`--field testing_evidence=<report>`) |
 | Code-Step-3c, before review dispatch | `review` | `reviewer_agent_id` |
 | Code-Step-3c, critical findings → re-implement | `coding` | `quality_fix_count += 1` (`--inc quality_fix_count`) |
 | Code-Step-3d, batch complete → next batch | *(unchanged)* | `batch += 1`, `phase_recurrence_count: {}` (`--batch next`) |
