@@ -41,6 +41,19 @@ try {
     },
   };
 
+  /**
+   * `mcp_server` is not always a string — the field logged `mcpServer.includes is not a
+   * function` when it arrived as an object like {name}. Accept a string, or an object with a
+   * string name/server/id; anything else (undefined, number, null) is "no server".
+   */
+  function normalizeMcpServer(v) {
+    if (typeof v === 'string') return v;
+    if (v && typeof v === 'object') {
+      for (const k of ['name', 'server', 'id']) if (typeof v[k] === 'string') return v[k];
+    }
+    return '';
+  }
+
   async function main() {
     const timer = createHookTimer('mcp-health-monitor');
     try {
@@ -57,7 +70,7 @@ try {
 
       const { getToolName } = require('./lib/hook-event-accessor.cjs');
       const toolName = (getToolName(data) || '').toLowerCase();
-      const mcpServer = data.mcp_server || '';
+      const mcpServer = normalizeMcpServer(data.mcp_server);
 
       // Check if this is an MCP tool call
       const mcpKey = Object.keys(MCP_FALLBACK).find(k =>

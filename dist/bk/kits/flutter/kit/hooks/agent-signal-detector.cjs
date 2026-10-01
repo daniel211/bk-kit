@@ -9,7 +9,9 @@
 // Claude Code now dispatches agents in the background by default, and for those PostToolUse
 // fires at launch with "Async agent launched successfully…", before the agent has said
 // anything. SubagentStop fires at completion and carries `last_assistant_message`, the agent's
-// final message — the same text workflow-metrics classifies with the same vocabulary.
+// final message — the same text workflow-metrics classifies with the same vocabulary. When the
+// agent ended with a SubagentHandback tool call (Claude Code 2.1.285+) that field is "" and the
+// message is read from the agent transcript instead: lib/subagent-final-message.cjs.
 //
 // Delivery: SubagentStop output never reaches the conductor, so the recommendation is queued in
 // lib/conductor-inbox.cjs and delivered by conductor-inbox-drain.cjs on the conductor's next
@@ -102,9 +104,13 @@ try {
 
       // The FINAL message only, as in workflow-metrics: a signal raised mid-run and then
       // resolved is not a reason to reroute.
-      const agentOutput = typeof data.last_assistant_message === 'string'
+      let agentOutput = typeof data.last_assistant_message === 'string'
         ? data.last_assistant_message
         : '';
+      // Optional lib: a missing file must not crash the hook — keep the payload field.
+      try {
+        agentOutput = require('./lib/subagent-final-message.cjs').resolveFinalMessage(data);
+      } catch { /* payload field only */ }
 
       if (!agentOutput.trim()) {
         timer.end({ status: 'no_output', agent: agentType, exit: 0 });

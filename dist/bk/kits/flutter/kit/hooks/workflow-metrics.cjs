@@ -57,12 +57,18 @@ try {
       // field trace rows read `status: "unknown"`, so every metric derived from status was a
       // structural zero (see fix_loops in lib/workflow-summary.cjs).
       //
-      // `last_assistant_message` is the agent's FINAL message — where a bk agent puts its
-      // report or its escalation — not its whole transcript. A signal raised mid-run and then
+      // The agent's FINAL message — where a bk agent puts its report or its escalation — not its
+      // whole transcript. Usually `last_assistant_message`, but an agent that ends with a
+      // SubagentHandback tool call (Claude Code 2.1.285+) leaves that "" and the message lives in
+      // the transcript; lib/subagent-final-message.cjs covers both. A signal raised mid-run and then
       // resolved is deliberately not recorded here.
-      const finalMessage = typeof data.last_assistant_message === 'string'
+      let finalMessage = typeof data.last_assistant_message === 'string'
         ? data.last_assistant_message
         : '';
+      // Optional lib: a missing file must not crash the hook — keep the payload field.
+      try {
+        finalMessage = require('./lib/subagent-final-message.cjs').resolveFinalMessage(data);
+      } catch { /* payload field only */ }
       const signals = classifyAgentOutput(finalMessage);
       const agentStatus = signals[0] || (finalMessage.trim() ? 'ok' : 'no_output');
 

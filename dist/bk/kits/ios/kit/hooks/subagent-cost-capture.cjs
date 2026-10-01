@@ -103,6 +103,9 @@ try {
         resolveWorkflowId, ownedCumulativeCost, COST_OWNER_KEY
       } = require('./lib/workflow-identity.cjs');
       const workflowId = resolveWorkflowId(state, sessionId);
+      // NOTE: nothing in the kit writes state.effort / state.current_effort (SubagentStop input
+      // carries no effort either), so this is always 'medium' — a label, not the real level.
+      // Harmless to cost now that exact usage skips the multiplier; fixing it needs a writer.
       const effort = state.effort || state.current_effort || 'medium';
       const model = parsed.model || state.model || 'claude-sonnet-4-6';
 
@@ -118,6 +121,7 @@ try {
       // computeCost's granular shape prices cache properly (read 0.1x input, creation 1.25x).
       const rawInputTokens = Math.max(0,
         parsed.tokensIn - (parsed.cacheReadTokens || 0) - (parsed.cacheCreationTokens || 0));
+      const exact = parsed.accuracy === 'high';
       const costUsd = computeCost({
         model,
         rawInputTokens,
@@ -125,7 +129,10 @@ try {
         cacheReadTokens: parsed.cacheReadTokens || 0,
         cacheCreationTokens: parsed.cacheCreationTokens || 0,
         thinkingTokens: parsed.thinkingTokens || 0,
-        effort
+        effort,
+        // accuracy 'high' = summed from real per-turn usage rows (exact); 'approx'/'low' are
+        // text-length estimates and keep the effort multiplier.
+        exactUsage: exact
       });
 
       // Build ledger entry (no prompt content — numbers/metadata only)
@@ -143,7 +150,7 @@ try {
         cacheCreationTokens: parsed.cacheCreationTokens || 0,
         thinkingTokens: parsed.thinkingTokens || 0,
         costUsd: Math.round(costUsd * 1e8) / 1e8,
-        multiplierApplied: getPricingMultiplier(effort),
+        multiplierApplied: exact ? 1 : getPricingMultiplier(effort),
         source: 'jsonl',
         accuracy: parsed.accuracy,
         sessionId: sessionId || null
@@ -196,15 +203,10 @@ try {
     }
   }
 
-  /** Get effort multiplier value for ledger metadata */
+  /** Multiplier applied to a non-exact row (exact rows record 1 at the call site). */
   function getPricingMultiplier(effort) {
     try {
-      const { computeCost: cc } = require('./lib/cost-ledger-writer.cjs');
-      // Derive multiplier by comparing base cost vs effort cost for 1k/1k tokens
-      // (avoids importing pricing JSON directly here)
-      const base = cc('claude-sonnet-4-6', 1000, 1000, 'medium');
-      const withEffort = cc('claude-sonnet-4-6', 1000, 1000, effort);
-      return base > 0 ? Math.round((withEffort / base) * 10) / 10 : 1.0;
+      return require('./lib/cost-ledger-writer.cjs').effortMultiplier(effort);
     } catch { return 1.0; }
   }
 

@@ -14,7 +14,8 @@
  *
  * Extracting the vocabulary lets workflow-metrics classify `last_assistant_message` with the
  * exact same rules the detector applies, so `status` and `fix_loops` become measurements
- * instead of structural zeros. Both now read the same field, `last_assistant_message`.
+ * instead of structural zeros. Both now read the same final message: `last_assistant_message`, or the SubagentHandback
+ * tool call's message when that is empty (lib/subagent-final-message.cjs).
  */
 
 'use strict';

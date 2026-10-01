@@ -188,15 +188,41 @@ try {
       let context = `[POST-COMMIT] Phase → commit${commitHash ? ` (${commitHash})` : ''}. Feature "${state.feature || 'unknown'}".`;
 
       const untracked = untrackedFiles(data.cwd);
+      let referenced = [];
       if (untracked.length) {
-        // Eight names are enough to recognise the deliverable; `git status` has the rest.
-        const shown = untracked.slice(0, 8);
-        const more = untracked.length - shown.length;
-        context += `\n[POST-COMMIT] WARNING: ${untracked.length} file(s) are still untracked after this commit:\n` +
-          shown.map((f) => `  ?? ${f}`).join('\n') +
-          (more > 0 ? `\n  ...and ${more} more` : '') +
-          `\nIf any belong to this commit it did not capture them (\`git add <dir>\` skips new files). ` +
-          `Verify: git show --stat ${commitHash || 'HEAD'}`;
+        // Sharper than "something is untracked": does THIS commit use an untracked file? Then it
+        // cannot build on its own and the history is not bisectable. Optional lib, bounded work.
+        try {
+          referenced = require('./lib/commit-untracked-references.cjs')
+            .findReferencedUntracked(untracked, data.cwd).referenced;
+        } catch { /* optional lib — fall back to the generic warning */ }
+        const refSet = new Set(referenced.map((r) => r.file));
+        // A referenced file may sit inside a collapsed `dir/` line: drop the line only when the
+        // exact path matched, otherwise leave the directory in the generic list.
+        const rest = untracked.filter((f) => !refSet.has(f));
+
+        if (referenced.length) {
+          context += `\n[POST-COMMIT] WARNING: this commit references file(s) that are still untracked — ` +
+            `it will not build or pass on its own, and the history is not bisectable:\n` +
+            referenced.slice(0, 8).map((r) =>
+              `  ?? ${r.file}  (used by ${r.usedBy.slice(0, 3).join(', ')}${r.usedBy.length > 3 ? ', ...' : ''})`
+            ).join('\n') +
+            `\nStage them into this commit (git add <file> && git commit --amend --no-edit) or reorder ` +
+            `the commits so they land first.`;
+        }
+        if (rest.length) {
+          // Eight names are enough to recognise the deliverable; `git status` has the rest.
+          const shown = rest.slice(0, 8);
+          const more = rest.length - shown.length;
+          const listing = `${rest.length} file(s) are still untracked after this commit:\n` +
+            shown.map((f) => `  ?? ${f}`).join('\n') + (more > 0 ? `\n  ...and ${more} more` : '');
+          context += referenced.length
+            // Dependency already called out above: keep the remainder to a one-line note.
+            ? `\n[POST-COMMIT] Also ${listing}`
+            : `\n[POST-COMMIT] WARNING: ${listing}` +
+              `\nIf any belong to this commit it did not capture them (\`git add <dir>\` skips new files). ` +
+              `Verify: git show --stat ${commitHash || 'HEAD'}`;
+        }
         if (untracked.some(holdsSessionState)) {
           context += `\nStage files by name inside bk/: bk/dev/shared/ also holds per-machine session state ` +
             `(.workflow-state.json*, checkpoints/, handoff/, .retry-state.json, .statusline-cache.json) that is never committed.`;
@@ -205,7 +231,8 @@ try {
         try {
           const { trackWarnSignal } = require('./lib/harness-policy-loader.cjs');
           trackWarnSignal('untracked_after_commit', {
-            commit: commitHash, count: untracked.length, files: untracked.slice(0, 20)
+            commit: commitHash, count: untracked.length, files: untracked.slice(0, 20),
+            referenced_by_commit: referenced.slice(0, 20).map((r) => r.file)
           });
         } catch { /* telemetry is best-effort */ }
       }

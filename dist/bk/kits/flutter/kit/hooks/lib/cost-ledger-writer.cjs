@@ -9,11 +9,17 @@
  *   Override via BK_METRICS_DIR env var (for testing).
  *
  * Cost formula:
- *   rawCost = (tokensIn/1000 * inputPer1k) + (tokensOut/1000 * outputPer1k)
- *   adjustedCost = rawCost * effortMultiplier
+ *   rawCost = raw*inputRate + out*outputRate + cacheRead*0.1*inputRate
+ *             + cacheCreation*1.25*inputRate + thinking*outputRate
+ *   cost    = rawCost * effortMultiplier   ONLY when usage is not exact (see below)
  *
- * Accuracy caveat: JSONL usage.input_tokens undercounts 46-174x due to thinking tokens.
- * Effort multiplier compensates but result is still ±15-30% approximation.
+ * Effort multiplier: designed for the era when JSONL input_tokens were placeholders that
+ * undercounted 46-174x (thinking tokens), where it compensated to a ±15-30% approximation.
+ * Captured usage is now exact (token-accurate-parser sums every turn: accuracy 'high'), so
+ * callers pass `exactUsage: true` and the multiplier is NOT applied — applying it was a flat
+ * 1.5x over-count versus subagent-live-tracker's cost_usd. Legacy-signature calls and
+ * granular calls without `exactUsage` (estimated / unknown-quality usage) keep the multiplier.
+ * Historical ledger rows are not rewritten.
  */
 
 'use strict';
@@ -57,6 +63,17 @@ function resolveModel(model) {
 }
 
 /**
+ * The estimate-compensation multiplier for an effort level (1.0 when unknown/unconfigured).
+ * Single source for computeCost and for the `multiplierApplied` ledger field.
+ * @param {string} [effort]
+ * @returns {number}
+ */
+function effortMultiplier(effort) {
+  const multipliers = getPricing().effortMultipliers || {};
+  return multipliers[effort || 'medium'] ?? multipliers['medium'] ?? 1.0;
+}
+
+/**
  * Compute estimated cost in USD.
  *
  * Two call shapes supported (P1-4 cache-aware refactor, additive — old signature still works):
@@ -65,19 +82,23 @@ function resolveModel(model) {
  *           Treats tokensIn as raw input. Use when caller has no cache breakdown.
  *
  *   Granular: computeCost({ model, rawInputTokens, tokensOut, cacheReadTokens,
- *                           cacheCreationTokens, thinkingTokens, effort })
+ *                           cacheCreationTokens, thinkingTokens, effort, exactUsage })
  *           Cache-aware: cacheRead = 0.1× input rate, cacheCreation = 1.25× input rate,
  *           thinking billed at output rate.
+ *           `exactUsage: true` (counts come from real usage, accuracy 'high') skips the
+ *           effort multiplier; omit it for estimated usage.
  *
  * @returns {number} Estimated cost in USD
  */
 function computeCost(modelOrOpts, tokensIn, tokensOut, effort) {
   // Detect call shape
   let model, rawInputTokens, cacheReadTokens, cacheCreationTokens, thinkingTokens, _effort;
+  let exactUsage = false;
   if (modelOrOpts && typeof modelOrOpts === 'object') {
     ({ model, rawInputTokens = 0, tokensOut = 0, cacheReadTokens = 0,
        cacheCreationTokens = 0, thinkingTokens = 0, effort: _effort } = modelOrOpts);
     tokensOut = modelOrOpts.tokensOut || 0;
+    exactUsage = modelOrOpts.exactUsage === true;
     // Backward compat: if caller passes legacy `tokensIn` (total) instead of `rawInputTokens`,
     // derive raw from total minus cache.
     if (rawInputTokens === 0 && typeof modelOrOpts.tokensIn === 'number') {
@@ -112,8 +133,8 @@ function computeCost(modelOrOpts, tokensIn, tokensOut, effort) {
     if (!modelPricing) return 0;
   }
 
-  const multipliers = pricing.effortMultipliers || {};
-  const multiplier = multipliers[_effort || 'medium'] ?? multipliers['medium'] ?? 1.0;
+  // Exact usage already includes thinking/cache; the multiplier only compensates estimates.
+  const multiplier = exactUsage ? 1.0 : effortMultiplier(_effort);
 
   const inputRate = modelPricing.inputPer1k;
   const outputRate = modelPricing.outputPer1k;
@@ -166,4 +187,4 @@ function appendEntry(entry) {
   }
 }
 
-module.exports = { computeCost, appendEntry, resolveMetricsDir, resolveModel };
+module.exports = { computeCost, effortMultiplier, appendEntry, resolveMetricsDir, resolveModel };

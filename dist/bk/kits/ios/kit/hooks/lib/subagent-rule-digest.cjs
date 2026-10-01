@@ -161,8 +161,8 @@ function buildSubagentRuleDigest({ agentType, platform, fullContext = false }) {
   // conductor history, most of it the report pasted a second time. The report file already
   // holds it (verify-output checks the file, and its required sections apply to the FILE), so
   // the reply carries only what the next dispatch decision needs. Signals stay in it:
-  // agent-signal-detector and workflow-metrics classify `last_assistant_message` and nothing
-  // else. The structured names must be in KNOWN_SIGNALS (lib/agent-signal-patterns.cjs) —
+  // agent-signal-detector and workflow-metrics classify the final message (`last_assistant_message`, or the
+  // SubagentHandback message — lib/subagent-final-message.cjs) and nothing else. The structured names must be in KNOWN_SIGNALS (lib/agent-signal-patterns.cjs) —
   // this line used to say `[SIGNAL: stuck]`, which the classifier silently ignores.
   // The design-* agents' one-line return format is stricter and wins.
   lines.push('- Final message = short hand-back, not the report (the conductor keeps it all session): ≤ ~1,200 chars — `Status: complete|needs_info|blocked` (+ verdict / severity counts), report path(s), ≤ 5 bullets the next step needs (blockers, criticals, files changed). No report file: the essentials inline, same cap. A stricter format in your body or the dispatch wins.');
