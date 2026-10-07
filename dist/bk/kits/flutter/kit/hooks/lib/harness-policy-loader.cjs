@@ -39,7 +39,7 @@ const DEFAULT_POLICY = {
       file_edit_history: '.bk-metrics/file-edit-history.jsonl'
     },
     phase_recurrence: {
-      enabled: true, warn_count: 2, block_count: 3, halt_count: 4,
+      enabled: true, warn_count: 3, block_count: 3, halt_count: 4,
       bypass_env: 'BK_HARNESS_RECURRENCE_OVERRIDE'
     },
     subagent_iteration: {

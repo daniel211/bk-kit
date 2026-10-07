@@ -270,6 +270,7 @@ Prefer the CLI to move the phase. It applies the same validation and bookkeeping
 ```bash
 node .claude/cli/bk-health/index.cjs --set-phase <phase>   # e.g. testing; add --inc quality_fix_count on a fix loop
 node .claude/cli/bk-health/index.cjs --batch next           # batch completed: batch N+1 + counts reset
+# First batch: `--set-phase coding` auto-seeds batch=1 when batch is unset (or `--set-phase coding --batch 1`).
 ```
 
 A refusal prints fsm-guard's own message and changes nothing. The Edit path below remains the

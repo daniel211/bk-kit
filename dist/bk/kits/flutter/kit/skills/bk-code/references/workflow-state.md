@@ -77,7 +77,13 @@ gets them restored). To move the workflow, change `current_phase` and nothing of
 ```
 node .claude/cli/bk-health/index.cjs --set-phase <phase> [--inc quality_fix_count] [--field reviewer_agent_id=<id>]
 node .claude/cli/bk-health/index.cjs --batch next          # batch boundary: batch N+1 + counts reset
+node .claude/cli/bk-health/index.cjs --set-phase coding --batch 1   # first batch, explicit (batch null)
 ```
+
+`batch` must be a number from the first `coding` entry on — agent-trace rows and fix-loop counting
+key on it. `--set-phase coding` **auto-seeds `batch: 1`** when `batch` is unset and `total_batches`
+is set (no count reset; it is not a batch boundary). `--field batch=…` is refused; to seed by hand
+use `--batch 1` (or `--set-phase coding --batch 1`).
 
 One Bash call, no Read of the state file. It runs `fsm-guard`'s own decision
 (`hooks/lib/fsm-phase-transition.cjs`) — same transition table, new-episode rule, recurrence
@@ -99,7 +105,7 @@ applies the recurrence override env; in a session started with it, Edit instead.
 | Workflow point | `current_phase` | Also write |
 |----------------|-----------------|-----------|
 | Code-Step-1, after plan.md parsed (full Write) | `plan` | `workflow_type`, `feature`, `plan_dir`, `platform`, `complexity_tier`, `total_batches` |
-| Code-Step-3a, first dispatch of a batch | `coding` | `batch`, `dev_agent_id` |
+| Code-Step-3a, first dispatch of a batch | `coding` | `batch` (`--set-phase coding --batch 1` for batch 1; auto-seeded to 1 if omitted), `dev_agent_id` |
 | Code-Step-3b, before test dispatch | `testing` | — |
 | Code-Step-3b, tests already ran as plan sub-tasks | `review` | `testing_evidence` (`--field testing_evidence=<report>`) |
 | Code-Step-3c, before review dispatch | `review` | `reviewer_agent_id` |

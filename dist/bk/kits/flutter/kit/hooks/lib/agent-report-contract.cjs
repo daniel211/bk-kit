@@ -120,7 +120,10 @@ const CONTRACTS = {
     // agent was actually told to write is the bug this file exists to fix.
     { dir: 'planResearch', show: 'unit-test-batchN.md', re: /^unit-test-batch\d+\.md$/, why: 'observed in the field' },
     // Also not documented: X-Game-Pro 2026-09-25, test-report-b1.md and test-report-b2.md.
-    { dir: 'planResearch', show: 'test-report*.md', re: /^test-report(?:-[\w-]+)?\.md$/, why: 'observed in the field' }
+    { dir: 'planResearch', show: 'test-report*.md', re: /^test-report(?:-[\w-]+)?\.md$/, why: 'observed in the field' },
+    // The plan's sub-task Output convention: X-Game-Pro 2026-10-07, test-sub-task-09a.md,
+    // -09b-lintfix.md, -10b.md, -11.md.
+    { dir: 'planResearch', show: 'test-sub-task-NN*.md', re: /^test-sub-task-\d+[a-z]*(?:-[\w-]+)?\.md$/, why: 'plan sub-task Output convention' }
   ],
   'device-test-agent': ({ f, F, p, P }) => [
     { dir: 'reports', show: `device-test-${P}-${F}[-batchN].md`, re: new RegExp(`^device-test-${p}-${f}${BATCH}\\.md$`), why: 'agents/bk-device-test-agent.md' }

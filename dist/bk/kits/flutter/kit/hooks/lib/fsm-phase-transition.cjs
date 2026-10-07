@@ -213,7 +213,7 @@ function checkPhaseRecurrence(currentState, newPhase, policy, opts = {}) {
   const cfg = policy && policy.deadloop && policy.deadloop.phase_recurrence;
   if (!cfg || !cfg.enabled) return { action: 'pass' };
 
-  const warnCount = cfg.warn_count || 2;
+  const warnCount = cfg.warn_count || 3;
   const blockCount = cfg.block_count || 3;
   const haltCount = cfg.halt_count || 4;
   const bypassEnv = cfg.bypass_env || 'BK_HARNESS_RECURRENCE_OVERRIDE';

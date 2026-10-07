@@ -67,10 +67,7 @@ try {
   // never code another agent is working on; bk-git-manager commits rather than edits.
   // X-Game-Pro, 0.12.3, one session: 18 "Recommended sections missing: Platform:, Files:" for
   // bk-project-manager, bk-docs-writer, bk-code-reviewer, bk-git-manager and the rest.
-  const CODE_WRITING_AGENTS = new Set([
-    'bk-ios-developer', 'bk-android-developer', 'bk-flutter-developer',
-    'bk-unit-test-agent', 'bk-device-test-agent', 'bk-code-simplifier'
-  ]);
+  const { CODE_WRITING_AGENTS } = require('./lib/agent-classes.cjs');
 
   // --- Task 3.1A: Required sections validation for dispatch prompts ---
   const REQUIRED_PROMPT_SECTIONS = ['Task:', 'Output:'];
@@ -267,8 +264,18 @@ try {
         }
         // Already filtered to what this agent needs, so an empty list means no advisory at all.
         if (validation.missingRecommended.length > 0) {
-          const names = validation.missingRecommended.join(', ');
-          contextParts.push(`[DISPATCH-ADVISORY] Recommended sections missing: ${names}. Consider adding them.`);
+          // The Files: nag is right the first time and noise the 27th (X-Game-Pro, 0.13.4):
+          // once per session+feature. Platform: stays — it only fires while still unknown.
+          let rec = validation.missingRecommended;
+          if (rec.includes('Files:')) {
+            const { firstTime } = require('./lib/advisory-once.cjs');
+            const sid = injectionBudget ? injectionBudget.sessionIdFrom(data) : null;
+            if (!firstTime('dispatch-files', { sessionId: sid, feature })) {
+              rec = rec.filter(n => n !== 'Files:');
+            }
+          }
+          const names = rec.join(', ');
+          if (rec.length > 0) contextParts.push(`[DISPATCH-ADVISORY] Recommended sections missing: ${names}. Consider adding them.`);
         }
       }
 

@@ -149,7 +149,29 @@ try {
     // Check snapshot infrastructure
     const hasInfra = checkSnapshotInfra(platform, projectRoot);
 
+    // "No snapshot infrastructure" is a property of the project, not of the file: one row
+    // per file said the same thing N times (X-Game-Pro, 0.13.4). Once per session, deduped by
+    // reason + platform + project. Without a session id (no dedupe state) fall back to the
+    // findings file itself, so the signal is still written once rather than per edit.
+    const reason = 'No snapshot test infrastructure detected';
+    const findingsPath = resolveMetricPath('.bk-metrics/ui-snapshot-findings.jsonl', projectRoot);
+    let firstForProject = true;
     if (!hasInfra) {
+      const sessionId = input.session_id || input.sessionId || null;
+      if (sessionId) {
+        const { firstTime } = require('./lib/advisory-once.cjs');
+        firstForProject = firstTime(`ui_snapshot_gap|${reason}|${platform}`, { sessionId, feature: projectRoot });
+      } else {
+        try {
+          firstForProject = !fs.readFileSync(findingsPath, 'utf8').split('\n').some(l => {
+            try { const e = JSON.parse(l); return e.signal === 'ui_snapshot_gap' && e.reason === reason && e.platform === platform; }
+            catch { return false; }
+          });
+        } catch { firstForProject = true; }
+      }
+    }
+
+    if (!hasInfra && firstForProject) {
       // Emit finding
       const findingsFile = resolveMetricPath('.bk-metrics/ui-snapshot-findings.jsonl', projectRoot);
       const entry = {
@@ -157,7 +179,7 @@ try {
         file: filePath,
         platform,
         signal: 'ui_snapshot_gap',
-        reason: 'No snapshot test infrastructure detected'
+        reason
       };
       appendJsonl(findingsFile, entry);
 

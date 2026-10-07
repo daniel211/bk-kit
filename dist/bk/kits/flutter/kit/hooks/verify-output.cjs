@@ -205,6 +205,14 @@ try {
       // What the agent did, from its own transcript: when it started, and every tool it called.
       const run = readAgentRun(identity.transcript);
 
+      // The first end_turn of an agent that has not yet called SubagentHandback is not its end:
+      // the harness forces it to continue, and its report is usually written after this stop.
+      // The real completion fires another SubagentStop, which is the one to judge.
+      if (run.handbackPending) {
+        timer.end({ status: 'handback_pending', agent: agentType, exit: 0 });
+        process.exit(0);
+      }
+
       const errors = [];
       const warnings = [];
 
@@ -308,7 +316,10 @@ try {
         const harness = CODE_IMMUTABLE_AGENTS.has(agentType);
         const label = harness ? 'Read-only+Harness' : 'Read-only';
 
-        const forbidden = [...new Set(run.toolUses
+        // A refused call (`denied`) is the boundary working, not crossed: skip it everywhere below.
+        const used = run.toolUses.filter((u) => !u.denied);
+
+        const forbidden = [...new Set(used
           .map((u) => u.name)
           .filter((n) => EDIT_TOOLS.has(n) || (!harness && n === 'Bash')))];
         if (forbidden.length > 0) {
@@ -317,12 +328,12 @@ try {
 
         // Bash is granted to the harness agent for the review harness only — flag anything else.
         if (harness) {
-          for (const cmd of offAllowlistBashCommands(run.toolUses)) {
+          for (const cmd of offAllowlistBashCommands(used)) {
             errors.push(`[TOOL-RESTRICT] Agent "${agentType}" ran a Bash command outside the harness allowlist: ${cmd}`);
           }
         }
 
-        for (const target of writesOutsideBk(run.toolUses, root)) {
+        for (const target of writesOutsideBk(used, root)) {
           warnings.push(`[TOOL-RESTRICT] ${label} agent "${agentType}" wrote outside bk/: ${target}`);
         }
       }

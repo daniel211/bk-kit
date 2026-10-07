@@ -25,11 +25,40 @@
 const fs = require('fs');
 
 /**
+ * Result text that means the harness REFUSED the call rather than ran it. Field wording
+ * (X-Game-Pro, Claude Code 2.1.291): `<tool_use_error>Error: No such tool available: Bash. Bash
+ * is disabled for this session, in subagents as well as here.</tool_use_error>`, the
+ * permission layer's "Permission to use X has been denied", and hook blocks.
+ */
+const DENIAL_RE = /No such tool available|is disabled for this session|(?:permission to use|use of) [\w:-]+ (?:has been|was) denied|tool use was (?:denied|rejected)|user doesn't want to proceed|(?:blocked|denied) by (?:a |the )?(?:pre-?tool|hook)|not allowed to use/i;
+
+/** The SubagentHandback regime marks itself in the first lines: dispatch reminder + tool schema. */
+const HANDBACK_TOOL = 'SubagentHandback';
+const HANDBACK_REGIME_LINES = 40;
+
+/** Flatten a tool_result `content` (string or [{type:'text',text}]) to text. */
+function resultText(content) {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) return content.map((b) => (b && typeof b.text === 'string' ? b.text : '')).join('\n');
+  return '';
+}
+
+/**
  * @param {string|null} transcriptPath
- * @returns {{ readable: boolean, startMs: number|null, toolUses: Array<{ name: string, input: object }> }}
+ * @returns {{ readable: boolean, startMs: number|null,
+ *   toolUses: Array<{ name: string, input: object, denied: boolean }>,
+ *   handbackPending: boolean }}
+ *   `denied` — the call did not take effect: the harness refused it, or (for any tool but Bash,
+ *   whose is_error is just a non-zero exit of a command that DID run) it errored. A denied
+ *   attempt is not evidence of anything the agent did, in either direction.
+ *   `handbackPending` — the transcript shows the SubagentHandback regime (Claude Code 2.1.285+)
+ *   but the agent has not called it yet: this SubagentStop is the agent's first end_turn, after
+ *   which the harness injects "[handback-send-enforce]" and the agent keeps working (X-Game-Pro
+ *   2026-10-06: a bk-unit-test-agent stopped at 22:55:47, wrote its report at 22:55:57). It is
+ *   not a completion, and judging it rejects a report the agent has not written yet.
  */
 function readAgentRun(transcriptPath) {
-  const empty = { readable: false, startMs: null, toolUses: [] };
+  const empty = { readable: false, startMs: null, toolUses: [], handbackPending: false };
   if (!transcriptPath) return empty;
 
   let text;
@@ -37,15 +66,25 @@ function readAgentRun(transcriptPath) {
 
   let startMs = null;
   const toolUses = [];
+  const byId = new Map();
+  let regime = false;
+  let handedBack = false;
+  let lineNo = 0;
 
   for (const line of text.split('\n')) {
     const raw = line.trim();
     if (!raw) continue;
+    lineNo++;
 
-    // Only lines that can matter are parsed: the first timestamped line, and assistant lines
-    // carrying tool calls. Field transcripts reach ~400 KB, most of it tool results.
+    if (!regime && lineNo <= HANDBACK_REGIME_LINES && raw.indexOf(HANDBACK_TOOL) !== -1) regime = true;
+
+    // Only lines that can matter are parsed: the first timestamped line, assistant lines
+    // carrying tool calls, and the few tool_result lines flagged is_error (a result without
+    // that flag cannot be a refusal). Field transcripts reach ~400 KB, mostly tool results.
     const wantStart = startMs === null;
-    if (!wantStart && raw.indexOf('"tool_use"') === -1) continue;
+    const hasUse = raw.indexOf('"tool_use"') !== -1;
+    const hasErr = !hasUse && raw.indexOf('"is_error":true') !== -1 && raw.indexOf('"tool_result"') !== -1;
+    if (!wantStart && !hasUse && !hasErr) continue;
 
     let row;
     try { row = JSON.parse(raw); } catch { continue; }
@@ -57,13 +96,20 @@ function readAgentRun(transcriptPath) {
 
     const content = row && row.message && Array.isArray(row.message.content) ? row.message.content : [];
     for (const block of content) {
-      if (block && block.type === 'tool_use' && typeof block.name === 'string') {
-        toolUses.push({ name: block.name, input: block.input && typeof block.input === 'object' ? block.input : {} });
+      if (!block) continue;
+      if (block.type === 'tool_use' && typeof block.name === 'string') {
+        if (block.name === HANDBACK_TOOL) handedBack = true;
+        const use = { name: block.name, input: block.input && typeof block.input === 'object' ? block.input : {}, denied: false };
+        toolUses.push(use);
+        if (typeof block.id === 'string') byId.set(block.id, use);
+      } else if (block.type === 'tool_result' && block.is_error === true) {
+        const use = byId.get(block.tool_use_id);
+        if (use && (use.name !== 'Bash' || DENIAL_RE.test(resultText(block.content)))) use.denied = true;
       }
     }
   }
 
-  return { readable: true, startMs, toolUses };
+  return { readable: true, startMs, toolUses, handbackPending: regime && !handedBack };
 }
 
 /**
@@ -73,7 +119,8 @@ function readAgentRun(transcriptPath) {
 const FILE_WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit']);
 
 /**
- * Every file the agent wrote or edited through a file tool during the run, in call order,
+ * Every file the agent wrote or edited through a file tool during the run, in call order
+ * (calls that errored or were refused wrote nothing and are skipped),
  * as the path it passed (absolute in practice; callers resolve relative ones).
  *
  * Bash writes (`cat > x <<EOF`, `tee`, `> x`) are deliberately not parsed: shell quoting makes
@@ -86,7 +133,7 @@ const FILE_WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit']);
 function filesWrittenBy(toolUses) {
   const out = [];
   for (const u of toolUses || []) {
-    if (!u || !FILE_WRITE_TOOLS.has(u.name)) continue;
+    if (!u || u.denied || !FILE_WRITE_TOOLS.has(u.name)) continue;
     const p = u.input && u.input.file_path;
     if (typeof p === 'string' && p.trim()) out.push(p.trim());
   }

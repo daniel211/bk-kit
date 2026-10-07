@@ -111,6 +111,33 @@ try {
     }
   }
 
+  // Test-support code is test infrastructure, not code under test: a Fake/Mock/Stub/Spy, a
+  // fixture, a `Foo+Support.swift` helper. Demanding a test for it is noise (X-Game-Pro, 0.13.4:
+  // 96 gap rows, many of them helpers). Directory names are matched as whole path segments
+  // (case-insensitive); file names by idiomatic prefix/suffix across Swift/Kotlin/Dart/TS/JS.
+  const SUPPORT_DIRS = new Set([
+    'testsupport', 'test-support', 'test_support', 'testutils', 'test-utils', 'test_utils',
+    'testhelpers', 'test-helpers', 'test_helpers', 'testdoubles', 'test-doubles',
+    'fakes', 'mocks', 'stubs', 'spies', 'fixtures', 'support',
+    // Dirs that hold tests themselves: any file there is a test or its helper.
+    'test', 'tests', 'androidtest', 'integration_test'
+  ]);
+  // Stem (name without extension) looks like a test double / helper.
+  function isSupportStem(stem) {
+    if (/^(Fake|Mock|Stub|Spy)([A-Z_.-]|$)/.test(stem)) return true;   // FakeUserRepo, MockAuth
+    if (/^(fake|mock|stub|spy)[_.-]/.test(stem)) return true;          // mock_user_repo (Dart)
+    if (/(Fake|Mock|Stub|Spy|Fixtures?)$/.test(stem)) return true;     // UserRepoMock
+    if (/\+Support$/.test(stem)) return true;                          // Foo+Support.swift
+    if (/[._](mocks?|fakes?|stubs?|fixtures?)$/i.test(stem)) return true; // user.mocks.dart
+    return false;
+  }
+
+  function isTestSupportFile(absPath) {
+    const segments = absPath.split(/[\\/]/).slice(0, -1).map(s => s.toLowerCase());
+    if (segments.some(s => SUPPORT_DIRS.has(s))) return true;
+    return isSupportStem(path.basename(absPath, path.extname(absPath)));
+  }
+
   async function main() {
     // Read stdin — use fd 0 for compat
     let raw = '';
@@ -145,6 +172,9 @@ try {
     if (base.includes('test') || base.includes('spec') || absPath.includes('__tests__')) {
       process.exit(0);
     }
+
+    // Fakes, mocks, fixtures and other test-support helpers need no test of their own
+    if (isTestSupportFile(path.relative(projectRoot, absPath))) process.exit(0);
 
     // Check for matching test file
     if (hasMatchingTestFile(absPath, projectRoot)) process.exit(0);

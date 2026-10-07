@@ -1,6 +1,6 @@
 {
   "name": "@beerkit/bk",
-  "version": "0.13.4",
+  "version": "0.13.5",
   "description": "beer-kit — iOS, Android and Flutter development kits for Claude Code: agents, skills, and hooks",
   "type": "module",
   "bin": {

@@ -60,6 +60,14 @@ function resolveBatch(raw, state) {
   return { ok: true, batch: target };
 }
 
+/** True when state.batch is unset/non-numeric and total_batches is a positive integer. */
+function needsBatchSeed(state) {
+  const batch = state.batch;
+  const hasBatch = batch !== null && batch !== undefined && batch !== '' && Number.isFinite(Number(batch));
+  const total = Number(state.total_batches);
+  return !hasBatch && Number.isInteger(total) && total > 0;
+}
+
 /**
  * `--field key=value` → [key, value]. The value is JSON when it parses (numbers, booleans, null,
  * quoted strings), the raw text otherwise, so `--field dev_agent_id=a1b2` needs no quoting.
@@ -93,7 +101,10 @@ function extraFields(opts, fresh) {
   for (const raw of opts.fields || []) {
     const kv = parseField(raw);
     if (!kv) return { ok: false, message: `--field expects key=value, got "${raw}".` };
-    if (FLAG_OWNED.has(kv[0])) return { ok: false, message: `--field ${kv[0]}: use --set-phase / --batch.` };
+    if (FLAG_OWNED.has(kv[0])) {
+      return { ok: false, message: `--field ${kv[0]}: use --set-phase / --batch ` +
+        '(e.g. `--set-phase coding --batch 1`, or `--batch 1` alone to seed the first batch).' };
+    }
     fields[kv[0]] = kv[1];
   }
   for (const name of opts.inc || []) {
@@ -106,7 +117,7 @@ function extraFields(opts, fresh) {
 }
 
 /** One-line description of what landed. */
-function describe(decision, fields, before) {
+function describe(decision, fields, before, seeded) {
   const parts = [];
   if (decision.verdict === 'new_episode') {
     parts.push(`new episode ${decision.patch.workflow_episode}: ${decision.from || 'none'} → ${decision.phase}`);
@@ -118,7 +129,9 @@ function describe(decision, fields, before) {
   } else if (fields.current_phase) {
     parts.push(`phase already "${fields.current_phase}"`);
   }
-  if (fields.batch !== undefined) {
+  if (seeded) {
+    parts.push('batch seeded to 1 (total_batches ' + before.total_batches + ')');
+  } else if (fields.batch !== undefined) {
     parts.push(`batch ${before.batch === undefined ? 'none' : before.batch} → ${fields.batch}, recurrence counts reset`);
   }
   const extras = Object.keys(fields).filter((k) => !['current_phase', 'batch', 'phase_recurrence_count'].includes(k));
@@ -163,6 +176,7 @@ function setPhase(opts = {}) {
   let early = null;          // a refusal decided before the FSM ran (no state, bad --batch)
   let fields = {};
   let before = {};
+  let seeded = false;        // batch=1 auto-seeded by `--set-phase coding`
 
   const written = cfg.writeWorkflowState((fresh) => {
     before = fresh || {};
@@ -181,6 +195,12 @@ function setPhase(opts = {}) {
       if (!b.ok) { early = b.message; return null; }
       fields.batch = b.batch;
       fields.phase_recurrence_count = {};
+    } else if (phase === 'coding' && needsBatchSeed(fresh)) {
+      // The conductor never seeded `batch` (X-Game-Pro 0.13.4: batch stayed null for 3 batches, so
+      // agent-trace rows carried batch=None and same-batch fix loops went uncounted). Seed the
+      // first batch with the phase write. Counts are NOT reset: this is not a batch boundary.
+      fields.batch = 1;
+      seeded = true;
     }
 
     const after = { ...fresh, ...fields };
@@ -254,7 +274,7 @@ function setPhase(opts = {}) {
       } catch { /* telemetry never changes the verdict */ }
     }
   }
-  return { success: true, exitCode: 0, verdict: decision.verdict, message: describe(decision, fields, before), advisory };
+  return { success: true, exitCode: 0, verdict: decision.verdict, message: describe(decision, fields, before, seeded), advisory };
 }
 
 module.exports = { setPhase, resolveBatch, parseField };

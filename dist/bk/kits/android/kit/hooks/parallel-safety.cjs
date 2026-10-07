@@ -166,7 +166,21 @@ try {
 
       if (fileTargets.length === 0) {
         // No file targets detected — warn if prompt lacks Files: section
-        if (prompt && !/Files?:/i.test(prompt)) {
+        // Only code-writing agents have files to lock; reviewers, auditors, researchers,
+        // planners, git/docs agents never do. And once per session+feature, not per dispatch.
+        const { CODE_WRITING_AGENTS } = require('./lib/agent-classes.cjs');
+        const { firstTime } = require('./lib/advisory-once.cjs');
+        let feature = null;
+        try {
+          const st = require('./lib/bk-config-utils.cjs').readWorkflowState();
+          feature = st && st.feature;
+        } catch { /* optional */ }
+        if (prompt && !/Files?:/i.test(prompt) && CODE_WRITING_AGENTS.has(agentType)
+            && !isReadOnly(agentType, prompt)
+            && firstTime('lock-files', {
+              sessionId: injectionBudget ? injectionBudget.sessionIdFrom(data) : null,
+              feature
+            })) {
           emitAdvisory('[PARALLEL-SAFETY] No lock taken: dispatch prompt has no "Files: path/to/file.ext" section.', data);
         }
         timer.end({ status: 'no_files', exit: 0 });

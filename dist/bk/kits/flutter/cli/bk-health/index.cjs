@@ -13,6 +13,8 @@
  *   node .claude/cli/bk-health/index.cjs --set-phase <phase> [--batch <N|next>] [--inc <field>]...
  *                                        [--field key=value]... [--session <id>]
  *   node .claude/cli/bk-health/index.cjs --batch <N|next>
+ *   (`--set-phase coding` auto-seeds batch=1 when batch is unset and total_batches > 0;
+ *    `--field batch=…` is refused — use `--set-phase coding --batch 1` or `--batch 1`)
  *
  * Duration format: Nh | Nd | Nm (e.g. 24h, 7d, 30m)
  */
