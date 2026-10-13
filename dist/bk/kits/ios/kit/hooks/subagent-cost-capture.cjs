@@ -95,7 +95,10 @@ try {
       const parsed = await parseTranscriptAccurate(transcriptPath, { timeoutMs: 500 });
 
       // Read workflow state for effort + workflowId
-      const state = readWorkflowState() || {};
+      // Same attribution rule as workflow-metrics: a terminal state left by an earlier session
+      // is not this session's workflow, so its cost must not land on that feature's ledger key.
+      const { liveStateFor } = require('./lib/stale-workflow-state.cjs');
+      const state = liveStateFor(readWorkflowState() || {}, sessionId) || {};
       // The ledger key must be the one budget-guard derives when it reads back, or the
       // filter there matches nothing and every entry ever written gets charged to the
       // current workflow. Both sides go through resolveWorkflowId for that reason.
@@ -174,8 +177,9 @@ try {
       // whose own ledger rows summed to ~$18. A state with no owner key (anything written
       // before this) resets too — its figure cannot be attributed to any workflow.
       writeWorkflowState((fresh) => {
-        const freshId = resolveWorkflowId(fresh, sessionId);
-        const owned = ownedCumulativeCost(fresh, freshId);
+        const live = liveStateFor(fresh, sessionId) || {};
+        const freshId = resolveWorkflowId(live, sessionId);
+        const owned = ownedCumulativeCost(live, freshId);
         const total = owned === null ? costUsd : owned + costUsd;
         return {
           workflowId: freshId,

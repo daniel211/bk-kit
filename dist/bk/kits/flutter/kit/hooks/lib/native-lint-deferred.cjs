@@ -38,6 +38,37 @@ const { runTool } = require('./native-lint-runner.cjs');
 const { trackRedSignal, trackWarnSignal, resolveMetricPath } = require('./harness-policy-loader.cjs');
 const { appendJsonl: rotatorAppend } = require('./jsonl-rotator.cjs');
 
+/** Real path of `p`, resolving symlinks through the nearest existing ancestor (macOS /tmp -> /private/tmp). */
+function realish(p) {
+  let cur = path.resolve(p);
+  const tail = [];
+  for (;;) {
+    try { return path.join(fs.realpathSync(cur), ...tail.reverse()); } catch { /* climb */ }
+    const parent = path.dirname(cur);
+    if (parent === cur) return path.resolve(p);
+    tail.push(path.basename(cur));
+    cur = parent;
+  }
+}
+
+/**
+ * True when `file` lives inside `projectRoot`. Native lint must skip anything else: an Edit/Write
+ * outside the project (/tmp harness copies, session scratchpads) is not the project's code, and
+ * linting it raised red/yellow signals the kit then counted against the project. Relative paths
+ * are taken relative to the root. Fails open (true) if the paths cannot be compared.
+ */
+function isInsideProjectRoot(projectRoot, file) {
+  try {
+    if (!projectRoot || !file) return true;
+    const root = realish(projectRoot);
+    const abs = realish(path.isAbsolute(file) ? file : path.join(projectRoot, file));
+    const rel = path.relative(root, abs);
+    return rel === '' || (!rel.startsWith('..' + path.sep) && rel !== '..' && !path.isAbsolute(rel));
+  } catch {
+    return true;
+  }
+}
+
 /** Distinct from stop-lint-flush's queue — see the header. */
 const NATIVE_QUEUE_NAMESPACE = 'native';
 
@@ -225,6 +256,7 @@ async function runNativeLintBatch(opts = {}) {
 }
 
 module.exports = {
+  isInsideProjectRoot,
   NATIVE_QUEUE_NAMESPACE,
   MAX_BATCH_FILES,
   MAX_REPORTED_FINDINGS,

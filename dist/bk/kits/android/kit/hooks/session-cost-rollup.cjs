@@ -38,7 +38,8 @@ try {
         process.exit(0);
       }
 
-      const state = readWorkflowState() || {};
+      const state = require('./lib/stale-workflow-state.cjs')
+        .liveStateFor(readWorkflowState() || {}, data.session_id || data.sessionId || null) || {};
       const workflowId = state.workflowId || state.workflow_id || null;
 
       // Try to get session cost from stats-cache.json

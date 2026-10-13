@@ -32,7 +32,7 @@ const libDir = path.join(__dirname, 'lib');
 const { loadHarnessPolicy, trackRedSignal, trackWarnSignal, resolveMetricPath } = require(path.join(libDir, 'harness-policy-loader.cjs'));
 const { detectTool, runTool } = require(path.join(libDir, 'native-lint-runner.cjs'));
 const { toolBudgetMs } = require(path.join(libDir, 'hook-budget.cjs'));
-const { enqueueNative } = require(path.join(libDir, 'native-lint-deferred.cjs'));
+const { enqueueNative, isInsideProjectRoot } = require(path.join(libDir, 'native-lint-deferred.cjs'));
 const { createHookTimer } = require(path.join(libDir, 'hook-logger.cjs'));
 const { appendJsonl: rotatorAppend } = require(path.join(libDir, 'jsonl-rotator.cjs'));
 
@@ -121,6 +121,10 @@ async function main() {
   }
 
   const projectRoot = policy.__projectRoot;
+
+  // Files outside the project root (/tmp copies, session scratchpads) are not this project's
+  // code: linting them only raised red/yellow signals against it. Skip silently.
+  if (!isInsideProjectRoot(projectRoot, filePath)) process.exit(0);
   const nativeCfg   = policy.native_lint || {};
   const iosCfg      = nativeCfg.ios || {};
 

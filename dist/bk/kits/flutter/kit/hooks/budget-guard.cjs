@@ -222,6 +222,8 @@ function main() {
   // Derive the ledger key exactly the way subagent-cost-capture stamps it, so the filter
   // below actually matches this workflow's entries and nobody else's.
   const sessionId = hookInput.session_id || hookInput.sessionId || null;
+  // A stale terminal state (earlier session's finished feature) is not this session's workflow.
+  state = require('./lib/stale-workflow-state.cjs').liveStateFor(state, sessionId) || {};
   const workflowId = resolveWorkflowId(state, sessionId);
   const ledgerCost = readLedgerSum(workflowId);
 

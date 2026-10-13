@@ -73,7 +73,11 @@ try {
       const agentStatus = signals[0] || (finalMessage.trim() ? 'ok' : 'no_output');
 
       // Read workflow state
-      const state = readWorkflowState() || {};
+      // A terminal state entered by an EARLIER session is a finished feature, not this
+      // session's workflow: attribute to the ad-hoc session key instead (lib/stale-workflow-state.cjs).
+      // Missing evidence keeps the old behaviour.
+      const { liveStateFor } = require('./lib/stale-workflow-state.cjs');
+      const state = liveStateFor(readWorkflowState() || {}, data.session_id) || {};
       const skill = state.command || 'unknown';
       const feature = state.feature || 'unknown';
       const complexityTier = state.complexity_tier || 'Standard';

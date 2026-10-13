@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updated": "2026-09-02",
+  "updated": "2026-10-12",
   "models": {
     "claude-fable-5-1": {
       "inputPer1k": 0.01,
@@ -58,6 +58,10 @@
       "inputPer1k": 0.003,
       "outputPer1k": 0.015
     },
+    "claude-haiku-5-5": {
+      "inputPer1k": 0.0001,
+      "outputPer1k": 0.0005
+    },
     "claude-haiku-4-5": {
       "inputPer1k": 0.001,
       "outputPer1k": 0.005
@@ -106,13 +110,14 @@
     "sonnet-4-5": "claude-sonnet-4-5",
     "sonnet-4-6": "claude-sonnet-4-6",
     "sonnet-3.5": "claude-3-5-sonnet-latest",
-    "haiku": "claude-haiku-4-5",
+    "haiku": "claude-haiku-5-5",
     "haiku-4-5": "claude-haiku-4-5",
     "haiku-3": "claude-3-haiku-20240307",
     "opus-5": "claude-opus-5",
     "opus-4-8": "claude-opus-4-8",
     "sonnet-5": "claude-sonnet-5",
     "fable": "claude-fable-5-1",
-    "fable-5-1": "claude-fable-5-1"
+    "fable-5-1": "claude-fable-5-1",
+    "haiku-5-5": "claude-haiku-5-5"
   }
 }
