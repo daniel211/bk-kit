@@ -15,10 +15,10 @@ Ask user approval before committing.
 ## On Approval
 
 ```
-Task(subagent_type: "bk-git-manager", model: "haiku", prompt: "
+Task(subagent_type: "bk-git-manager", prompt: "
   Task: Commit the fix {fix_name}
   Fix: {fix_name}
-  Files changed: {files_from_impl_result}
+  Files changed: {files_from_impl_result} (+ new ?? files of this fix, git add skips them)
   Commit type: fix
   Commit message format: fix({module}): {brief description}
   Output: commit SHA (report back to conductor)

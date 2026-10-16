@@ -14,6 +14,7 @@ import { addKitOption, resolveKitOrExit } from '../lib/kit-resolver.mjs';
 import {
   installFileForMode, inventoryForMode, readSubagentContextMode, reconcileModeOnly,
 } from '../lib/subagent-context-mode.mjs';
+import { readModelOverrides, unknownOverrideAgents } from '../lib/agent-model-override.mjs';
 import {
   gitPrefix, trackedSessionState, untrackCommand, writeGitignoreEntries,
 } from '../lib/session-state-gitignore.mjs';
@@ -94,19 +95,20 @@ async function promptConflict(filePath, strategy = 'prompt') {
  * `mode` is the `.bk.json` subagent context mode: in 'full' a kit agent installs without its
  * `omitClaudeMd: true` line, and its package hash is taken of THAT content, so recorded, disk
  * and package hashes stay comparable and a toggle never reads as a local edit (see
- * lib/subagent-context-mode.mjs).
+ * lib/subagent-context-mode.mjs). `models` is the validated `.bk.json` model override map; it is
+ * applied to the kit agents it names in the same way (lib/agent-model-override.mjs).
  *
  * @param {{ claudeDir: string, kitDir: string, packageRoot: string,
  *           packageFiles: Record<string,string>, installedFiles: Record<string,string>,
- *           mode?: 'lean'|'full', conflict?: 'prompt'|'keep'|'take' }} opts
+ *           mode?: 'lean'|'full', models?: object, conflict?: 'prompt'|'keep'|'take' }} opts
  * @returns {Promise<{ updated: number, added: number, skipped: number, conflicts: number }>}
  */
 export async function syncKitFiles({
-  claudeDir, kitDir, packageRoot, packageFiles, installedFiles, mode = 'lean', conflict = 'prompt',
+  claudeDir, kitDir, packageRoot, packageFiles, installedFiles, mode = 'lean', models, conflict = 'prompt',
 }) {
   const sourceOf = (relPath) => sourceFor(relPath, { kitDir, packageRoot });
-  const kitFiles = inventoryForMode(packageFiles, sourceOf, mode);
-  const install = (relPath, targetPath) => installFileForMode(relPath, sourceOf(relPath), targetPath, mode);
+  const kitFiles = inventoryForMode(packageFiles, sourceOf, mode, models);
+  const install = (relPath, targetPath) => installFileForMode(relPath, sourceOf(relPath), targetPath, mode, models);
 
   // Classify all files
   const allPaths = new Set([...Object.keys(kitFiles), ...Object.keys(installedFiles)]);
@@ -158,7 +160,7 @@ export async function syncKitFiles({
         // mode: toggle the flag line in their copy instead of asking them to choose between
         // their edits and the mode.
         const modeHash = reconcileModeOnly({
-          relPath, srcPath: sourceOf(relPath), targetPath, installHash, mode,
+          relPath, srcPath: sourceOf(relPath), targetPath, installHash, mode, models,
         });
         if (modeHash) {
           installedFiles[relPath] = modeHash;
@@ -264,12 +266,19 @@ export function registerUpdate(program) {
       // `.bk.json` subagents.fullContext changes what a kit agent installs as (see
       // lib/subagent-context-mode.mjs); a toggled setting takes effect here.
       const mode = readSubagentContextMode(targetDir);
+      const { overrides: models, warnings: modelWarnings } = readModelOverrides(targetDir, [kitDir]);
 
       console.log(`Updating ${platform} kit in ${claudeDir}...\n`);
       if (mode === 'full') console.log('  Subagent context: full (.bk.json subagents.fullContext) — kit agents install without omitClaudeMd\n');
+      for (const w of modelWarnings) console.log(`  ⚠ ${w}`);
+      if (Object.keys(models).length > 0) {
+        console.log(`  Agent models: ${Object.keys(models).join(', ')} (.bk.json models)\n`);
+        const unknown = unknownOverrideAgents(models, claudeDir);
+        if (unknown.length > 0) console.log(`  ⚠ .bk.json models names no installed kit agent: ${unknown.join(', ')}\n`);
+      }
 
       const { updated, added, skipped, conflicts } = await syncKitFiles({
-        claudeDir, kitDir, packageRoot, packageFiles, installedFiles, mode, conflict: opts.conflict,
+        claudeDir, kitDir, packageRoot, packageFiles, installedFiles, mode, models, conflict: opts.conflict,
       });
 
       // Update .bk-version.json

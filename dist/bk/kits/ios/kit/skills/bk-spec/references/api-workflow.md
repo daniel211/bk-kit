@@ -43,7 +43,6 @@ Task(
 ```
 Task(
   subagent_type: "bk-code-reviewer",
-  model: "sonnet",
   run_in_background: true,
   description: "Review API contract quality for {feature-name}",
   prompt: "

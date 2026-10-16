@@ -14,7 +14,7 @@ try {
   // P1-7: migrated from deprecated jsonl-token-parser → token-accurate-parser.
   // Note: parseTranscriptAccurate returns tokensIn as TOTAL (cache + raw); see RC-1 plan.
   const { parseTranscriptAccurate, isOwnSessionTranscript } = require('./lib/token-accurate-parser.cjs');
-  const { computeCost, appendEntry } = require('./lib/cost-ledger-writer.cjs');
+  const { computeCost, appendEntry, pricingSource, ledgerAccuracy } = require('./lib/cost-ledger-writer.cjs');
 
   async function main() {
     const timer = createHookTimer('subagent-cost-capture');
@@ -135,8 +135,12 @@ try {
         effort,
         // accuracy 'high' = summed from real per-turn usage rows (exact); 'approx'/'low' are
         // text-length estimates and keep the effort multiplier.
-        exactUsage: exact
+        exactUsage: exact,
+        sessionId
       });
+      // No price for this model: costUsd above used the 'unknown' (opus-rate) fallback, so mark
+      // the row and never let it read as exact.
+      const fallbackPriced = pricingSource(model).source === 'fallback';
 
       // Build ledger entry (no prompt content — numbers/metadata only)
       const entry = {
@@ -155,7 +159,8 @@ try {
         costUsd: Math.round(costUsd * 1e8) / 1e8,
         multiplierApplied: exact ? 1 : getPricingMultiplier(effort),
         source: 'jsonl',
-        accuracy: parsed.accuracy,
+        accuracy: ledgerAccuracy(parsed.accuracy, model),
+        ...(fallbackPriced ? { pricing: 'fallback', pricingModel: 'unknown' } : {}),
         sessionId: sessionId || null
       };
 

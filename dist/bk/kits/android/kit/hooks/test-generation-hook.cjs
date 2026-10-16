@@ -187,11 +187,17 @@ try {
       language,
       reason: `No test file found for ${path.basename(absPath)}`
     };
-    appendJsonl(gapFile, entry);
+    // One row per file (count + first_seen), not one per edit. The stderr signal is also only
+    // emitted the first time, so repeated edits of the same file stay quiet.
+    let isNew = true;
+    try { isNew = require('./lib/test-gap-ledger.cjs').recordTestGap(gapFile, entry); }
+    catch { appendJsonl(gapFile, entry); }
 
-    process.stderr.write(
-      `[test-generation-hook] test_gap: ${filePath} (${language}) — no matching test file found\n`
-    );
+    if (isNew) {
+      process.stderr.write(
+        `[test-generation-hook] test_gap: ${filePath} (${language}) — no matching test file found\n`
+      );
+    }
 
     process.exit(0);
   }

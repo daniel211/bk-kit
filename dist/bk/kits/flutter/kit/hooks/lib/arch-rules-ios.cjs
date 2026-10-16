@@ -123,7 +123,7 @@ const publicApiNeedsDoc = {
           ctx.filePath,
           i + 1,
           `Public ${m[2]} '${m[3]}' is missing a doc comment (///).`,
-          `Add a /// doc comment above 'public ${m[2]} ${m[3]}'.`,
+          `Insert directly above \`${lines[i].trim().slice(0, 60)}\`: "/// <one-line summary of what ${m[3]} does>" (one \`///\` line is enough). To silence this rule project-wide set arch_fitness.ios.rules.public_api_needs_doc.enabled=false in bk-harness-policy.json.`,
           lines[i].trim()
         ));
       }

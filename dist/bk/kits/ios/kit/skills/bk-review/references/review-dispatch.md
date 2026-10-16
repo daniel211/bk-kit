@@ -14,7 +14,7 @@ Dispatch review agent(s) in ONE message (background):
 
 **Primary Reviewer (Default: bk-gemini-reviewer):**
 ```
-Task(subagent_type: "bk-gemini-reviewer", model: "sonnet", run_in_background: true, prompt: "
+Task(subagent_type: "bk-gemini-reviewer", run_in_background: true, prompt: "
   Task: Code review for feature {feature_name}
   Platform: {platform}
   Files: {file_list from impl reports, or git diff}
@@ -27,7 +27,7 @@ Task(subagent_type: "bk-gemini-reviewer", model: "sonnet", run_in_background: tr
 
 *(Fallback if `agy` is not available, or when `--engine claude` is requested)*:
 ```
-Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true, prompt: "
+Task(subagent_type: "bk-code-reviewer", run_in_background: true, prompt: "
   Task: Code review for feature {feature_name}
   Platform: {platform}
   Files: {file_list from impl reports, or git diff}
@@ -39,7 +39,7 @@ Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true
 
 **Optional — security-sensitive changes:**
 ```
-Task(subagent_type: "bk-security-auditor", model: "sonnet", run_in_background: true, prompt: "
+Task(subagent_type: "bk-security-auditor", run_in_background: true, prompt: "
   Task: Security audit for feature {feature_name}
   Platform: {platform}
   Files: {file_list from impl reports, or git diff}

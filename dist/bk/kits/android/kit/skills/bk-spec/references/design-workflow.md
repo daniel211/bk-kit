@@ -149,7 +149,6 @@ Dispatch design-validator to discover screens:
 ```
 Task(
   subagent_type: "design-validator",
-  model: "sonnet",
   description: "Figma discovery",
   prompt: "Figma URL: {figma_url}
     Flow: bk/dev/{feature-slug}/design/
@@ -164,7 +163,6 @@ verify below is unchanged:
 ```
 Task(
   subagent_type: "design-agy-extractor",
-  model: "sonnet",
   description: "Figma discovery (agy)",
   prompt: "Mode: discovery
     Figma URL: {figma_url}
@@ -269,7 +267,6 @@ Reason: dispatching 30+ Task calls in one message risks rate limits and stream t
 ```
 Task(
   subagent_type: "design-spec-writer",
-  model: "sonnet",
   description: "Design spec {slug}",
   prompt: "
     Task: Extract design spec from Figma screen
@@ -288,7 +285,6 @@ Task(
 ```
 Task(
   subagent_type: "design-agy-extractor",
-  model: "sonnet",
   description: "Design spec {slug} (agy)",
   prompt: "Mode: screen
     Screen: {nodeId} | Slug: {slug}
@@ -369,7 +365,6 @@ not an automatic merge — resolving a real disagreement is a judgement call, no
 ```
 Task(
   subagent_type: "design-asset-exporter",
-  model: "sonnet",
   description: "Export Figma assets",
   prompt: "Flow: bk/dev/{feature-slug}/design/
     Tech stack: read from bk/docs/foundation/build-targets.md (platform = ios | android | flutter)
@@ -428,7 +423,6 @@ Task(
 ```
 Task(
   subagent_type: "bk-code-reviewer",
-  model: "sonnet",
   description: "Review design spec quality for {feature-name}",
   prompt: "
     Review design documentation for feature: {feature-name} ({feature-slug}).

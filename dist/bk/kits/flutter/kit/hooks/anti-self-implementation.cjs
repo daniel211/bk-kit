@@ -96,6 +96,26 @@ try {
     return lines.length > 0 && lines.every(isMetaLine);
   }
 
+  /**
+   * bk-plan Step 9/10 have the conductor record the critic scoring table in `## Critic Review` and
+   * the interview answers in `## Validation Log` (critic-review.md, validate-interview.md). That is
+   * transcription of agent/user output, not plan synthesis. Sanctioned only when the Edit's new text
+   * carries one of those headings and the old text is a lone heading anchor or touches no other `##` section.
+   */
+  const RECORD_EDIT_MAX_CHARS = 4000;
+  const RECORD_HEADING = /^#{2,3}\s+(Critic Review|Validation Log|Session \d+)\b/m;
+  function isSanctionedRecordEdit(toolName, toolInput) {
+    if (toolName !== 'Edit') return false;
+    const oldStr = typeof toolInput.old_string === 'string' ? toolInput.old_string : '';
+    const newStr = typeof toolInput.new_string === 'string' ? toolInput.new_string : '';
+    if (newStr.length > RECORD_EDIT_MAX_CHARS || oldStr.length > RECORD_EDIT_MAX_CHARS) return false;
+    if (!RECORD_HEADING.test(newStr)) return false;
+    // Anchor-only old text (a lone heading line kept in the new text) is an insertion, not a rewrite.
+    const anchor = oldStr.trim();
+    if (!anchor.includes('\n') && /^##\s/.test(anchor)) return newStr.includes(anchor);
+    return !/^##\s+(?!(Critic Review|Validation Log)\b)/m.test(oldStr);
+  }
+
   async function main() {
     const timer = createHookTimer('anti-self-implementation');
     try {
@@ -138,7 +158,7 @@ try {
 
       // Check if path matches a delegation target
       const match = DELEGATION_PATHS.find((entry) => entry.test(normalizedPath));
-      if (match && isSanctionedMetadataEdit(getToolName(data), toolInput)) {
+      if (match && (isSanctionedMetadataEdit(getToolName(data), toolInput) || isSanctionedRecordEdit(getToolName(data), toolInput))) {
         timer.end({ status: 'sanctioned_metadata_edit', path: normalizedPath, exit: 0 });
         process.exit(0);
       }
@@ -154,8 +174,9 @@ try {
         } catch { /* best-effort */ }
 
         const warning =
-          `[DIVISION-OF-LABOR] ${normalizedPath} belongs to ${match.agent} — ` +
-          `use Task(subagent_type="${match.agent.split(' ')[0]}", ...) instead of writing it here.` +
+          `[DIVISION-OF-LABOR] Conductor ${getToolName(data) || 'Write'} on ${normalizedPath}: this content belongs to ${match.agent}. ` +
+          `Dispatch Task(subagent_type="${match.agent.split(' ')[0]}", ...) with the change as instructions (e.g. critic REVISE fixes, validate answers). ` +
+          `Conductor may edit plan docs directly only for status/checkbox/table-cell flips and the ## Critic Review / ## Validation Log records.` +
           reactiveNote;
 
         // Advisory context is subject to the shared injection budget (cap + dedupe).

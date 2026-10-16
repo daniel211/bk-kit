@@ -118,10 +118,10 @@ If user chose split in Step 3, present each commit group for sequential approval
 
 On user approval, dispatch bk-git-manager (haiku):
 ```
-Task(subagent_type: "bk-git-manager", model: "haiku", prompt: "
+Task(subagent_type: "bk-git-manager", prompt: "
   Task: Stage files and create the commit
   Commit message: {approved_message}
-  Files to stage: {file_list or 'all changed'}
+  Files to stage: {file_list or 'all changed'} + any new (??) file of this change (git add skips them)
   Branch: {current_branch}
   Conventional commit type: feat|fix|refactor|test|docs|chore
   Output: commit SHA (report back to conductor)

@@ -30,6 +30,11 @@ after your agent (e.g. `bk-planner/`). Never read or write another agent's memor
 - **`memory: user`** — the directory lives under the user's home directory, never inside
   the project. Never derive it from the current working directory either.
 
+**Memory is NOT part of the plan or feature.** `bk/dev/<feature>/` holds plans and reports only;
+`<package>/.claude/agent-memory/` and `.claude/worktrees/agent-*/.claude/agent-memory/` do not exist as
+memory dirs. The SubagentStart context line `Agent memory directory` gives your absolute path — copy it
+verbatim. If a write is denied, retry with the exact path printed in the denial; do not skip the save.
+
 **Always use the absolute path.** Build memory paths from the project-root absolute path
 (`<project-root>/.claude/agent-memory/<agent>/`) or the exact directory in your system prompt.
 Never `mkdir -p .claude/agent-memory/...` (or `touch`, `cp`, redirect into it) with a relative

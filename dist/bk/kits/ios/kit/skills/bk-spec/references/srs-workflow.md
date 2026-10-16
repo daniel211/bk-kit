@@ -91,7 +91,6 @@ Wait for both to complete before proceeding to Step 3.
 ```
 Task(
   subagent_type: "bk-code-reviewer",
-  model: "sonnet",
   description: "Review SRS quality for {feature-name}",
   prompt: "
     Review SRS documents (01-overview, 02-functional, 03-nonfunctional) in bk/dev/{feature-slug}/srs/.

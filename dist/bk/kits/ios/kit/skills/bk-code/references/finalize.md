@@ -67,7 +67,7 @@ If any `stepResults[N].generation` exists in `.plan-state.json`:
 ### Plan Sync-Back (MANDATORY — before docs and git)
 
 ```
-Task(subagent_type: "bk-project-manager", model: "haiku", run_in_background: true,
+Task(subagent_type: "bk-project-manager", run_in_background: true,
   description: "Sync plan progress", prompt: "
   Task: Sync-back plan progress at {plan-dir}
   Sync-back plan at {plan-dir}:
@@ -130,13 +130,14 @@ Task(subagent_type: "bk-docs-writer", model: "sonnet", description: "Update docs
 Dispatch bk-git-manager in same message as bk-docs-writer:
 
 ```
-Task(subagent_type: "bk-git-manager", model: "haiku", description: "Commit changes", run_in_background: true, prompt: "
+Task(subagent_type: "bk-git-manager", description: "Commit changes", run_in_background: true, prompt: "
   Task: Stage and commit changes for {plan title}
   Stage and commit changes for: {plan title}
   Conventional commit format. Scope: {feature name}.
   Do NOT commit .env or credentials.
   Do NOT skip pre-commit hooks.
-  NOTE: bk-docs-writer may still be running. Stage all current files.
+  NOTE: bk-docs-writer may still be running. Stage all current files, incl. NEW (??) source/test files,
+  bk/dev/{feature}/ plan dir and .claude/agent-memory notes; report any ?? left out with the reason.
   If docs updates land after your commit, the orchestrator will run git amend.
   Output: commit SHA + conventional message (report back to conductor)
 ")

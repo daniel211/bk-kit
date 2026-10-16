@@ -54,7 +54,7 @@ Key rules:
 3. **OKAY**: proceed to validate
 4. **REVISE**:
    - Read `## Suggested Fixes` from critic output
-   - Apply fixes to affected phase files
+   - Apply fixes by re-dispatching `bk-planner` (foreground) with the Suggested Fixes; the conductor does NOT edit plan.md/sub-task-*.md prose itself (only the `## Critic Review` record + status cells)
    - Update `.plan-state.json`: set step 7 status to `"retrying"` (not `"complete"`)
    - Re-dispatch critic (1 retry max)
    - On retry success: update step 7 to `"complete"`

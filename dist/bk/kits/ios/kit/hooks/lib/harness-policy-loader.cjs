@@ -179,6 +179,12 @@ const DEFAULT_POLICY = {
     enforcement: 'warn',
     ledger_path: '.bk-metrics/cost-ledger.jsonl'
   },
+  // insights.md (pattern-extractor.cjs): how many distinct workflows it analyses, and the
+  // fewest it needs before it states a rate/average claim instead of "insufficient data".
+  insights: {
+    window_workflows: 10,
+    min_workflows_for_claims: 5
+  },
   subagent_observability: {
     enabled: true,
     live_tracker: {

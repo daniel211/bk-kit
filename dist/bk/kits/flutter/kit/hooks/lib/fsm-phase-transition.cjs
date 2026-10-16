@@ -79,6 +79,20 @@ const TRANSITIONS = {
   }
 };
 
+// The explicit way BACK from `commit` (field review 2026-10-16 §2.3: `commit → coding|testing`
+// refused with `allowed: []` on both machines — a post-commit bug, review comment or CI failure
+// had no legal path, so the user started a new workflow or was blocked). It is deliberately NOT
+// in TRANSITIONS: a plain write out of `commit` stays invalid. The write must declare a reason
+// (`reopen_reason`; CLI: `--field reopen_reason="..."`), the target must be listed here, and at
+// most MAX_REOPENS reopens fit in one episode. Only `commit` reopens — `aborted` was discarded
+// on purpose, `completed` (bk-plan) writes no code, and `escalated` already has its own edges.
+const REOPEN_TARGETS = {
+  'bk-code': ['coding', 'testing'],
+  'bk-debug': ['code', 'test'],
+  'bk-refactor': ['refactor', 'test']
+};
+const MAX_REOPENS = 3;
+
 // Workflows whose in-flight state protects nothing. A plan run writes documents under
 // bk/dev/{feature}/ and nothing else, so a plan the user walked away from — approved it in
 // chat without the `completed` write landing, or moved to another feature — must not refuse
@@ -289,10 +303,34 @@ function checkPhaseRecurrence(currentState, newPhase, policy, opts = {}) {
 }
 
 /**
+ * Judge a write that the transition table refuses: is it an explicit reopen from `commit`?
+ *
+ * @param {string} workflowType
+ * @param {object} state - state on disk
+ * @param {string} from
+ * @param {string} to
+ * @param {string|null} reason - the write's `reopen_reason`
+ * @returns {{ok: true, reason: string}|{ok: false, note: string|null}} note: extra deny text
+ */
+function judgeReopen(workflowType, state, from, to, reason) {
+  const targets = REOPEN_TARGETS[workflowType];
+  if (from !== 'commit' || !targets || !targets.includes(to)) return { ok: false, note: null };
+  const hint = `Reopen after commit: write "${to}" with a reason — ` +
+    `${HEALTH_CLI} --set-phase ${to} --field reopen_reason="<why>" ` +
+    `(allowed targets: ${targets.join(', ')}; max ${MAX_REOPENS} per episode).`;
+  if (!reason || !reason.trim()) return { ok: false, note: hint };
+  if ((Number(state.reopen_count) || 0) >= MAX_REOPENS) {
+    return { ok: false, note: `Reopen limit (${MAX_REOPENS}) reached for this episode — start a new workflow ` +
+      'with an opening phase instead.' };
+  }
+  return { ok: true, reason: reason.trim().slice(0, 200) };
+}
+
+/**
  * The text fsm-guard prints for a transition the table does not allow.
  * @returns {string}
  */
-function invalidTransitionMessage(workflowType, currentPhase, newPhase, allowed, startType) {
+function invalidTransitionMessage(workflowType, currentPhase, newPhase, allowed, startType, reopenNote) {
   const openingPhases = ((TRANSITIONS[startType] || {}).null || []).join(', ');
   const restartHint = TERMINAL_PHASES.has(currentPhase)
     ? `"${currentPhase}" is terminal. To start the next workflow, write an opening ` +
@@ -303,7 +341,8 @@ function invalidTransitionMessage(workflowType, currentPhase, newPhase, allowed,
     `[FSM-GUARD] Invalid transition in ${workflowType}: ` +
     `"${currentPhase}" → "${newPhase}"\n` +
     `Allowed from "${currentPhase}": [${allowed.join(', ') || 'none'}]\n` +
-    restartHint
+    restartHint +
+    (reopenNote ? reopenNote + '\n' : '')
   );
 }
 
@@ -328,6 +367,7 @@ function invalidTransitionMessage(workflowType, currentPhase, newPhase, allowed,
  * @param {boolean} [p.honorBypassEnv] - false: ignore the recurrence override env (CLI callers)
  * @param {string|null} [p.root] - project root, to find the plan dir for testing-evidence
  * @param {string|null} [p.newTestingEvidence] - `testing_evidence` the write declares
+ * @param {string|null} [p.reopenReason] - `reopen_reason` the write declares (commit → coding|testing)
  * @returns {object} one of
  *   { verdict: 'new_episode', phase, patch }
  *   { verdict: 'tamper', field, message }
@@ -384,7 +424,8 @@ function decidePhaseWrite(p) {
         }],
         phase_recurrence_count: { [newPhase]: 1 },
         // A fresh history needs no window start; this also drops one a Write carried over.
-        recurrence_reset_ts: null
+        recurrence_reset_ts: null,
+        reopen_count: 0
       }
     };
   }
@@ -443,14 +484,46 @@ function decidePhaseWrite(p) {
   const stateKey = currentPhase === null ? 'null' : currentPhase;
   const allowed = TRANSITIONS[workflowType][stateKey] || [];
 
+  let reopen = null;
   if (!allowed.includes(newPhase)) {
+    const judged = judgeReopen(workflowType, currentState, currentPhase, newPhase, p.reopenReason);
+    if (!judged.ok) {
+      return {
+        verdict: 'invalid',
+        workflowType,
+        from: currentPhase,
+        to: newPhase,
+        allowed,
+        message: invalidTransitionMessage(workflowType, currentPhase, newPhase, allowed, startType, judged.note)
+      };
+    }
+    reopen = judged;
+  }
+
+  // An explicit reopen starts a fresh fix window: the loop that ended in `commit` is over, and
+  // counting its entries would make a legitimate follow-up fix look like a loop. History is
+  // kept (audit) and the entry carries entered_by "reopen" plus the reason. A real loop AFTER
+  // the reopen is counted from here and blocked as ever; MAX_REOPENS bounds commit→reopen cycles.
+  if (reopen) {
+    const now = Date.now();
+    const entry = {
+      phase: newPhase, ts: now, entered_by: 'reopen', from_phase: currentPhase,
+      reason: reopen.reason, session: enteredBy
+    };
+    const patch = {
+      phase_history: [...(effectiveState.phase_history || []), entry].slice(-50),
+      phase_recurrence_count: { [newPhase]: 1 },
+      recurrence_reset_ts: now - 1,          // so the reopen entry itself (ts = now) counts once
+      reopen_count: (Number(currentState.reopen_count) || 0) + 1,
+      reopen_reason: null                    // consumed: a stale marker must not reopen again
+    };
+    // A reopened workflow gets its fix budgets back; the old loop's are spent.
+    for (const k of ['quality_fix_count', 'build_retry_count', 'test_fix_count', 'refactor_fix_count']) {
+      if (typeof currentState[k] === 'number') patch[k] = 0;
+    }
     return {
-      verdict: 'invalid',
-      workflowType,
-      from: currentPhase,
-      to: newPhase,
-      allowed,
-      message: invalidTransitionMessage(workflowType, currentPhase, newPhase, allowed, startType)
+      verdict: 'transition', from: currentPhase, to: newPhase, patch,
+      recurrence: { action: 'pass', entered: 1 }, signal: null, loopCount: 0, testing: null, reopened: true
     };
   }
 
@@ -581,6 +654,8 @@ function recordRefusal(decision, ctx) {
 module.exports = {
   TRANSITIONS,
   TERMINAL_PHASES,
+  REOPEN_TARGETS,
+  MAX_REOPENS,
   ABANDONABLE_WORKFLOWS,
   extractStringField,
   startsNewEpisode,

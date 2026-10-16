@@ -125,7 +125,8 @@ function describe(decision, fields, before, seeded) {
     const wf = before.workflow_type || before.command || 'workflow';
     const count = decision.patch && decision.patch.phase_recurrence_count
       ? ` (entry ${decision.patch.phase_recurrence_count[decision.to]} since the last reset)` : '';
-    parts.push(`${wf}: ${decision.from || 'none'} → ${decision.to}${count}`);
+    const reopened = decision.reopened ? ' (reopened after commit)' : '';
+    parts.push(`${wf}: ${decision.from || 'none'} → ${decision.to}${reopened || count}`);
   } else if (fields.current_phase) {
     parts.push(`phase already "${fields.current_phase}"`);
   }
@@ -218,6 +219,8 @@ function setPhase(opts = {}) {
       // `--field testing_evidence=…` is how the conductor points at the report that holds the run.
       root,
       newTestingEvidence: typeof fields.testing_evidence === 'string' ? fields.testing_evidence : null,
+      // `--field reopen_reason="..."`: the explicit way back from `commit` (see REOPEN_TARGETS).
+      reopenReason: typeof fields.reopen_reason === 'string' ? fields.reopen_reason : null,
       getPolicy,
       enteredBy: opts.sessionId || 'bk-health-cli',
       // Never from this process's env: see checkPhaseRecurrence() — a Bash prefix would do it.

@@ -79,7 +79,7 @@ If `bk/docs/foundation/architecture.md` was not found during Code-Step-1, omit t
 **Timeout: 15 minutes per dev agent.** Include in dispatch prompt: `Expected completion: 15 minutes. If stuck: save partial progress to output file, report what's blocking.`
 
 ```
-Task(subagent_type: "bk-ios-developer", model: "opus", description: "Implement sub-task {NN}: {title}", prompt: "
+Task(subagent_type: "bk-ios-developer", description: "Implement sub-task {NN}: {title}", prompt: "
   # Example uses bk-ios-developer; substitute bk-android-developer or bk-flutter-developer at runtime
   Implement sub-task {NN}: {title}
   Sub-task file: {absolute-path-to-sub-task-file}

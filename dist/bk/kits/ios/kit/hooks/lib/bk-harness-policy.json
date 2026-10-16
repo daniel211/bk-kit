@@ -362,6 +362,10 @@
     "BK_INFERENTIAL_MODE": "Set to 'mock' to use deterministic mock results",
     "BK_INFERENTIAL_MOCK_RESULT": "JSON-encoded mock result for BK_INFERENTIAL_MODE=mock"
   },
+  "insights": {
+    "window_workflows": 10,
+    "min_workflows_for_claims": 5
+  },
   "subagent_observability": {
     "enabled": true,
     "live_tracker": {

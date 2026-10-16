@@ -23,7 +23,7 @@ No gate for obvious/small scope. For many files or cross-cutting changes:
 ## Phase 2 — dev agent (foreground, opus)
 
 ```
-Task(subagent_type: "bk-{platform}-developer", model: "opus", prompt: "
+Task(subagent_type: "bk-{platform}-developer", prompt: "
   Refactor goal: {description}
   Refactor type: {rename|extract|move|restructure|modernize}
   Affected files: {file_list_with_line_ranges}
@@ -88,10 +88,10 @@ On limit reached:
 On approval:
 
 ```
-Task(subagent_type: "bk-git-manager", model: "haiku", prompt: "
+Task(subagent_type: "bk-git-manager", prompt: "
   Task: Commit the refactor {description}
   Refactor: {description}
-  Files changed: {files_from_impl_result}
+  Files changed: {files_from_impl_result} (+ new ?? files of this refactor, git add skips them)
   Commit type: refactor
   Output: commit SHA (report back to conductor)
 ")
@@ -101,7 +101,7 @@ Task(subagent_type: "bk-git-manager", model: "haiku", prompt: "
 
 1. **bk-project-manager** → sync-back plan checkboxes if a plan exists
    ```
-   Task(subagent_type: "bk-project-manager", model: "haiku", run_in_background: true,
+   Task(subagent_type: "bk-project-manager", run_in_background: true,
      description: "Sync plan progress", prompt: "
      Task: Sync-back plan progress at {plan-dir}
      Sync-back plan at {plan-dir}:

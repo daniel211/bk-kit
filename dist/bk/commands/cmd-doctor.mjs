@@ -15,6 +15,7 @@ import { addKitOption, resolveKitOrExit } from '../lib/kit-resolver.mjs';
 import { detectDrift, formatDriftList, readDoctorIgnore } from '../lib/kit-drift.mjs';
 import { OMIT_CLAUDE_MD_MIN_VERSION, compareVersions, detectClaudeVersion } from '../lib/claude-code-version.mjs';
 import { agentsOutOfMode, readSubagentContextMode } from '../lib/subagent-context-mode.mjs';
+import { agentsOutOfOverride, hasOverrides, readModelOverrides, unknownOverrideAgents } from '../lib/agent-model-override.mjs';
 import {
   appendIgnoreCommand, missingIgnoreEntries, trackedSessionState, untrackCommand,
 } from '../lib/session-state-gitignore.mjs';
@@ -387,6 +388,28 @@ export async function runDoctor(targetDir, platform) {
       console.log(`    Apply the mode with: bk update --kit ${platform}`);
       return 'warn';
     });
+  }
+
+  // 9d. `.bk.json` models: per-agent model/effort overrides, applied to the installed agent
+  //     frontmatter by init/update (lib/agent-model-override.mjs). Silent when none is set —
+  //     the defaults are the kit's own. A warning, not an error: an agent whose frontmatter
+  //     disagrees just runs on what its file says.
+  {
+    const { overrides, warnings: modelWarnings } = readModelOverrides(targetDir, [claudeDir]);
+    for (const w of modelWarnings) check(w, () => 'warn');
+    if (hasOverrides(overrides)) {
+      const unknown = unknownOverrideAgents(overrides, claudeDir);
+      const { total, mismatched } = agentsOutOfOverride(claudeDir, overrides);
+      check(`Agent models: ${Object.keys(overrides).join(', ')} (.bk.json models)`, () => {
+        if (unknown.length > 0) console.log(`    No installed kit agent named: ${unknown.join(', ')}`);
+        if (mismatched.length > 0) {
+          console.log(`    ${mismatched.length} of ${total} overridden agent(s) do not carry the override yet:`);
+          for (const line of formatDriftList(mismatched)) console.log(`      ${line}`);
+          console.log(`    Apply it with: bk update --kit ${platform}`);
+        }
+        return unknown.length > 0 || mismatched.length > 0 ? 'warn' : true;
+      });
+    }
   }
 
   // 10. Per-machine session state kept out of git — see lib/session-state-gitignore.mjs for the

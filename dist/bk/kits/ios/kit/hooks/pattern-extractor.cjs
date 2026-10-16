@@ -38,14 +38,25 @@ try {
         process.exit(0);
       }
 
-      // Read last 10 entries
+      // Window and sample-size thresholds come from the harness policy (`insights` section,
+      // defaults in lib/harness-policy-loader.cjs) rather than being hardcoded here.
+      let windowWorkflows = 10;
+      let minWorkflows = 5;
+      try {
+        const cfg = require('./lib/harness-policy-loader.cjs').loadHarnessPolicy().insights || {};
+        if (Number.isInteger(cfg.window_workflows) && cfg.window_workflows > 0) windowWorkflows = cfg.window_workflows;
+        if (Number.isInteger(cfg.min_workflows_for_claims) && cfg.min_workflows_for_claims > 0) minWorkflows = cfg.min_workflows_for_claims;
+      } catch { /* policy unreadable — keep the built-in defaults */ }
+
+      // ALL rows are read; the window is applied to WORKFLOWS below. It used to be the last 10
+      // ROWS, which in the field collapsed to 2-4 workflows (49-66 rows on disk) and produced
+      // claims like "1/2 recent workflows had fix loops".
       const allLines = fs.readFileSync(summaryPath, 'utf8').split('\n').filter(Boolean);
-      const entries = allLines
-        .slice(-10)
+      const allEntries = allLines
         .map(l => { try { return JSON.parse(l); } catch { return null; } })
         .filter(Boolean);
 
-      if (entries.length === 0) {
+      if (allEntries.length === 0) {
         timer.end({ status: 'no_entries', exit: 0 });
         process.exit(0);
       }
@@ -83,26 +94,38 @@ try {
         if (ft) return `${sk || 'session'}:${ft}`;
         return `legacy\u0000${e.skill || 'unknown'}\u0000${e.feature || 'unknown'}`;
       };
+      // Rows of one workflow are SUMMED, not "latest wins": each row covers only the agents
+      // traced since the previous close-out (1 then 7 agents for one 8-agent workflow), so
+      // keeping only the latest row would drop most of the workflow.
       const workflowMap = new Map();
-      for (const e of entries) {
+      for (const e of allEntries) {
         const key = workflowKey(e);
         if (!workflowMap.has(key)) {
           workflowMap.set(key, {
-            skill: e.skill || 'unknown', total_agents: 0, fix_loops: 0, reactive_signals: 0
+            skill: e.skill || 'unknown', total_agents: 0, fix_loops: 0, reactive_signals: 0, rows: 0
           });
         }
         const wf = workflowMap.get(key);
+        wf.rows++;
+        // Re-insert so Map order tracks each workflow's MOST RECENT row.
+        workflowMap.delete(key); workflowMap.set(key, wf);
         wf.total_agents += e.total_agents || 0;
         wf.fix_loops += e.fix_loops || 0;
         wf.reactive_signals += e.reactive_signals || 0;
       }
-      const workflows = Array.from(workflowMap.values());
+      // The last N workflows by most recent activity.
+      const workflows = Array.from(workflowMap.values()).slice(-windowWorkflows);
+      const entries = { length: workflows.reduce((n, w) => n + w.rows, 0) };
+      const enoughData = workflows.length >= minWorkflows;
+      const insufficient = `n=${workflows.length}, need >=${minWorkflows}`;
 
       const insights = [];
+      // Notes are shown in insights.md only; they are not injected into the session context.
+      const notes = [];
 
       // Pattern 1: High fix-loop rate
       const withFixLoops = workflows.filter(w => w.fix_loops > 0);
-      if (workflows.length > 0 && withFixLoops.length / workflows.length > 0.3) {
+      if (enoughData && withFixLoops.length / workflows.length > 0.3) {
         insights.push(`Plan quality may need improvement — ${withFixLoops.length}/${workflows.length} recent workflows had fix loops.`);
       }
 
@@ -120,17 +143,59 @@ try {
         skillFixMap[sk].runs++;
         skillFixMap[sk].fixLoops += w.fix_loops;
       }
+      let skillsTooFew = 0;
       for (const [sk, stats] of Object.entries(skillFixMap)) {
-        if (stats.runs >= 2 && stats.fixLoops / stats.runs >= 1.5) {
+        // An average over fewer than minWorkflows runs of this skill is anecdote, not a pattern.
+        if (stats.runs < minWorkflows) { if (stats.runs >= 2 && stats.fixLoops / stats.runs >= 1.5) skillsTooFew++; continue; }
+        if (stats.fixLoops / stats.runs >= 1.5) {
           insights.push(`Check prompt for ${sk} — avg ${(stats.fixLoops / stats.runs).toFixed(1)} fix loops per run across ${stats.runs} runs.`);
         }
+      }
+
+      if (!enoughData) {
+        notes.push(`Fix-loop rate and per-skill averages: insufficient data (${insufficient}).`);
+      } else if (skillsTooFew > 0) {
+        notes.push(`Per-skill fix-loop average: insufficient data for ${skillsTooFew} skill(s) with fewer than ${minWorkflows} runs.`);
       }
 
       // Default insight if no patterns detected
       if (insights.length === 0) {
         const avgAgents = workflows.reduce((s, w) => s + w.total_agents, 0) / workflows.length;
-        insights.push(`Workflow health looks good. Avg ${avgAgents.toFixed(1)} agents/workflow over last ${workflows.length} runs.`);
+        // Below the sample floor this is a plain count, with no "looks good" verdict attached.
+        insights.push(enoughData
+          ? `Workflow health looks good. Avg ${avgAgents.toFixed(1)} agents/workflow over last ${workflows.length} runs.`
+          : `Avg ${avgAgents.toFixed(1)} agents/workflow over last ${workflows.length} runs — insufficient data for a health verdict (${insufficient}).`);
       }
+
+      // Test gaps: unique source files still without a test (see lib/test-gap-ledger.cjs).
+      // Rows whose file has since been deleted are ignored. Section only when > 0.
+      let testGapLines = [];
+      try {
+        const root = resolveProjectRoot();
+        const gaps = require('./lib/test-gap-ledger.cjs')
+          .readUniqueTestGaps(path.join(metricsDir, 'test-gaps.jsonl'))
+          .filter(g => fs.existsSync(path.isAbsolute(g.file) ? g.file : path.join(root, g.file)));
+        if (gaps.length > 0) {
+          testGapLines = [
+            '',
+            '## Test gaps',
+            `- ${gaps.length} unique file(s) without a test. Most-edited:`,
+            ...gaps.slice(0, 5).map(g => `  - ${g.file} (${g.count} edit${g.count === 1 ? '' : 's'})`)
+          ];
+          insights.push(`${gaps.length} source file(s) have no test — see "Test gaps" in insights.md.`);
+        }
+      } catch { /* optional section */ }
+
+      // Cost by model: per model / per agent spend from the subagent rows of cost-ledger.jsonl,
+      // with each model's fix-loop rate over ALL summarised workflows it ran in (not just the
+      // window — spend is lifetime, so the join is too). See lib/cost-by-model.cjs. Section only
+      // when the ledger has subagent rows.
+      let costLines = [];
+      try {
+        const cbm = require('./lib/cost-by-model.cjs');
+        const rows = cbm.readSubagentLedgerRows(path.join(metricsDir, 'cost-ledger.jsonl'));
+        costLines = cbm.renderCostByModel(cbm.summarizeCostByModel(rows, workflowMap), { minWorkflows });
+      } catch { /* optional section */ }
 
       // Write insights.md (overwrite with latest)
       fs.mkdirSync(metricsDir, { recursive: true });
@@ -143,12 +208,15 @@ try {
         '## Detected Patterns',
         '',
         ...insights.map((ins, i) => `${i + 1}. ${ins}`),
+        ...notes.map(n => `- ${n}`),
         '',
         '## Raw Stats',
         `- Total workflows analyzed: ${workflows.length}`,
         `- Summary rows read: ${entries.length}`,
         `- Workflows with fix loops: ${withFixLoops.length}`,
-        `- Total reactive signals: ${workflows.reduce((s, w) => s + w.reactive_signals, 0)}`
+        `- Total reactive signals: ${workflows.reduce((s, w) => s + w.reactive_signals, 0)}`,
+        ...testGapLines,
+        ...costLines
       ].join('\n');
       fs.writeFileSync(insightsPath, insightsContent, 'utf8');
 

@@ -61,7 +61,7 @@ For Architecture/Platform/Security questions:
 ### Background Research (if question needs codebase context)
 
 ```
-Task(subagent_type: "bk-researcher", model: "haiku", run_in_background: true,
+Task(subagent_type: "bk-researcher", run_in_background: true,
   description: "Research context for question", prompt: "
   Gather context for question: {user_question}
   Search codebase for relevant patterns, files, recent changes.

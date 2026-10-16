@@ -33,8 +33,8 @@
 | Git operations | bk-git-manager | haiku | background |
 | Plan sync-back | bk-project-manager | haiku | background |
 
-Every dispatch MUST pass `model` explicitly and prefix `description` with `[<model>]`
-so the running-agent footer shows which model each subagent uses — see
+Every dispatch MUST prefix `description` with `[<model>]` (the installed agent's model, or the
+skill's tier when its example passes `model`) so the running-agent footer shows the model — see
 `.claude/rules/dispatch-labeling.md`.
 
 **Conductor NEVER writes production code, documentation, plans, or test files.**

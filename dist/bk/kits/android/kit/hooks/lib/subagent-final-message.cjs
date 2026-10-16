@@ -11,7 +11,8 @@
  * Resolution order:
  *   1. a non-empty `last_assistant_message` on the payload (plain text ending);
  *   2. the `input.message` of the LAST `SubagentHandback` tool_use in `agent_transcript_path`;
- *   3. "".
+ *   3. the text of the transcript's last assistant turn when it has no tool call (stale payload);
+ *   4. "".
  *
  * Never throws: a missing/unreadable transcript, bad JSON lines, or a non-string message all
  * fall through to the next source. Only the tail of the transcript is read.
@@ -64,17 +65,56 @@ function lastHandbackMessage(transcriptPath) {
   return '';
 }
 
-/** @returns {{ message: string, source: 'payload'|'handback'|'none' }} */
-function resolveFinalMessageWithSource(hookData) {
+/** Synchronous pause; the hook has nothing else to do while it waits for a transcript flush. */
+function sleepMs(ms) {
+  try { Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms); } catch { /* no-op */ }
+}
+
+/**
+ * Message plus WHY it is empty when it is. Resolution order: payload text, handback tool call,
+ * then plain text in the transcript's last turn (payload stale). Otherwise `source: 'none'` and
+ * `reason`/`diagnostics` from lib/subagent-transcript-diagnostics.cjs.
+ *
+ * Flush race: SubagentStop may fire before the transcript is on disk. When the transcript is
+ * absent/empty (not when the payload names no transcript at all) the lookup is retried, up to
+ * `retries` x `retryDelayMs` (default 2 x 100ms) — paid only by runs that would otherwise be
+ * filed as silent.
+ *
+ * @returns {{ message: string, source: 'payload'|'handback'|'transcript_text'|'none',
+ *             reason: string, diagnostics: object|null }}
+ */
+function resolveFinalMessageDetailed(hookData, opts) {
+  const { diagnoseTranscript, emptyDiagnostics } = require('./subagent-transcript-diagnostics.cjs');
+  const retries = opts && Number.isInteger(opts.retries) ? opts.retries : 2;
+  const delay = opts && Number.isInteger(opts.retryDelayMs) ? opts.retryDelayMs : 100;
   try {
     const data = hookData || {};
     if (typeof data.last_assistant_message === 'string' && data.last_assistant_message.trim()) {
-      return { message: data.last_assistant_message, source: 'payload' };
+      return { message: data.last_assistant_message, source: 'payload', reason: 'payload_text', diagnostics: null };
     }
-    const handback = lastHandbackMessage(data.agent_transcript_path || data.agentTranscriptPath);
-    if (handback) return { message: handback, source: 'handback' };
-  } catch { /* fall through */ }
-  return { message: '', source: 'none' };
+    const file = data.agent_transcript_path || data.agentTranscriptPath;
+    let diag = null;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      const handback = lastHandbackMessage(file);
+      if (handback) return { message: handback, source: 'handback', reason: 'handback_tool_call', diagnostics: null };
+      diag = diagnoseTranscript(file);
+      if (diag.reason === 'transcript_final_text') {
+        return { message: diag.lastTurnText, source: 'transcript_text', reason: 'transcript_final_text', diagnostics: null };
+      }
+      if (diag.reason !== 'transcript_unreadable' && diag.reason !== 'transcript_empty') break;
+      if (attempt < retries) sleepMs(delay);
+    }
+    return { message: '', source: 'none', reason: diag.reason, diagnostics: diag.diagnostics };
+  } catch {
+    return { message: '', source: 'none', reason: 'resolver_error', diagnostics: emptyDiagnostics() };
+  }
+}
+
+/** @returns {{ message: string, source: 'payload'|'handback'|'transcript_text'|'none' }} */
+function resolveFinalMessageWithSource(hookData) {
+  // No retries: callers that only want the text (agent-signal-detector) must not pay the wait.
+  const { message, source } = resolveFinalMessageDetailed(hookData, { retries: 0 });
+  return { message, source };
 }
 
 /** @returns {string} the agent's final message, or "" */
@@ -82,4 +122,4 @@ function resolveFinalMessage(hookData) {
   return resolveFinalMessageWithSource(hookData).message;
 }
 
-module.exports = { resolveFinalMessage, resolveFinalMessageWithSource, lastHandbackMessage };
+module.exports = { resolveFinalMessage, resolveFinalMessageWithSource, resolveFinalMessageDetailed, lastHandbackMessage };

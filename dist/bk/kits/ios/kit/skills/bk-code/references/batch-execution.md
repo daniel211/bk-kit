@@ -60,7 +60,7 @@ one batch are not mistaken for retries. Without it they share one budget and the
 
 **Sequential sub-tasks** (sub-task has `depends:` on another sub-task in same batch):
 ```
-Task(subagent_type: "bk-{platform}-developer", model: "opus",
+Task(subagent_type: "bk-{platform}-developer",
   description: "Implement sub-task {NN}: {title}",
   prompt: "
   Sub-task file: {plan-dir}/sub-task-{NN}-{slug}.md
@@ -96,7 +96,7 @@ Task(subagent_type: "bk-{platform}-developer", model: "opus",
 **Parallel sub-tasks** (sub-task has `parallel-with:` listing another sub-task in same batch):
 ```
 # Dispatch all parallel sub-tasks in ONE message with run_in_background: true
-Task(subagent_type: "bk-{platform}-developer", model: "opus",
+Task(subagent_type: "bk-{platform}-developer",
   run_in_background: true,
   description: "Implement sub-task {NN}: {title}",
   prompt: "
@@ -126,7 +126,7 @@ Task(subagent_type: "bk-{platform}-developer", model: "opus",
     Write it even when blocked — status: needs_info + info_needed. There is no impl-result.json.
 ")
 
-Task(subagent_type: "bk-{platform}-developer", model: "opus",
+Task(subagent_type: "bk-{platform}-developer",
   run_in_background: true,
   description: "Implement sub-task {MM}: {title}",
   prompt: "
@@ -165,7 +165,7 @@ A report with `status: needs_info` is not a pass: read `info_needed`, resolve it
 After all sub-tasks in batch are implemented, dispatch test agent:
 
 ```
-Task(subagent_type: "bk-unit-test-agent", model: "haiku",
+Task(subagent_type: "bk-unit-test-agent",
   run_in_background: true,
   description: "Test batch {N}: {batch-name}",
   prompt: "
@@ -204,7 +204,7 @@ Task(subagent_type: "bk-unit-test-agent", model: "haiku",
 If test report shows failures, dispatch debugger:
 
 ```
-Task(subagent_type: "bk-debugger", model: "sonnet",
+Task(subagent_type: "bk-debugger",
   description: "Debug batch {N} test failures",
   prompt: "
   Test report: {plan-dir}/research/test-batch-{N}.md
@@ -220,7 +220,7 @@ Task(subagent_type: "bk-debugger", model: "sonnet",
 
 Then re-implement fix:
 ```
-Task(subagent_type: "bk-{platform}-developer", model: "opus",
+Task(subagent_type: "bk-{platform}-developer",
   description: "Fix sub-task {NN} per debug findings",
   prompt: "
   Debug report: {plan-dir}/research/debug-batch-{N}.md
@@ -232,7 +232,7 @@ Task(subagent_type: "bk-{platform}-developer", model: "opus",
 
 Then re-test:
 ```
-Task(subagent_type: "bk-unit-test-agent", model: "haiku",
+Task(subagent_type: "bk-unit-test-agent",
   run_in_background: true,
   description: "Re-test batch {N} after fix",
   prompt: "
@@ -265,7 +265,7 @@ Task(subagent_type: "bk-unit-test-agent", model: "haiku",
 After tests pass (or user chose to skip), dispatch reviewer:
 
 ```
-Task(subagent_type: "bk-code-reviewer", model: "sonnet",
+Task(subagent_type: "bk-code-reviewer",
   run_in_background: true,
   description: "Review batch {N}: {batch-name}",
   prompt: "
@@ -306,7 +306,7 @@ Task(subagent_type: "bk-code-reviewer", model: "sonnet",
 
 **Optional security reviewer** — dispatch when batch sub-tasks touch auth, payment, or sensitive data:
 ```
-Task(subagent_type: "bk-security-auditor", model: "sonnet",
+Task(subagent_type: "bk-security-auditor",
   run_in_background: true,
   description: "Security review batch {N}",
   prompt: "
@@ -322,7 +322,7 @@ Task(subagent_type: "bk-security-auditor", model: "sonnet",
 
 1. Dispatch `bk-{platform}-developer` to fix critical issues:
 ```
-Task(subagent_type: "bk-{platform}-developer", model: "opus",
+Task(subagent_type: "bk-{platform}-developer",
   description: "Fix review findings for batch {N}",
   prompt: "
   Review report: {plan-dir}/research/review-batch-{N}.md
@@ -335,7 +335,7 @@ Task(subagent_type: "bk-{platform}-developer", model: "opus",
 
 2. Re-test after fix:
 ```
-Task(subagent_type: "bk-unit-test-agent", model: "haiku",
+Task(subagent_type: "bk-unit-test-agent",
   run_in_background: true,
   description: "Re-test batch {N} after review fix",
   prompt: "
@@ -346,7 +346,7 @@ Task(subagent_type: "bk-unit-test-agent", model: "haiku",
 
 3. Re-review (only focus areas with critical findings):
 ```
-Task(subagent_type: "bk-code-reviewer", model: "sonnet",
+Task(subagent_type: "bk-code-reviewer",
   run_in_background: true,
   description: "Re-review batch {N} fixes",
   prompt: "

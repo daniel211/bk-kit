@@ -13,7 +13,7 @@ try {
   const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');
   const { foundationDir, hasFoundationDocs, extractSections, FOUNDATION_REL } = require('./lib/foundation-docs.cjs');
   const { agentContextMode, buildSubagentRuleDigest } = require('./lib/subagent-rule-digest.cjs');
-  const { buildSubagentUserContext } = require('./lib/subagent-user-context.cjs');
+  const { buildSubagentUserContext, canonicalProjectRoot } = require('./lib/subagent-user-context.cjs');
 
   async function main() {
     try {
@@ -108,6 +108,15 @@ try {
       const contextMode = agentContextMode(projectRoot, agentType);
       if (contextMode === 'omit' || contextMode === 'full') {
         lines.push(...buildSubagentRuleDigest({ agentType, platform, fullContext: contextMode === 'full' }));
+        // Memory path as an ABSOLUTE string. Agents otherwise assemble `.claude/agent-memory/<agent>/`
+        // from wherever they are working (bk/dev/<feature>/, a package dir, a git worktree) and the
+        // guard blocks the write (~60x in the field). The main repo root is canonical in worktrees.
+        if (/^[\w.-]+$/.test(agentType) && agentType !== 'unknown') {
+          const memDir = path.join(canonicalProjectRoot(projectRoot), '.claude', 'agent-memory', agentType);
+          lines.push(`## Agent memory directory`,
+            `- Write memory ONLY under this absolute path: ${memDir}/ (it already exists; no mkdir).`,
+            `- Never build it relative to your cwd, bk/dev/<feature>/, a package dir or a git worktree.`, ``);
+        }
         if (contextMode === 'omit') lines.push(...buildSubagentUserContext({ projectRoot }));
       } else {
         lines.push(`## Rules`);

@@ -65,11 +65,25 @@ try {
       let finalMessage = typeof data.last_assistant_message === 'string'
         ? data.last_assistant_message
         : '';
+      // `reason` says HOW the status was derived; `diagnostics` (structural counters only, no
+      // prompt/response content) is attached when the final message came back empty.
+      let reason = finalMessage.trim() ? 'payload_text' : 'resolver_unavailable';
+      let diagnostics = null;
       // Optional lib: a missing file must not crash the hook — keep the payload field.
       try {
-        finalMessage = require('./lib/subagent-final-message.cjs').resolveFinalMessage(data);
+        const resolved = require('./lib/subagent-final-message.cjs').resolveFinalMessageDetailed(data);
+        finalMessage = resolved.message;
+        reason = resolved.reason;
+        diagnostics = resolved.diagnostics;
       } catch { /* payload field only */ }
       const signals = classifyAgentOutput(finalMessage);
+      // STATUS VOCABULARY (one place, so readers can switch on it):
+      //   <signal>   a classified signal from the final message (fix_loop_stuck, ...)
+      //   ok         a non-blank final message with no signal
+      //   no_output  this hook ran and resolved NO final message; `reason` + `diagnostics` say why
+      //   unknown    LEGACY ONLY. Rows from kits that read `data.status` (a key SubagentStop never
+      //              carries) were all "unknown". This code never writes it; treat it as
+      //              "status was not derived", i.e. older than no_output, and not as a failure.
       const agentStatus = signals[0] || (finalMessage.trim() ? 'ok' : 'no_output');
 
       // Read workflow state
@@ -153,6 +167,8 @@ try {
         skill,
         feature,
         status: agentStatus,
+        reason,
+        ...(agentStatus === 'no_output' && diagnostics ? { diagnostics } : {}),
         signals,
         complexity_tier: complexityTier,
         phase: currentPhase,

@@ -27,6 +27,9 @@
 const fs = require('fs');
 const path = require('path');
 
+// Models already reported as unknown by this process (violation dedupe, see computeCost).
+const _reportedUnknown = new Set();
+
 // Load pricing table once at module load time
 let _pricing = null;
 function getPricing() {
@@ -62,6 +65,38 @@ function resolveModel(model) {
   return best || resolved;
 }
 
+/** True the first time this (model, session) is seen; fail-open (speak) on any error. */
+function firstUnknownInSession(model, sessionId) {
+  try {
+    return require('./advisory-once.cjs').firstTime(`unknown_model|${model}`, { sessionId, feature: 'cost-ledger-writer' });
+  } catch { return true; }
+}
+
+/**
+ * Does `model` have a real price (exact, alias, or `-` prefix match), or would computeCost
+ * fall back to the 'unknown' entry (which is the OPUS rate - ~50x too high for haiku-5-5)?
+ * Ledger writers stamp `pricing: 'fallback'` and downgrade accuracy when this says fallback.
+ * @param {string} model
+ * @returns {{ source: 'table'|'fallback', resolvedModel: string }}
+ */
+function pricingSource(model) {
+  const resolvedModel = resolveModel(model);
+  const known = !!getPricing().models?.[resolvedModel];
+  return { source: known ? 'table' : 'fallback', resolvedModel };
+}
+
+/**
+ * Accuracy to record: a fallback-priced row is never better than 'approx', whatever the
+ * token counts' accuracy, because the rate itself is a guess.
+ * @param {string} accuracy
+ * @param {string} model
+ * @returns {string}
+ */
+function ledgerAccuracy(accuracy, model) {
+  if (accuracy === 'high' && pricingSource(model).source === 'fallback') return 'approx';
+  return accuracy;
+}
+
 /**
  * The estimate-compensation multiplier for an effort level (1.0 when unknown/unconfigured).
  * Single source for computeCost and for the `multiplierApplied` ledger field.
@@ -94,11 +129,13 @@ function computeCost(modelOrOpts, tokensIn, tokensOut, effort) {
   // Detect call shape
   let model, rawInputTokens, cacheReadTokens, cacheCreationTokens, thinkingTokens, _effort;
   let exactUsage = false;
+  let sessionId = null;
   if (modelOrOpts && typeof modelOrOpts === 'object') {
     ({ model, rawInputTokens = 0, tokensOut = 0, cacheReadTokens = 0,
        cacheCreationTokens = 0, thinkingTokens = 0, effort: _effort } = modelOrOpts);
     tokensOut = modelOrOpts.tokensOut || 0;
     exactUsage = modelOrOpts.exactUsage === true;
+    sessionId = modelOrOpts.sessionId || null;
     // Backward compat: if caller passes legacy `tokensIn` (total) instead of `rawInputTokens`,
     // derive raw from total minus cache.
     if (rawInputTokens === 0 && typeof modelOrOpts.tokensIn === 'number') {
@@ -119,17 +156,22 @@ function computeCost(modelOrOpts, tokensIn, tokensOut, effort) {
 
   if (!modelPricing) {
     modelPricing = pricing.models?.unknown;
-    process.stderr.write(`[cost-ledger-writer] warn: no pricing for model '${model}' (resolved: '${resolvedModel}') — using 'unknown' fallback\n`);
-    try {
-      const { trackViolation } = require('./harness-policy-loader.cjs');
-      trackViolation({
-        hook: 'cost-ledger-writer',
-        violation_type: 'unknown_model',
-        severity: 'nudge',
-        blocked: false,
-        context: { model, resolvedModel }
-      });
-    } catch { /* loader unavailable */ }
+    // Once per (model, session): a subagent-heavy session otherwise filed one per ledger row
+    // (X-Game-Pro 0.13.6: 200+). Without a session id, once per process.
+    if (!_reportedUnknown.has(String(model)) && firstUnknownInSession(model, sessionId)) {
+      _reportedUnknown.add(String(model));
+      process.stderr.write(`[cost-ledger-writer] warn: no pricing for model '${model}' (resolved: '${resolvedModel}') — using 'unknown' fallback\n`);
+      try {
+        const { trackViolation } = require('./harness-policy-loader.cjs');
+        trackViolation({
+          hook: 'cost-ledger-writer',
+          violation_type: 'unknown_model',
+          severity: 'nudge',
+          blocked: false,
+          context: { model, resolvedModel }
+        });
+      } catch { /* loader unavailable */ }
+    }
     if (!modelPricing) return 0;
   }
 
@@ -187,4 +229,4 @@ function appendEntry(entry) {
   }
 }
 
-module.exports = { computeCost, effortMultiplier, appendEntry, resolveMetricsDir, resolveModel };
+module.exports = { computeCost, pricingSource, ledgerAccuracy, effortMultiplier, appendEntry, resolveMetricsDir, resolveModel };

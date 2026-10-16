@@ -38,7 +38,7 @@ Identify:
 
 Dispatch bk-debugger with crash context:
 ```
-Task(subagent_type: "bk-debugger", model: "sonnet", prompt: "
+Task(subagent_type: "bk-debugger", prompt: "
   Crash type: {type}
   Stack trace: {trace}
   Platform: {platform}

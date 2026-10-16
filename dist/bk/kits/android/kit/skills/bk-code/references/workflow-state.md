@@ -116,7 +116,8 @@ applies the recurrence override env; in a session started with it, Edit instead.
 
 Valid transitions (enforced by `fsm-guard`):
 `(none)→plan→coding→testing→review→{coding|commit|escalated}`, `escalated→{coding|commit|aborted}`.
-Anything else is refused with exit 2 — that refusal is the guard working, not a bug to route around.
+After `commit`, follow-up work on the same feature: `--set-phase coding --field reopen_reason="<why>"` (or
+`testing`; max 3 per episode; counters restart). Anything else is refused with exit 2 — that refusal is the guard working, not a bug to route around.
 
 ## Starting the next feature
 

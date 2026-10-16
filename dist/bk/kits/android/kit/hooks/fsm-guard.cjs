@@ -229,6 +229,8 @@ try {
         newWorkflowId: extractStringField(newContent, 'workflowId'),
         // Evidence the write itself declares (an Edit adding "testing_evidence": "...").
         newTestingEvidence: extractStringField(newContent, 'testing_evidence'),
+        // Marker of an explicit reopen from `commit` (commit → coding|testing).
+        reopenReason: extractStringField(newContent, 'reopen_reason'),
         get root() { return projectRootOrNull(input); },
         // A new episode decides before any review — its reset overwrites the bookkeeping the
         // write carried — so the review is only computed when it is needed.

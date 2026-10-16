@@ -13,12 +13,13 @@ cannot tell an opus dispatch from a haiku one while a workflow is running.
 
 1. Every `Task()` / `Agent()` call MUST pass `description` in the form
    `[<model>] <3-5 word task>`, where `<model>` is one of `opus`, `sonnet`, `haiku`.
-2. The conductor MUST pass `model` explicitly on the dispatch call and use that exact
-   value as the prefix. Never infer the prefix from the agent's `model:` frontmatter —
-   frontmatter is a default that a call-site `model` argument or a session-wide default
-   subagent model can override, so an inferred label can be wrong.
-3. When no `model` argument is passed, the prefix MUST be the agent's frontmatter model,
-   and the conductor MUST NOT pass a `model` argument that contradicts it.
+2. The `<model>` prefix is the model the dispatch runs on: the `model` argument when the
+   call passes one, otherwise the `model:` in the installed agent file
+   (`.claude/agents/<agent>.md`). Read that file; never infer the prefix from memory — the
+   project may have changed it with `models` in `.claude/.bk.json` (applied by `bk update`).
+3. Pass `model` on a call only for a skill-level tier written in the skill's dispatch example
+   (see Model Assignment), and omit it when `.claude/.bk.json` has `models.<agent>` for that
+   agent. Never pass one that contradicts the installed frontmatter otherwise.
 4. The prefix costs one word. Keep the remaining description to 3-5 words; trim the task
    text, never the prefix.
 5. Skills MUST NOT be labeled with a model. A skill has no model of its own — it runs on
@@ -29,8 +30,13 @@ cannot tell an opus dispatch from a haiku one while a workflow is running.
 
 ## Model Assignment
 
-The model per agent is fixed by `conductor-role.md` §2. Do not vary it per call without
-a stated reason.
+The model per agent is set by the agent frontmatter (`model:` / `effort:`), which a project
+overrides with `models` in `.claude/.bk.json` (`docs/user-guide.md`, "Agent models"). Skill
+dispatch examples carry no `model:` unless the skill runs an agent off its default tier on
+purpose: bk-researcher and bk-docs-writer on sonnet (research and spec writing),
+bk-unit-test-agent and bk-device-test-agent on sonnet (bk-test, bk-debug, bk-refactor, quality
+loop), bk-brainstormer on sonnet (bk-debug), bk-security-auditor on haiku (bk-health scan).
+Defaults at install:
 
 | Model | Agents |
 |-------|--------|

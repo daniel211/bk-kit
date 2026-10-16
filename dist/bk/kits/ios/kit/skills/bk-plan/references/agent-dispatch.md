@@ -101,7 +101,6 @@ Dispatch critic as **separate agent** (not self-review). Background, reads plan 
 ```
 Task(
   subagent_type: "bk-code-reviewer",
-  model: "sonnet",
   run_in_background: true,
   description: "Critic review plan for {feature}",
   prompt: "
@@ -201,7 +200,7 @@ bk-docs-seeker), project memory. DO NOT use the built-in `Plan()` agent — it h
 
 ```
 TaskUpdate(taskId=T5, status="in_progress")
-Task(subagent_type: "bk-planner", model: "opus",
+Task(subagent_type: "bk-planner",
   description: "Create implementation plan for {feature}", prompt: "
   Task: Create sub-task-based implementation plan
   Feature: {feature_description}

@@ -14,6 +14,7 @@ import { mergeSettings } from '../lib/settings-merger.mjs';
 import { kitLayout, packageRootFrom } from '../lib/package-layout.mjs';
 import { addKitOption, resolveKitOrExit } from '../lib/kit-resolver.mjs';
 import { applyModeToInstalledAgents, readSubagentContextMode } from '../lib/subagent-context-mode.mjs';
+import { readModelOverrides, unknownOverrideAgents } from '../lib/agent-model-override.mjs';
 import {
   gitPrefix, writeGitignoreEntries,
 } from '../lib/session-state-gitignore.mjs';
@@ -131,9 +132,15 @@ export function registerInit(program) {
       // (lib/subagent-context-mode.mjs). Today that is always lean: init refuses an existing
       // .claude/, and --force replaces .bk.json with the template. `bk update` applies a toggle.
       const contextMode = readSubagentContextMode(targetDir);
-      const modeChanged = applyModeToInstalledAgents(claudeDir, contextMode);
+      const { overrides: modelOverrides, warnings: modelWarnings } = readModelOverrides(targetDir, [kitDir]);
+      const modeChanged = applyModeToInstalledAgents(claudeDir, contextMode, modelOverrides);
+      for (const w of modelWarnings) console.log(`  ⚠ ${w}`);
+      const unknownModelAgents = unknownOverrideAgents(modelOverrides, claudeDir);
+      if (unknownModelAgents.length > 0) console.log(`  ⚠ .bk.json models names no installed kit agent: ${unknownModelAgents.join(', ')}`);
       if (modeChanged.length > 0) {
-        console.log(`  ✓ Subagent context: full — omitClaudeMd removed from ${modeChanged.length} kit agent(s)`);
+        console.log(contextMode === 'full'
+          ? `  ✓ Subagent context: full — omitClaudeMd removed from ${modeChanged.length} kit agent(s)`
+          : `  ✓ Agent models: ${modeChanged.length} kit agent(s) rewritten from .bk.json models`);
       }
 
       // Copy cli/ → .claude/cli/ (CLI binaries like bk-health, bk-harness-ci)

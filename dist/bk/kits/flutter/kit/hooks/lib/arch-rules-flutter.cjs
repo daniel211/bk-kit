@@ -120,7 +120,7 @@ const publicApiNeedsDartdoc = {
           ctx.filePath,
           i + 1,
           `Public declaration '${name}' is missing a Dart doc comment (///).`,
-          `Add a /// doc comment above '${line.trim().slice(0, 60)}'.`,
+          `Insert directly above \`${line.trim().slice(0, 60)}\`: "/// <one-line summary of what ${name} does>" (one \`///\` line is enough). To silence this rule project-wide set arch_fitness.flutter.rules.public_api_needs_dartdoc.enabled=false in bk-harness-policy.json.`,
           line.trim().slice(0, 80)
         ));
       }

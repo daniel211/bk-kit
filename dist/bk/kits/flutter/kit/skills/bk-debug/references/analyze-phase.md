@@ -9,7 +9,7 @@ Launch ALL agents in ONE message:
 ### 1. bk-debugger (foreground)
 
 ```
-Task(subagent_type: "bk-debugger", model: "sonnet", prompt: "
+Task(subagent_type: "bk-debugger", prompt: "
   Bug description: {description}
   Platform: {platform}
   Recent commits: {git_log}

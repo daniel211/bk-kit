@@ -28,6 +28,24 @@ paths:
 | review | commit | All post-tasks complete |
 | review | coding | Fix loop: `quality_fix_count < 2` AND critical/major findings |
 
+`testing → coding` is not an edge: a test failure is recorded at `testing → review` (evidence
+note), and the fix loop is `review → coding`.
+
+### Reopen after `commit` (follow-up fix, review comment, CI failure)
+
+`commit` has no ordinary outgoing edge. The way back is explicit — the write must carry a reason:
+
+```bash
+node .claude/cli/bk-health/index.cjs --set-phase coding --field reopen_reason="<why>"   # or testing
+```
+
+(Edit path: put `"reopen_reason": "<why>"` in the same write.) Targets: bk-code `coding|testing`,
+bk-debug `code|test`, bk-refactor `refactor|test`; `commit` only (not `aborted`/`completed`), max 3
+reopens per episode. The entry is `entered_by: "reopen"` with `reason`, recurrence counts and the
+history window restart, and fix counters are zeroed, so an earlier review→coding loop is not held
+against the follow-up. Loops after the reopen are counted and blocked as usual. A new feature is
+still a new episode (opening phase), not a reopen.
+
 ### Testing evidence (`/bk-code`, advisory)
 
 `testing` may be satisfied by developer-run test sub-tasks, but the evidence must be recorded. On
@@ -212,7 +230,8 @@ episode instead.
 
 ### Starting the next workflow (new episode)
 
-`commit`, `aborted` and `completed` have no outgoing edges inside an episode. The next workflow
+`commit`, `aborted` and `completed` have no outgoing edges inside an episode (`commit` has the
+reopen path above). The next workflow
 starts by writing an **opening phase** — `plan` (bk-code), `classify` (bk-debug), `analyze`
 (bk-refactor), `planning` (bk-plan)
 — straight over the terminal state. `fsm-guard.cjs` recognises that as a new episode and (the

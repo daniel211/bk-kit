@@ -32,6 +32,7 @@ import { createHash } from 'node:crypto';
 import { cpSync, existsSync, readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { loadConfigFromPath } from './kit-drift.mjs';
+import { applyOverrideToContent, contentWithOverride, hasOverrides, kitAgentName } from './agent-model-override.mjs';
 
 /** @typedef {'lean'|'full'} SubagentContextMode */
 
@@ -85,13 +86,22 @@ export function restoreOmitClaudeMd(content) {
 }
 
 /**
- * What the package file becomes when installed in `mode`.
+ * What the package file becomes when installed in `mode`, with the project's `models` overrides
+ * (agent-model-override.mjs) applied to the kit agent they name. Both are rewrites of kit-agent
+ * frontmatter, so they share this one place: every hash `update` takes goes through it.
  * @param {string} relPath
  * @param {string} content — the package file as shipped
  * @param {SubagentContextMode} mode
+ * @param {Record<string,{model?:string,effort?:string}>} [models]
  */
-export function contentForMode(relPath, content, mode) {
-  return mode === 'full' && isKitAgentPath(relPath) ? stripOmitClaudeMd(content) : content;
+export function contentForMode(relPath, content, mode, models) {
+  const base = mode === 'full' && isKitAgentPath(relPath) ? stripOmitClaudeMd(content) : content;
+  return contentWithOverride(relPath, base, models);
+}
+
+/** Does a kit agent at relPath install differently from the package file? */
+function rewritesAgent(relPath, mode, models) {
+  return isKitAgentPath(relPath) && (mode === 'full' || (hasOverrides(models) && !!models[kitAgentName(relPath)]));
 }
 
 const sha256 = (text) => createHash('sha256').update(text).digest('hex');
@@ -103,17 +113,18 @@ const sha256 = (text) => createHash('sha256').update(text).digest('hex');
  * @param {Record<string,string>} inventory — path → package hash (buildPackageInventory)
  * @param {(relPath: string) => string} sourceOf — absolute package path for a relPath
  * @param {SubagentContextMode} mode
+ * @param {Record<string,{model?:string,effort?:string}>} [models]
  * @returns {Record<string,string>}
  */
-export function inventoryForMode(inventory, sourceOf, mode) {
-  if (mode !== 'full') return inventory;
+export function inventoryForMode(inventory, sourceOf, mode, models) {
+  if (mode !== 'full' && !hasOverrides(models)) return inventory;
   const out = { ...inventory };
   for (const relPath of Object.keys(inventory)) {
-    if (!isKitAgentPath(relPath)) continue;
+    if (!rewritesAgent(relPath, mode, models)) continue;
     const src = sourceOf(relPath);
     if (!existsSync(src)) continue;
     const raw = readFileSync(src, 'utf8');
-    const installed = contentForMode(relPath, raw, mode);
+    const installed = contentForMode(relPath, raw, mode, models);
     if (installed !== raw) out[relPath] = sha256(installed);
   }
   return out;
@@ -125,29 +136,31 @@ export function inventoryForMode(inventory, sourceOf, mode) {
  * @param {string} srcPath
  * @param {string} targetPath
  * @param {SubagentContextMode} mode
+ * @param {Record<string,{model?:string,effort?:string}>} [models]
  */
-export function installFileForMode(relPath, srcPath, targetPath, mode) {
+export function installFileForMode(relPath, srcPath, targetPath, mode, models) {
   mkdirSync(dirname(targetPath), { recursive: true });
   // Byte copy for everything the mode does not touch — the kit ships non-text files too.
-  if (mode !== 'full' || !isKitAgentPath(relPath)) cpSync(srcPath, targetPath);
-  else writeFileSync(targetPath, contentForMode(relPath, readFileSync(srcPath, 'utf8'), mode));
+  if (!rewritesAgent(relPath, mode, models)) cpSync(srcPath, targetPath);
+  else writeFileSync(targetPath, contentForMode(relPath, readFileSync(srcPath, 'utf8'), mode, models));
 }
 
 /**
  * Bring every installed kit agent in `claudeDir` to `mode` in place (init, after the copy).
- * Only the lean → full direction is needed there: init always copies the package as shipped.
+ * Only the lean → full direction (and model overrides) are needed there: init always copies the
+ * package as shipped.
  * @returns {string[]} relPaths changed
  */
-export function applyModeToInstalledAgents(claudeDir, mode) {
+export function applyModeToInstalledAgents(claudeDir, mode, models) {
   const changed = [];
   const agentsDir = join(claudeDir, 'agents');
-  if (mode !== 'full' || !existsSync(agentsDir)) return changed;
+  if ((mode !== 'full' && !hasOverrides(models)) || !existsSync(agentsDir)) return changed;
   for (const name of readdirSync(agentsDir)) {
     const relPath = `agents/${name}`;
     if (!isKitAgentPath(relPath)) continue;
     const file = join(agentsDir, name);
     const raw = readFileSync(file, 'utf8');
-    const next = contentForMode(relPath, raw, mode);
+    const next = contentForMode(relPath, raw, mode, models);
     if (next !== raw) {
       writeFileSync(file, next);
       changed.push(relPath);
@@ -166,18 +179,21 @@ export function applyModeToInstalledAgents(claudeDir, mode) {
  * customisation: the next real package change still classifies as a conflict.
  *
  * @param {{ relPath: string, srcPath: string, targetPath: string, installHash: string|undefined,
- *           mode: SubagentContextMode }} args
+ *           mode: SubagentContextMode, models?: Record<string,{model?:string,effort?:string}> }} args
  * @returns {string|null}
  */
-export function reconcileModeOnly({ relPath, srcPath, targetPath, installHash, mode }) {
+export function reconcileModeOnly({ relPath, srcPath, targetPath, installHash, mode, models }) {
   if (!isKitAgentPath(relPath) || !installHash || !existsSync(srcPath) || !existsSync(targetPath)) return null;
   const raw = readFileSync(srcPath, 'utf8');
   const other = mode === 'full' ? 'lean' : 'full';
-  if (sha256(contentForMode(relPath, raw, other)) !== installHash) return null;
+  if (sha256(contentForMode(relPath, raw, other, models)) !== installHash) return null;
   const mine = readFileSync(targetPath, 'utf8');
-  const next = mode === 'full' ? stripOmitClaudeMd(mine) : restoreOmitClaudeMd(mine);
+  const toggled = mode === 'full' ? stripOmitClaudeMd(mine) : restoreOmitClaudeMd(mine);
+  const next = hasOverrides(models) && models[kitAgentName(relPath)]
+    ? applyOverrideToContent(toggled, models[kitAgentName(relPath)])
+    : toggled;
   if (next !== mine) writeFileSync(targetPath, next);
-  return sha256(contentForMode(relPath, raw, mode));
+  return sha256(contentForMode(relPath, raw, mode, models));
 }
 
 /**

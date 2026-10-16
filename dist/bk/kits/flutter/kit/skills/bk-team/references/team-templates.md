@@ -19,7 +19,7 @@ IMMEDIATELY execute in order:
 
 4. **CALL** `Task` x N to spawn dev teammates:
    - `subagent_type: "bk-{platform}-developer"`, `mode: "plan"`, `plan_mode_required: true`
-   - `model: "opus"`, `name: "dev-{N}"`
+   - `name: "dev-{N}"` (no `model`: the agent frontmatter decides)
    - Prompt: task description + file ownership + Beer Kit Context Block
 
 5. **REVIEW AND APPROVE** each dev's plan via `plan_approval_response`. Reject if file ownership violated.
@@ -60,7 +60,7 @@ IMMEDIATELY execute in order:
    - Description: `Investigate: <theory>. For issue: <issue>. ADVERSARIAL: try to disprove other theories. Message other debuggers to challenge findings. Report evidence FOR and AGAINST. Save to: {reports}/debugger-{N}-{date}-{slug}.md. Mark task completed when done.`
 
 4. **CALL** `Task` x N to spawn debugger teammates:
-   - `subagent_type: "bk-debugger"`, `model: "sonnet"`, `name: "debugger-{N}"`
+   - `subagent_type: "bk-debugger"`, `name: "debugger-{N}"`
    - Prompt: task description + Beer Kit Context Block
 
 5. **MONITOR** via TaskCompleted events. Let debuggers message each other — adversarial convergence.
@@ -95,7 +95,7 @@ IMMEDIATELY execute in order:
    - Description: `Review <scope> for <focus>. Severity-rated findings only. Format: [CRITICAL|IMPORTANT|MODERATE] <finding> — <evidence> — <fix>. No "seems" or "probably" — concrete evidence only. Save to: {reports}/reviewer-{N}-{date}-{slug}.md. Mark task completed when done.`
 
 4. **CALL** `Task` x N to spawn reviewer teammates:
-   - `subagent_type: "bk-code-reviewer"`, `model: "sonnet"`, `name: "reviewer-{N}"`
+   - `subagent_type: "bk-code-reviewer"`, `name: "reviewer-{N}"`
    - Prompt: task description + Beer Kit Context Block
 
 5. **MONITOR** via TaskCompleted events + TaskList fallback (60s).

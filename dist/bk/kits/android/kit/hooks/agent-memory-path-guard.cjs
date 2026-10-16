@@ -15,6 +15,7 @@ try {
   const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');
   const { getToolName, getFilePath, getCwd } = require('./lib/hook-event-accessor.cjs');
   const { trackViolation } = require('./lib/harness-policy-loader.cjs');
+  const { correctedMemoryPath, retryAdvice } = require('./lib/agent-memory-corrected-path.cjs');
 
   function isInside(candidate, root) {
     const relative = path.relative(root, candidate);
@@ -85,7 +86,8 @@ try {
         const reason =
           `Bash would create an agent memory path outside its canonical root: ${candidate}. ` +
           `Use the absolute project-root path under ${allowedRoots.join(' or ')}; ` +
-          'never mkdir .claude/agent-memory relative to a code, worktree, bk/dev, or feature directory.';
+          'never mkdir .claude/agent-memory relative to a code, worktree, bk/dev, or feature directory.' +
+          retryAdvice(candidate, projectRoot);
         process.stderr.write(`[AGENT MEMORY PATH BLOCK] ${reason}\n`);
         trackViolation({
           hook: 'agent-memory-path-guard',
@@ -94,7 +96,7 @@ try {
           target: raw,
           blocked: true,
           severity: 'error',
-          context: { candidate, project_root: projectRoot, via: 'bash' }
+          context: { candidate, project_root: projectRoot, via: 'bash', corrected: (correctedMemoryPath(candidate, projectRoot) || {}).path }
         });
         timer.end({ status: 'blocked', path: candidate, exit: 2 });
         process.exit(2);
@@ -186,7 +188,8 @@ try {
       const reason =
         `Agent memory path resolves outside its canonical root: ${candidate}. ` +
         `Use the system-provided memory directory under ${allowedRoots.join(' or ')}; ` +
-        'never construct .claude/agent-memory relative to a code, worktree, bk/dev, or feature directory.';
+        'never construct .claude/agent-memory relative to a code, worktree, bk/dev, or feature directory.' +
+        retryAdvice(candidate, projectRoot);
 
       process.stderr.write(`[AGENT MEMORY PATH BLOCK] ${reason}\n`);
       trackViolation({
@@ -196,7 +199,7 @@ try {
         target: filePath,
         blocked: true,
         severity: 'error',
-        context: { candidate, project_root: projectRoot, expected_root: expectedRoot }
+        context: { candidate, project_root: projectRoot, expected_root: expectedRoot, corrected: (correctedMemoryPath(candidate, projectRoot) || {}).path }
       });
       timer.end({ status: 'blocked', path: candidate, exit: 2 });
       process.exit(2);

@@ -70,7 +70,6 @@ FUNCTION dispatchGroup(group, platformCtx, planDir):
     FOR subTask IN batch:
       agents.append(Task(
         subagent_type: "bk-ios-developer",  # substitute bk-android-developer or bk-flutter-developer at runtime
-        model: "opus",
         run_in_background: true,
         description: "Implement sub-task {subTask.id}: {subTask.title}",
         prompt: buildPrompt(subTask, platformCtx, planDir)

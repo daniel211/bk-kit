@@ -75,6 +75,13 @@ function buildTokenPanel(metricsDir) {
     return { agents: [], totals: { in: 0, out: 0, cost_usd: 0 } };
   }
 
+  // Rows priced with the 'unknown' (opus-rate) fallback: their USD is a guess, say how much.
+  const fb = entries.filter(e => e.pricing === 'fallback');
+  const fallback = {
+    rows: fb.length,
+    cost_usd: Math.round(fb.reduce((n, e) => n + (e.costUsd || 0), 0) * 10000) / 10000
+  };
+
   // Group by agentType (field: agent)
   const byAgent = {};
   for (const entry of entries) {
@@ -112,7 +119,7 @@ function buildTokenPanel(metricsDir) {
   );
   totals.cost_usd = Math.round(totals.cost_usd * 10000) / 10000;
 
-  return { agents, totals };
+  return { agents, totals, fallback };
 }
 
 /**
@@ -149,7 +156,11 @@ function renderTokenPanel(panel) {
     pad(shortTokens(panel.totals.out), COL.out) +
     pad(`$${panel.totals.cost_usd.toFixed(2)}`, COL.cost);
 
-  return [header, sep, ...rows, sep, totalsRow].join('\n');
+  const lines = [header, sep, ...rows, sep, totalsRow];
+  if (panel.fallback && panel.fallback.rows > 0) {
+    lines.push(`  ! ${panel.fallback.rows} row(s), $${panel.fallback.cost_usd.toFixed(2)} priced with the unknown-model fallback (approx)`);
+  }
+  return lines.join('\n');
 }
 
 module.exports = { buildTokenPanel, renderTokenPanel, shortTokens, readJsonl };

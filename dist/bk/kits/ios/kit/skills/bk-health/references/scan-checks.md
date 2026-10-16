@@ -45,7 +45,7 @@ Glob("**/*.{swift,kt,dart,java}")     → source file count (exclude tests)
 ```
 IF deep mode:
   # 4a: Architecture compliance
-  Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true,
+  Task(subagent_type: "bk-code-reviewer", run_in_background: true,
     description: "Architecture compliance check for health report",
     prompt: "
       Perform architecture compliance check.

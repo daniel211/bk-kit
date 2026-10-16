@@ -560,6 +560,20 @@
       },
       "additionalProperties": false
     },
+    "insights": {
+      "type": "object",
+      "properties": {
+        "window_workflows": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "min_workflows_for_claims": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
     "subagent_observability": {
       "type": "object",
       "properties": {

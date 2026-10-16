@@ -216,12 +216,20 @@ try {
           const more = rest.length - shown.length;
           const listing = `${rest.length} file(s) are still untracked after this commit:\n` +
             shown.map((f) => `  ?? ${f}`).join('\n') + (more > 0 ? `\n  ...and ${more} more` : '');
+          let fix = null;
+          try {
+            fix = require('./lib/untracked-fix-command.cjs').buildFixCommand(rest, { skip: holdsSessionState });
+          } catch { /* optional lib — fall back to the generic hint */ }
+          const hint = fix && fix.command
+            ? `\nThese are files this session wrote. If they belong to this change (source, tests, the bk/dev/<feature>/ plan, ` +
+              `.claude/agent-memory), fold them in with ONE command: ${fix.command}` +
+              `\nIf one is deliberately left out, add it to .gitignore or tell the user why. Never stage .env/keys.`
+            : `\nIf any belong to this commit it did not capture them (\`git add <dir>\` skips new files).`;
           context += referenced.length
             // Dependency already called out above: keep the remainder to a one-line note.
             ? `\n[POST-COMMIT] Also ${listing}`
-            : `\n[POST-COMMIT] WARNING: ${listing}` +
-              `\nIf any belong to this commit it did not capture them (\`git add <dir>\` skips new files). ` +
-              `Verify: git show --stat ${commitHash || 'HEAD'}`;
+            : `\n[POST-COMMIT] WARNING: ${listing}${hint}` +
+              `\nVerify: git show --stat ${commitHash || 'HEAD'}`;
         }
         if (untracked.some(holdsSessionState)) {
           context += `\nStage files by name inside bk/: bk/dev/shared/ also holds per-machine session state ` +

@@ -10,7 +10,7 @@ Trivial: simplified prompt, skip analyze context. Standard/Complex: full context
 Dispatch platform dev agent foreground (opus):
 
 ```
-Task(subagent_type: "bk-{platform}-developer", model: "opus", prompt: "
+Task(subagent_type: "bk-{platform}-developer", prompt: "
   Fix plan from debug analysis
   Root cause: {root_cause}
   Files to modify: {affected_files}

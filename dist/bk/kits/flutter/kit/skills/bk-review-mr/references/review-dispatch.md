@@ -22,7 +22,7 @@ Standard tier — whole file list. Split tier — repeat this same template once
 report path.
 
 ```
-Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true, prompt: "
+Task(subagent_type: "bk-code-reviewer", run_in_background: true, prompt: "
   TOOL RESTRICTION: You are a READ-ONLY agent. Do NOT use Edit, Bash, or Task tools.
 
   MR Review Task:
@@ -63,7 +63,7 @@ Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true
 ## Conditional: security-sensitive changes
 
 ```
-Task(subagent_type: "bk-security-auditor", model: "sonnet", run_in_background: true, prompt: "
+Task(subagent_type: "bk-security-auditor", run_in_background: true, prompt: "
   TOOL RESTRICTION: You are a READ-ONLY agent. Do NOT use Edit, Bash, or Task tools.
 
   MR Security Audit:

@@ -148,7 +148,7 @@ const publicApiNeedsKdoc = {
           ctx.filePath,
           i + 1,
           `${m[1]} '${m[2]}' is missing a KDoc comment (/** */).`,
-          `Add a /** KDoc comment */ above '${m[1]} ${m[2]}'.`,
+          `Insert directly above \`${lines[i].trim().slice(0, 60)}\`: "/** <one-line summary of what ${m[2]} does> */". To silence this rule project-wide set arch_fitness.android.rules.public_api_needs_kdoc.enabled=false in bk-harness-policy.json.`,
           lines[i].trim()
         ));
       }

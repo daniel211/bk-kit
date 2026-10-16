@@ -31,13 +31,13 @@ every mode when provided. Load: `references/workflow-modes.md`
 - If normal mode < 3 Task() calls → INCOMPLETE
 
 **AGENT NAMING:** never the built-in `Plan()` (no serena MCP, no sub-agents, no architecture
-skill, no project memory) — always `Task(subagent_type: "bk-planner", model: "opus", ...)`.
+skill, no project memory) — always `Task(subagent_type: "bk-planner", ...)`.
 
 | Step | Agent | Model | Execution | Condition |
 |------|-------|-------|-----------|----------|
 | 4b | Explore | default | background | If enterprise docs found |
 | 6 | bk-researcher ×2 | haiku | background | **MUST** (skip fast) |
-| 8 | **bk-planner** | **opus** | **foreground** | **MUST** — plan writing (NOT built-in Plan) |
+| 8 | **bk-planner** | agent default | **foreground** | **MUST** — plan writing (NOT built-in Plan) |
 | 9 | bk-code-reviewer | sonnet | background | **MUST** (skip fast/trivial) |
 
 Step 4a dispatches no agent — pointer-only over `/bk-spec` output (STOP+AskUser if missing).
@@ -92,7 +92,7 @@ Load: `references/autodream-integration.md`
 7. **Gap Escalation** — aggregate gaps, get user decisions for CRITICAL/HIGH
    Load: `references/gap-escalation.md` — Skip if: fast mode or no CRITICAL/HIGH gaps
 
-8. **Synthesize Plan** — DELEGATE to bk-planner (foreground, opus); never write plan.md or
+8. **Synthesize Plan** — DELEGATE to bk-planner (foreground); never write plan.md or
    sub-task-*.md yourself. Pass foundation, research, inputs, srs, scope, gap decisions.
    Load: `references/agent-dispatch.md` § Planner Dispatch + `references/plan-synthesis.md`
 

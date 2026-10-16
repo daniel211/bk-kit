@@ -12,7 +12,7 @@ Adversarial review that finds plan flaws before implementation.
 Dispatch bk-code-reviewer with adversarial prompt:
 
 ```
-Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true,
+Task(subagent_type: "bk-code-reviewer", run_in_background: true,
   description: "Red-team plan review", prompt: "
   Role: HOSTILE REVIEWER. Your job is to FIND FLAWS in this plan.
   

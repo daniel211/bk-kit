@@ -14,7 +14,7 @@ Selected via SKILL.md arguments (`--auto`, `--review`, `--quick`).
 cycle = 0
 LOOP:
   1. Dispatch bk-code-reviewer → score, critical_count, findings
-     Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true, prompt: "
+     Task(subagent_type: "bk-code-reviewer", run_in_background: true, prompt: "
        Feature: {feature}
        Files changed: {files_from_impl_result}
        Output: bk/dev/shared/reports/code-review-{feature}.md
@@ -85,8 +85,8 @@ For Complex tier, dispatch ALL in ONE message:
 
 ```
 Task(subagent_type: "bk-code-reviewer", ...)
-Task(subagent_type: "bk-security-auditor", model: "sonnet", run_in_background: true, prompt: "...")
-Task(subagent_type: "bk-performance-analyzer", model: "sonnet", run_in_background: true, prompt: "...")
+Task(subagent_type: "bk-security-auditor", run_in_background: true, prompt: "...")
+Task(subagent_type: "bk-performance-analyzer", run_in_background: true, prompt: "...")
 ```
 
 ## State Output

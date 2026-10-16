@@ -105,7 +105,7 @@ ALWAYS dispatch bk-docs-writer — DO NOT write `bk/docs/foundation/*.md` yourse
 
 ```
 TaskUpdate(taskId=T4, status="in_progress")
-Task(subagent_type: "bk-docs-writer", model: "haiku",
+Task(subagent_type: "bk-docs-writer",
   description: "Synthesize foundation docs", prompt: "
   Task: Synthesize scan reports into 7 foundation documentation files
   Files: Read scan reports from bk/docs/foundation/_raw/:

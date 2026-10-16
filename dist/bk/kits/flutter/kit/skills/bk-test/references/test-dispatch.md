@@ -4,7 +4,7 @@
 
 Dispatch bk-test-architect foreground (sonnet):
 ```
-Task(subagent_type: "bk-test-architect", model: "sonnet", prompt: "
+Task(subagent_type: "bk-test-architect", prompt: "
   Feature: {feature_name}
   Platform: {platform}
   Impl reports: {list of resolved report paths from Step 1}

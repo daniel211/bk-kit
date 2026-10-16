@@ -19,7 +19,7 @@ Specialized pipeline for slow startup, janky scrolling, memory leaks, battery dr
 
 Dispatch bk-debugger for profiling:
 ```
-Task(subagent_type: "bk-debugger", model: "sonnet", prompt: "
+Task(subagent_type: "bk-debugger", prompt: "
   Performance issue: {description}
   Platform: {platform}
   Profile using platform tools. Identify bottleneck.
@@ -61,7 +61,7 @@ Common patterns:
 
 Dispatch bk-performance-analyzer:
 ```
-Task(subagent_type: "bk-performance-analyzer", model: "sonnet", prompt: "
+Task(subagent_type: "bk-performance-analyzer", prompt: "
   Compare before/after performance for: {area}
   Baseline: {before_metrics}
   Current: measure after fix

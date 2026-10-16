@@ -18,7 +18,7 @@ Dispatch 3 focused reviewers in a **single message** (parallel execution):
 
 ```
 # All 3 dispatched in ONE message — not sequentially
-Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true, description: "Review architecture", prompt: "
+Task(subagent_type: "bk-code-reviewer", run_in_background: true, description: "Review architecture", prompt: "
   Review changes for plan: {plan-dir}
   Phase files: {list of completed phase files}
   Platform context: platform-context.json
@@ -34,7 +34,7 @@ Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true
   Save report to: {plan-dir}/research/review-architecture.md
 ")
 
-Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true, description: "Review security", prompt: "
+Task(subagent_type: "bk-code-reviewer", run_in_background: true, description: "Review security", prompt: "
   Review changes for plan: {plan-dir}
   Phase files: {list of completed phase files}
   Platform context: platform-context.json
@@ -48,7 +48,7 @@ Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true
   Save report to: {plan-dir}/research/review-security.md
 ")
 
-Task(subagent_type: "bk-code-reviewer", model: "sonnet", run_in_background: true, description: "Review reqs coverage", prompt: "
+Task(subagent_type: "bk-code-reviewer", run_in_background: true, description: "Review reqs coverage", prompt: "
   Review changes for plan: {plan-dir}
   Phase files: {list of completed phase files}
   Platform context: platform-context.json

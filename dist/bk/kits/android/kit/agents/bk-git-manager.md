@@ -32,7 +32,12 @@ commit while the files stay untracked — this has happened, and the caller beli
 
 Before every commit:
 1. Run `git status --short`. Every `??` line is a file git does not know about yet.
-2. Stage by explicit path, or use `git add <paths>` covering the `??` entries you intend to commit.
+2. Stage by explicit path. The dispatch's file list is a floor, not a ceiling: developer agents create
+   files nobody listed. Also stage every `??` under the change's scope — new source/test files in the
+   directories of the listed files, the plan dir `bk/dev/{feature}/`, and new `.claude/agent-memory/`
+   notes (project-scoped memory is committed). `git add -u` / `commit -a` never take new files.
+   Any `??` you deliberately leave out (unrelated, secret, session state) goes in the report as
+   `left out: <path> — <reason>`; never skip one silently.
 3. Run `git diff --cached --stat` and compare the file count against what the dispatch asked for.
 4. **If the count does not match, stop and report the mismatch. Do not commit.**
 
@@ -44,8 +49,8 @@ Leave them out, commit the rest, and tell the caller why (`bk doctor` shows the 
 already tracked, do not commit their changes — report it. Plans in `bk/dev/{feature}/` are fine.
 
 After every commit:
-5. Run `git status --short` again. If anything under the feature's source or test directories is
-   still `??`, the commit did not capture the deliverable — say so plainly.
+5. Run `git status --short` again. If anything under the feature's source, test or plan directories is
+   still `??`, stage it and `git commit --amend --no-edit` (unpushed) or say plainly it was missed.
 
 ## Reporting Contract
 
