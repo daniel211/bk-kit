@@ -10,11 +10,13 @@ import { pathToFileURL } from 'node:url';
 import { homedir } from 'node:os';
 import { execSync } from 'node:child_process';
 import { reportHookPerf } from '../lib/hook-perf-measure.mjs';
-import { packageRootFrom } from '../lib/package-layout.mjs';
+import { kitLayout, packageRootFrom } from '../lib/package-layout.mjs';
 import { addKitOption, resolveKitOrExit } from '../lib/kit-resolver.mjs';
 import { detectDrift, formatDriftList, readDoctorIgnore } from '../lib/kit-drift.mjs';
 import { OMIT_CLAUDE_MD_MIN_VERSION, compareVersions, detectClaudeVersion } from '../lib/claude-code-version.mjs';
 import { agentsOutOfMode, readSubagentContextMode } from '../lib/subagent-context-mode.mjs';
+import { matchedPreset, haikuEffortWarnings, locallyEditedAgents } from '../lib/model-override-doctor.mjs';
+import { readAgentDefaults } from '../lib/model-presets.mjs';
 import { agentsOutOfOverride, hasOverrides, readModelOverrides, unknownOverrideAgents } from '../lib/agent-model-override.mjs';
 import {
   appendIgnoreCommand, missingIgnoreEntries, trackedSessionState, untrackCommand,
@@ -136,7 +138,7 @@ export async function reportDesignEngine(targetDir, { indent = '    ' } = {}) {
  * @param {string} platform
  * @returns {Promise<{ passed: number, warnings: number, errors: number }>}
  */
-export async function runDoctor(targetDir, platform) {
+export async function runDoctor(targetDir, platform, { pkgAgentsDir } = {}) {
   const claudeDir = join(targetDir, '.claude');
   const versionPath = join(targetDir, '.bk-version.json');
   let passed = 0;
@@ -400,12 +402,26 @@ export async function runDoctor(targetDir, platform) {
     if (hasOverrides(overrides)) {
       const unknown = unknownOverrideAgents(overrides, claudeDir);
       const { total, mismatched } = agentsOutOfOverride(claudeDir, overrides);
-      check(`Agent models: ${Object.keys(overrides).join(', ')} (.bk.json models)`, () => {
+      let versionRecordedFiles = {};
+      try { versionRecordedFiles = JSON.parse(readFileSync(versionPath, 'utf8')).files || {}; } catch { /* none */ }
+      let pkgDefaults = {};
+      try { // an unresolvable package kit degrades silently: no preset name, no haiku/default judgement
+        pkgDefaults = readAgentDefaults(pkgAgentsDir ?? join(kitLayout(packageRootFrom(import.meta.dirname), platform).kitDir, 'agents'));
+      } catch { /* no package defaults */ }
+      const preset = matchedPreset(overrides, pkgDefaults);
+      for (const w of haikuEffortWarnings(overrides, pkgDefaults)) check(w, () => 'warn');
+      const label = preset
+        ? `Agent models: ${preset} preset (${Object.keys(overrides).length} agent(s) overridden)`
+        : `Agent models: ${Object.keys(overrides).join(', ')} (.bk.json models)`;
+      check(label, () => {
         if (unknown.length > 0) console.log(`    No installed kit agent named: ${unknown.join(', ')}`);
         if (mismatched.length > 0) {
           console.log(`    ${mismatched.length} of ${total} overridden agent(s) do not carry the override yet:`);
           for (const line of formatDriftList(mismatched)) console.log(`      ${line}`);
           console.log(`    Apply it with: bk update --kit ${platform}`);
+          if (locallyEditedAgents(claudeDir, mismatched, versionRecordedFiles).length > 0) {
+            console.log('    Locally edited agents are kept; take the kit version with: bk update --conflict take');
+          }
         }
         return unknown.length > 0 || mismatched.length > 0 ? 'warn' : true;
       });

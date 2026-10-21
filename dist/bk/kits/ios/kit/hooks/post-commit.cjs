@@ -201,7 +201,18 @@ try {
         // exact path matched, otherwise leave the directory in the generic list.
         const rest = untracked.filter((f) => !refSet.has(f));
 
-        if (referenced.length) {
+        // Same untracked set as the previous commit's warning: the caller already saw the full
+        // text and the fix command, so repeat only a one-liner and skip the telemetry row.
+        let repeatSet = false;
+        try {
+          repeatSet = !referenced.length && require('./lib/untracked-repeat-guard.cjs')
+            .isRepeatAndRecord(rest, require('./lib/injection-budget.cjs').sessionIdFrom(data));
+        } catch { /* optional lib — warn in full */ }
+
+        if (repeatSet) {
+          context += `\n[POST-COMMIT] ${rest.length} file(s) still untracked, unchanged since the previous commit's warning ` +
+            `(see \`git status\`). Stage them, gitignore them, or tell the user why they stay out.`;
+        } else if (referenced.length) {
           context += `\n[POST-COMMIT] WARNING: this commit references file(s) that are still untracked — ` +
             `it will not build or pass on its own, and the history is not bisectable:\n` +
             referenced.slice(0, 8).map((r) =>
@@ -210,7 +221,7 @@ try {
             `\nStage them into this commit (git add <file> && git commit --amend --no-edit) or reorder ` +
             `the commits so they land first.`;
         }
-        if (rest.length) {
+        if (rest.length && !repeatSet) {
           // Eight names are enough to recognise the deliverable; `git status` has the rest.
           const shown = rest.slice(0, 8);
           const more = rest.length - shown.length;
@@ -236,7 +247,7 @@ try {
             `(.workflow-state.json*, checkpoints/, handoff/, .retry-state.json, .statusline-cache.json) that is never committed.`;
         }
 
-        try {
+        if (!repeatSet) try {
           const { trackWarnSignal } = require('./lib/harness-policy-loader.cjs');
           trackWarnSignal('untracked_after_commit', {
             commit: commitHash, count: untracked.length, files: untracked.slice(0, 20),

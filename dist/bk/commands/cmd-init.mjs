@@ -15,6 +15,7 @@ import { kitLayout, packageRootFrom } from '../lib/package-layout.mjs';
 import { addKitOption, resolveKitOrExit } from '../lib/kit-resolver.mjs';
 import { applyModeToInstalledAgents, readSubagentContextMode } from '../lib/subagent-context-mode.mjs';
 import { readModelOverrides, unknownOverrideAgents } from '../lib/agent-model-override.mjs';
+import { parseModelsOption, resolveModelPreset, persistModelPreset, recordPristineConfigHash, DEFAULT_PRESET } from '../lib/init-model-preset.mjs';
 import {
   gitPrefix, writeGitignoreEntries,
 } from '../lib/session-state-gitignore.mjs';
@@ -35,12 +36,22 @@ export function registerInit(program) {
     // Both spellings: --gitignore predates the default and stays valid in scripts (it also
     // forces the write outside a git repository); --no-gitignore is the opt-out.
     .option('--gitignore', "Add the kit's per-machine state files to .gitignore (default in a git repo)")
-    .option('--no-gitignore', "Do not touch .gitignore");
+    .option('--no-gitignore', "Do not touch .gitignore")
+    .option('--models <preset>', 'Agent model preset: quality | balanced | economy (asks when interactive)')
+    .option('--yes', 'Skip prompts and use defaults');
 
   addKitOption(command)
     // Async because runDoctor is: its design-engine check dynamically imports the kit that
     // was just written into the target directory.
     .action(async (opts) => {
+      // Rejected before anything is read or written.
+      let explicitPreset;
+      try {
+        explicitPreset = parseModelsOption(opts.models);
+      } catch (err) {
+        console.error(`Error: ${err.message}`);
+        process.exit(1);
+      }
       const targetDir = resolve(opts.target);
       const claudeDir = join(targetDir, '.claude');
 
@@ -126,6 +137,13 @@ export function registerInit(program) {
       // Copy kit → .claude/ (excluding settings.json — handled separately via merge)
       copyDirFiltered(kitDir, claudeDir, ['settings.json']);
 
+      // Model preset first: it writes `.bk.json` models, which the block below then applies.
+      const preset = await resolveModelPreset({ explicit: explicitPreset, yes: opts.yes });
+      const presetAgents = persistModelPreset({ targetDir, claudeDir, preset });
+      if (preset !== DEFAULT_PRESET) {
+        console.log(`  ✓ Agent models: ${preset} (${presetAgents} agent(s)) — change anytime with \`bk models\``);
+      }
+
       // `.bk.json` subagents.fullContext: kit agents without omitClaudeMd. Read after the copy,
       // so it is the .bk.json this install leaves behind, and applied before hashing, so
       // .bk-version.json records what is on disk — the hash `update` computes for the same mode
@@ -175,6 +193,7 @@ export function registerInit(program) {
 
       // Compute file hashes for .bk-version.json
       const fileHashes = hashAllFiles(claudeDir);
+      if (preset !== DEFAULT_PRESET) recordPristineConfigHash(fileHashes, kitDir);
 
       // Write .bk-version.json at project root
       const versionFile = {

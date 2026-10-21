@@ -1,8 +1,8 @@
 {
-  "version": "0.13.7",
+  "version": "0.14.0",
   "platform": "ios",
-  "builtAt": "2026-10-16T15:59:38.120Z",
-  "fileCount": 423,
+  "builtAt": "2026-10-21T08:28:10.420Z",
+  "fileCount": 424,
   "files": {
     ".bk.json": "1d6d59c151741037c6269c4d80bb2da64f4560a2f609228719d068349ea070dd",
     "CLAUDE.md": "574114b07c04f0177aa0a12d7dd9ba3cef7ca6a005c947f1f9b75a80d1a4f0f2",
@@ -123,6 +123,7 @@
     "hooks/lib/testing-evidence.cjs": "e7c3b59782b1af79d43e2823d0f3cc122a99e8ef2cb71bc7158a7aeb45bb87a6",
     "hooks/lib/token-accurate-parser.cjs": "61821d8c0c582335a541db208efad08dcee059d9d03f6112a296ea01ec73a1be",
     "hooks/lib/untracked-fix-command.cjs": "8311c3a1b632628936887d479e870e47d139ae5375b122680a340b6ca3e20ae7",
+    "hooks/lib/untracked-repeat-guard.cjs": "3092689400a49e8c1152984222393db3168f42304b93f283a3cef93df04db967",
     "hooks/lib/usage-rollup-refresh.cjs": "81818d3a6446f78aef600d503e7068c03b38c3cd3c8d11e4579373d9e15e2a3d",
     "hooks/lib/usage-rollup.cjs": "213fbca2adf92d943b99b2c1b043108fcb1e7f0115a990f1c7260df71b74cacc",
     "hooks/lib/usage-transcript-scanner.cjs": "ed3303e8dc3fa0565f9840990be9dbdb5decc9782b4cf16e4de48a3c72ead8ae",
@@ -138,7 +139,7 @@
     "hooks/parallel-safety.cjs": "b5fc37ef7a182f84a1d5c5ac6a4f347646b283d7d2d034fead98cc2df4730056",
     "hooks/pattern-extractor.cjs": "9f9ac6521dbf6af345461c9dd14eeeeab41c42135beb1168b753d8c6e71f5926",
     "hooks/plan-complete-reminder.cjs": "ea6de982e6d339b7c6a0688a3b557d79b146b5212a8597413e7014fe20fd6e63",
-    "hooks/post-commit.cjs": "4cdce016d6af8049e945489aef768018631a0e60b5928cea2c7683214e64e50a",
+    "hooks/post-commit.cjs": "f12095575c8596d3c6312cbfc3cd5c1b2f3e70f90d04236c497b483e894ea032",
     "hooks/post-edit-lint.cjs": "cff94598aed51eac34d979b9b1ff4351cbc5f6c5487e8673f62170daaea62523",
     "hooks/post-edit-simplify.cjs": "c2671cbd88d8468ed9b2200bf8b28624820182142a295e45bdc82e71cc4416fc",
     "hooks/preference-tracker.cjs": "cdff9770223e8adc8b3776527da7cfa1249b33619cc27dd02c624117c083958b",

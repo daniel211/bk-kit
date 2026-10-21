@@ -4,7 +4,7 @@
  *
  * One binary for all three kits. The platform is no longer baked in at build time: each command
  * resolves it from --kit, the project's .bk-version.json, or the project's own layout — see
- * lib/kit-resolver.mjs. Only '0.13.7' is still substituted by the build.
+ * lib/kit-resolver.mjs. Only '0.14.0' is still substituted by the build.
  */
 
 import { Command } from 'commander';
@@ -13,18 +13,20 @@ import { registerDoctor } from '../commands/cmd-doctor.mjs';
 import { registerUpdate } from '../commands/cmd-update.mjs';
 import { registerDocs } from '../commands/cmd-docs.mjs';
 import { registerMetrics } from '../commands/cmd-metrics.mjs';
+import { registerModels } from '../commands/cmd-models.mjs';
 
 const program = new Command();
 program
   .name('bk')
   .description('beer-kit — iOS, Android and Flutter development kits for Claude Code')
-  .version('0.13.7');
+  .version('0.14.0');
 
 registerInit(program);
 registerDoctor(program);
 registerUpdate(program);
 registerDocs(program);
 registerMetrics(program);
+registerModels(program);
 
 // parseAsync, not parse: the init and doctor actions are async (doctor dynamically imports
 // the installed kit's preflight module). With the sync parse() the returned promise is
