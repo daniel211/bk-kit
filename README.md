@@ -142,6 +142,7 @@ bk update                  # trong thư mục dự án
 | `bk update` | Nâng kit lên bản mới bằng merge 3 chiều |
 | `bk docs` | Quản lý tài liệu dự án sinh bởi kit |
 | `bk metrics` | Xem số liệu quy trình và chi phí |
+| `bk models` | Xem và đổi model/effort của từng agent: `list`, `set`, `preset`, `reset` |
 
 ---
 
@@ -161,8 +162,15 @@ File `.claude/.bk.json` (theo dự án) hoặc `~/.claude/.bk.json` (toàn cục
 ```
 
 - **Tắt một hook:** `"hooks": { "<tên-hook>": false }`.
-- **Đổi model/effort cho từng agent:** khóa `models`, rồi chạy `bk update`. `model` nhận `opus`,
-  `sonnet`, `haiku` hoặc model id đầy đủ; `effort` nhận `low`…`max`.
+- **Đổi model/effort cho từng agent:** dùng `bk models`, không cần chạy thêm `bk update`.
+  `model` nhận `opus`, `sonnet`, `haiku` hoặc model id đầy đủ; `effort` nhận `low`…`max`.
+  Sửa tay khóa `models` trong `.bk.json` rồi `bk update` vẫn dùng được.
+- **Chọn model theo preset:** `bk init --models <preset>` hoặc `bk models preset <preset>`.
+  `quality` chạy mọi agent bằng `opus`; `balanced` (mặc định) giữ nguyên cấu hình của kit;
+  `economy` hạ một bậc (`opus`→`sonnet`, `sonnet`→`haiku`), trừ `bk-planner`,
+  `bk-security-auditor`, `bk-debugger`. Chạy `bk init` trong terminal tương tác sẽ hỏi chọn;
+  thêm `--yes` để bỏ qua câu hỏi. `bk models preset` hiện các mục sẽ thay đổi/bị bỏ trước khi ghi.
+  Ví dụ: `bk models set bk-ios-developer sonnet --effort high`, `bk models reset`.
 - **Giữ chỉnh sửa có chủ đích:** liệt kê file trong `doctorIgnore` để `bk doctor` không cảnh báo.
 - **Lệnh build/test/lint** nằm ở `.claude/platform-context.json`; sai thì chạy
   `/bk-bootstrap --refresh` hoặc sửa tay.
