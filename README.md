@@ -7,6 +7,7 @@ có người lập kế hoạch, người code, người review, người test, 
 nền tảng bạn đang làm (Swift/SwiftUI, Kotlin/Compose hay Dart/BLoC). Toàn bộ chạy trong
 `.claude/` của dự án, nên kit đi cùng repo và cả team dùng chung một bộ luật.
 
+<!-- auto:release-stats -->
 | | |
 |---|---|
 | **22** agents | planner, developer theo nền tảng, 3 reviewer, debugger, security auditor, test architect, git manager... |
@@ -14,6 +15,7 @@ nền tảng bạn đang làm (Swift/SwiftUI, Kotlin/Compose hay Dart/BLoC). To�
 | **65** hooks | chặn đọc file nhạy cảm, quét secret, giới hạn context, ép phân vai, đo chi phí... |
 | **26** rules | chuẩn code từng nền tảng, giao thức điều phối, cổng phê duyệt |
 | **3** nền tảng | iOS · Android · Flutter, trong **một** package `@beerkit/bk` và **một** lệnh `bk` |
+<!-- /auto:release-stats -->
 
 ---
 
@@ -120,8 +122,8 @@ bk doctor                  # kiểm tra cài đặt
 
 Mở dự án trong Claude Code rồi chạy `/bk-bootstrap`.
 
-Cài một phiên bản cụ thể: thay `latest` bằng tag, ví dụ
-`gh release download v0.13.7 --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz'`.
+Cài một phiên bản cụ thể: truyền tag vào lệnh tải, ví dụ
+<!-- auto:release-version -->`gh release download v0.13.7 --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz'`<!-- /auto:release-version -->.
 
 ### Cập nhật
 
