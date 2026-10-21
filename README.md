@@ -1,55 +1,230 @@
-# bk-kit — Beer Kit release channel
+# Beer Kit (`bk`)
 
-**`dist/` is generated. Do not edit it by hand.**
+**Bộ công cụ multi-agent cho Claude Code, dành cho phát triển mobile: iOS, Android và Flutter.**
 
-Every commit here is produced by the `/bk-releasekit <version>` skill in the
-[beer-kit](https://github.com/daniel211/beer-kit) source repo. One commit + one tag per
-released kit version. Anything you change under `dist/` is overwritten by the next release —
-fix it in `beer-kit/src/` instead.
+Beer Kit biến Claude Code từ một trợ lý chung chung thành một đội phát triển mobile có quy trình:
+có người lập kế hoạch, người code, người review, người test, người debug. Mỗi người đều biết rõ
+nền tảng bạn đang làm (Swift/SwiftUI, Kotlin/Compose hay Dart/BLoC). Toàn bộ chạy trong
+`.claude/` của dự án, nên kit đi cùng repo và cả team dùng chung một bộ luật.
 
-This README is the exception: releases do not touch it, so it is the place to keep notes for
-whoever installs from here.
+| | |
+|---|---|
+| **22** agents | planner, developer theo nền tảng, 3 reviewer, debugger, security auditor, test architect, git manager... |
+| **40** skills | `/bk-plan`, `/bk-code`, `/bk-debug`, `/bk-test`, `/bk-team`, `/bk-autopilot`... |
+| **65** hooks | chặn đọc file nhạy cảm, quét secret, giới hạn context, ép phân vai, đo chi phí... |
+| **26** rules | chuẩn code từng nền tảng, giao thức điều phối, cổng phê duyệt |
+| **3** nền tảng | iOS · Android · Flutter, trong **một** package `@beerkit/bk` và **một** lệnh `bk` |
 
-## Layout
+---
+
+## Quy trình làm việc
 
 ```
-dist/ios/          kit/, kit-manifest.json, META.json, package.json, bin/, commands/, lib/, cli/, templates/
-dist/android/      same shape
-dist/flutter/      same shape
+ /bk-bootstrap        quét dự án, sinh tài liệu nền (kiến trúc, quy ước, lệnh build/test)
+      │
+      ▼
+ /bk-plan "..."       kế hoạch theo phase, có phụ thuộc và phân quyền file
+      │
+      ▼  (bạn duyệt)
+ /bk-code plan.md     code → 3 reviewer song song → test → sửa lỗi → commit
+      │
+      ▼
+ /bk-debug "..."      phân loại độ phức tạp, điều đúng đội cho đúng lỗi
 ```
 
-Each `dist/<platform>/` is a complete, standalone npm package. `kit/` is the pre-merged
-Claude Code kit (agents, skills, hooks, rules) that `bk-<platform> init` copies into a
-project's `.claude/` directory.
-
-## Installing a released version
-
-Each tag also carries the three packed tarballs as GitHub Release assets — that is the
-install path, and it works without an npm registry:
+Muốn đi một mạch từ ý tưởng đến code: `/bk-autopilot "Đăng nhập bằng sinh trắc học"`
+(plan, cổng duyệt, rồi code).
 
 ```bash
-gh release download v0.3.0 --repo daniel211/bk-kit --pattern 'beerkit-bk-ios-*.tgz'
-npm install -g ./beerkit-bk-ios-0.3.0.tgz
-
-cd ~/MyApp
-bk-ios init
-bk-ios doctor
+/bk-bootstrap                            # lần đầu: sinh foundation docs
+/bk-plan "Màn hình đăng nhập sinh trắc học"
+/bk-code bk/dev/<feature>/plan.md
+/bk-debug "Build lỗi trên iOS 15"
 ```
 
-Swap `ios` for `android` or `flutter` as needed. `gh` handles authentication for this
-private repo; a plain `npm install -g <url>` will not.
+## Điểm mạnh
 
-To inspect a version instead of installing it:
+**1. Một lệnh, ba nền tảng.** `bk init --kit ios|android|flutter`, hoặc bỏ `--kit` để kit tự nhận
+từ `pubspec.yaml`, `*.xcodeproj`, `build.gradle*`. Agent, rule và lệnh build/test được dựng riêng
+cho từng nền tảng, không phải prompt chung.
+
+**2. Chia vai thật sự, không phải một agent làm tất cả.** Người điều phối giao việc cho agent
+chuyên trách. Agent chỉ-đọc (reviewer, security auditor) bị chặn quyền ghi ngay lúc giao việc và
+được kiểm tra lại sau khi xong. Điều phối viên không được tự code thay developer.
+
+**3. Review và test nằm trong luồng, không phải bước tùy chọn.** `/bk-code` chạy 3 reviewer song
+song (kiến trúc, bảo mật, đúng yêu cầu), viết và chạy test, giao lỗi cho debugger, rồi commit theo
+conventional format.
+
+**4. Song song khi an toàn.** Plan tự phát hiện các phase độc lập (≥3 màn hình, không trùng file)
+và `/bk-code` chạy nhiều developer cùng lúc. Việc nặng hơn dùng `/bk-team` (dev, debug hoặc review
+với context riêng, có đối chất giả thuyết).
+
+**5. Debug có phân tầng.** `/bk-debug` chấm độ phức tạp: lỗi nhỏ sửa thẳng, lỗi vừa chạy
+debugger → dev → test → review, lỗi phức tạp thêm brainstorm, research, bảo mật, hiệu năng.
+
+**6. Hàng rào an toàn dựng sẵn.**
+
+| Hook | Làm gì |
+|------|--------|
+| Privacy block | Chặn `.env`, keystore, `.mobileprovision`, chứng chỉ; hỏi bạn trước khi đọc |
+| Security check | Quét secret (AWS, GitHub token, private key...) trước khi ghi file, chặn nếu phát hiện |
+| Scout block | Không để agent lục `Pods/`, `.gradle/`, `DerivedData/`, `node_modules/` |
+| Context safety | Cảnh báo ở 70% context, chặn giao việc mới ở 85% |
+| Cổng chặn vòng lặp | Dừng khi quy trình có dấu hiệu kẹt (lặp một phase, agent chạy mãi không tiến triển) |
+
+**7. Chuyển từ Figma sang code có kiểm chứng.** Trích xuất từng màn hình Figma thành spec có token,
+rồi `/bk-visual-verify` so ảnh thiết kế với ảnh app và chấm điểm lệch layout, màu, khoảng cách,
+chữ. Phần này cần công cụ ngoài (xem *Lưu ý*).
+
+**8. Agent nhớ dự án.** Mỗi agent giữ memory trong `.claude/agent-memory/` (lệnh build, mẫu kiến
+trúc, lỗi hay gặp, quy ước review), đọc lúc bắt đầu và ghi lại điều mới học lúc kết thúc, nên
+không phải khám phá lại từ đầu mỗi phiên.
+
+**9. Biết mình tốn bao nhiêu.** Mỗi lần giao việc đều được ghi chi phí theo agent và theo model.
+`insights.md` tổng hợp *Cost by model* và các lỗ hổng test; kit nói rõ "chưa đủ dữ liệu" khi mẫu
+quá ít thay vì đoán.
+
+**10. Chủ động tiết kiệm token.** Subagent của kit khởi động ở chế độ gọn: chỉ nạp bản tóm tắt rule
+theo vai trò, `CLAUDE.md` của dự án và memory index, thay vì ~14k token rule dành cho điều phối
+viên. Cần ngữ cảnh đầy đủ thì bật `subagents.fullContext`.
+
+**11. Cập nhật không phá chỉnh sửa của bạn.** `bk update` merge 3 chiều: file bạn chưa đụng thì tự
+cập nhật, file mới tự thêm, file bạn xóa vẫn bị xóa, file cả hai cùng sửa thì hỏi (Keep / Take /
+Skip). `bk doctor` đối chiếu hash từng file với manifest nên mọi chỉnh sửa cục bộ đều hiện ra.
+
+**12. Làm việc trên nhiều máy / nhiều người.** Plan và `.plan-state.json` commit được; muốn làm
+tiếp ở máy khác chỉ cần `git pull` rồi `/bk-code bk/dev/<feature>/plan.md` để chạy tiếp từ bước
+đang dở.
+
+---
+
+## Cài đặt
+
+**Yêu cầu:** Node.js ≥ 18, Claude Code CLI đã đăng nhập, [GitHub CLI `gh`](https://cli.github.com)
+đã `gh auth login` (repo này private nên `npm install` trực tiếp từ URL sẽ không dùng được), và
+một dự án iOS / Android / Flutter.
 
 ```bash
-git clone --depth 1 --branch v0.3.0 https://github.com/daniel211/bk-kit
+# Tải bản mới nhất, rồi cài toàn cục
+gh release download --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz' --clobber
+npm install -g ./beerkit-bk-*.tgz
 ```
 
-## Verifying an install
+```bash
+# Gắn vào dự án của bạn
+cd ~/MyProject
+bk init --kit ios          # hoặc android / flutter
+bk doctor                  # kiểm tra cài đặt
+```
 
-`dist/<platform>/kit-manifest.json` lists every shipped file with its SHA-256 hash, and
-`META.json` records the kit version, the source commit it was built from, and the build
-timestamp. `bk-<platform> doctor` checks an installed `.claude/` against that manifest.
+Mở dự án trong Claude Code rồi chạy `/bk-bootstrap`.
+
+Cài một phiên bản cụ thể: thay `latest` bằng tag, ví dụ
+`gh release download v0.13.7 --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz'`.
+
+### Cập nhật
+
+```bash
+gh release download --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz' --clobber
+npm install -g ./beerkit-bk-*.tgz
+bk update                  # trong thư mục dự án
+```
+
+### Lệnh `bk`
+
+| Lệnh | Việc |
+|------|------|
+| `bk init` | Cài kit vào `.claude/`, tạo `.bk-version.json`, cập nhật `.gitignore` |
+| `bk doctor` | Kiểm tra file thiếu, file bị sửa, cấu hình model, chế độ subagent |
+| `bk update` | Nâng kit lên bản mới bằng merge 3 chiều |
+| `bk docs` | Quản lý tài liệu dự án sinh bởi kit |
+| `bk metrics` | Xem số liệu quy trình và chi phí |
+
+---
+
+## Cấu hình nhanh
+
+File `.claude/.bk.json` (theo dự án) hoặc `~/.claude/.bk.json` (toàn cục):
+
+```json
+{
+  "hooks": { "scout-block": false },
+  "models": {
+    "bk-planner": { "model": "sonnet", "effort": "high" }
+  },
+  "subagents": { "fullContext": false },
+  "doctorIgnore": ["platform-context.json"]
+}
+```
+
+- **Tắt một hook:** `"hooks": { "<tên-hook>": false }`.
+- **Đổi model/effort cho từng agent:** khóa `models`, rồi chạy `bk update`. `model` nhận `opus`,
+  `sonnet`, `haiku` hoặc model id đầy đủ; `effort` nhận `low`…`max`.
+- **Giữ chỉnh sửa có chủ đích:** liệt kê file trong `doctorIgnore` để `bk doctor` không cảnh báo.
+- **Lệnh build/test/lint** nằm ở `.claude/platform-context.json`; sai thì chạy
+  `/bk-bootstrap --refresh` hoặc sửa tay.
+
+---
+
+## Lưu ý khi sử dụng
+
+**Chi phí và thời gian**
+- Đây là hệ thống nhiều agent nên tốn token hơn chat thường. Với việc nhỏ hãy dùng `--fast`
+  (`/bk-plan --fast`, `/bk-code --fast`); với tính năng rủi ro cao dùng `--deep`.
+- `--fast` của `/bk-code` bỏ qua review và test. Chỉ dùng cho hotfix hoặc thay đổi tầm thường.
+- Theo dõi % context ở statusline, chạy `/compact` trước khi tới 70%. Ở 85% kit sẽ chặn giao việc
+  mới.
+
+**Yêu cầu phiên bản và công cụ ngoài**
+- Chế độ subagent gọn (`omitClaudeMd`) cần **Claude Code ≥ 2.1.271**. Bản thấp hơn nạp đầy đủ rule
+  như bình thường nhưng tốn token hơn.
+- `/bk-team` cần bật **Agent Teams** trong Claude Code.
+- Trích xuất Figma và `/bk-visual-verify` dùng Antigravity CLI (`agy`) hoặc Gemini API; không có
+  thì kit vẫn chạy đầy đủ bằng engine `claude`. Hướng dẫn `agy` nằm ở phần cuối trang này.
+
+**Làm việc với git**
+- Commit `.claude/` (trừ `hooks/.logs/`), `.bk-version.json` và `bk/dev/<feature>/`.
+- **Không commit** `bk/dev/shared/.workflow-state.json`, `checkpoints/`, `.bk-metrics/`,
+  `.claude/hooks/.logs/`. Đây là trạng thái phiên của riêng từng máy và sẽ gây xung đột.
+  `bk init` / `bk update` ghi sẵn `.gitignore` cho các mục này; `bk doctor` báo nếu thiếu hoặc nếu
+  chúng đã bị track.
+- File **mới** do kit thêm có thể bị `.gitignore` của dự án che; kiểm tra `git status` sau
+  `bk init` / `bk update` rồi `git add -f` nếu cần.
+
+**Khi sửa kit đã cài**
+- Sửa file trong `.claude/` là được, nhưng `bk update` sẽ hỏi khi cả bạn và kit cùng đổi một file.
+  Gặp xung đột, chọn `Keep` rồi hợp nhất tay phần mới của kit; chọn `Take` sẽ mất chỉnh sửa của
+  bạn.
+- `.claude/.bk.json` là file cấu hình của bạn, không bao giờ bị ghi đè.
+
+**Khi hệ thống "đứng"**
+- Kit chủ động dừng một quy trình có vẻ kẹt (`global_halt` / `workflow_paused`). Xem lý do bằng
+  `node .claude/cli/bk-health/index.cjs --dashboard`, gỡ bằng `--resume`. Đừng xóa
+  `.workflow-state.json` bằng tay; kit sẽ khôi phục lại từ bản backup.
+- Muốn làm tiếp một tính năng đã commit, mở lại bằng
+  `bk-health --set-phase coding|testing --field reopen_reason="<lý do>"` (tối đa 3 lần).
+
+**Bảo mật**
+- Kit chặn đọc file nhạy cảm và quét secret, nhưng đó là lớp phòng hộ, không thay thế việc không
+  để secret trong repo. Hãy giữ khóa API trong biến môi trường hoặc vault.
+- Hook là code chạy trên máy bạn. Đọc thay đổi trong `.claude/hooks/` khi review bản cập nhật như
+  với bất kỳ code nào khác.
+
+**Về bản phát hành này**
+- Repo này là **kênh phát hành**: thư mục `dist/` được sinh tự động, mỗi phiên bản là một commit
+  và một tag. Đừng sửa tay trong `dist/` vì bản phát hành kế tiếp sẽ ghi đè. Cần kiểm tra trước
+  khi cài: `git clone --depth 1 --branch <tag> https://github.com/daniel211/bk-kit`.
+- Mỗi gói đi kèm `kit-manifest.json` (SHA-256 từng file) và `META.json` (phiên bản, commit nguồn,
+  thời điểm build) để xác minh nguồn gốc.
+- Số phiên bản 0.x: bản **minor** tăng có thể chứa thay đổi không tương thích; đọc ghi chú phát
+  hành trước khi nâng.
+
+---
+
+## Giấy phép
+
+MIT
 
 ---
 
