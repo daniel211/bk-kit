@@ -1,6 +1,6 @@
 {
   "name": "@beerkit/bk",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "description": "beer-kit — iOS, Android and Flutter development kits for Claude Code: agents, skills, and hooks",
   "type": "module",
   "bin": {
@@ -25,7 +25,11 @@
     "ai-toolkit",
     "ios",
     "android",
-    "flutter"
+    "flutter",
+    "python",
+    "backend",
+    "web",
+    "react"
   ],
   "license": "MIT"
 }

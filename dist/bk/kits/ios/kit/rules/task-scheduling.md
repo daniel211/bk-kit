@@ -10,7 +10,7 @@ All agent dispatches MUST include a timeout expectation. If an agent exceeds its
 | Dev agents | 15 minutes | bk-ios-developer, bk-android-developer, bk-flutter-developer |
 | Review agents | 5 minutes | bk-code-reviewer, bk-security-auditor, bk-performance-analyzer |
 | Docs agents | 5 minutes | bk-docs-writer |
-| Test agents | 10 minutes | bk-unit-test-agent, bk-device-test-agent |
+| Test agents | 10 minutes | bk-unit-test-agent, bk-device-test-agent (mobile kits only) |
 | Git agents | 2 minutes | bk-git-manager |
 | Planning agents | 10 minutes | bk-planner, bk-test-architect |
 

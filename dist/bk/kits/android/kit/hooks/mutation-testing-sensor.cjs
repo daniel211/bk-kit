@@ -23,7 +23,8 @@ try {
 
   // Manifest files that trigger re-scan
   const MANIFEST_FILES = [
-    'package.json', 'Package.swift', 'build.gradle', 'build.gradle.kts', 'pubspec.yaml'
+    'package.json', 'Package.swift', 'build.gradle', 'build.gradle.kts', 'pubspec.yaml',
+    'pyproject.toml', 'setup.cfg'
   ];
 
   /**
@@ -36,10 +37,15 @@ try {
 
   // iOS mutation config files
   const IOS_CONFIG_FILES = ['Muter.conf.yml', '.muter-config.yml'];
-  // Android mutation config files
-  const ANDROID_CONFIG_FILES = ['stryker.conf.js', 'stryker.conf.ts', 'stryker.config.js'];
   // Flutter mutation packages
   const FLUTTER_MUTATION_PACKAGES = ['mutation_test'];
+  // Python: cosmic-ray reads a TOML session config (any name; these are the conventional ones)
+  const PYTHON_CONFIG_FILES = ['cosmic-ray.toml', '.cosmic-ray.toml', 'cr.toml'];
+  // Python: mutmut / cosmic-ray configured in pyproject.toml (section or dependency) or setup.cfg
+  const PYTHON_PYPROJECT_RE = /^\s*\[tool\.(mutmut|cosmic-ray)\]|["'\s](mutmut|cosmic-ray)\s*(?:[<>=~!]|["'])/m;
+  const PYTHON_SETUP_CFG_RE = /^\s*\[(mutmut|cosmic-ray)\]/m;
+  // Web: Stryker config files (stryker.conf.* and stryker.config.*, any JS/TS/JSON flavour)
+  const WEB_STRYKER_RE = /^stryker\.conf(?:ig)?\.(?:[cm]?[jt]s|json)$/;
 
   /**
    * Scan for iOS mutation testing configs.
@@ -52,12 +58,10 @@ try {
   }
 
   /**
-   * Scan for Android mutation testing configs.
+   * Scan for Android mutation testing configs. Pitest is the JVM tool; Stryker configs (JS/TS)
+   * used to count here too and made every Stryker web project read as "android ready".
    */
   function detectAndroidMutation(projectRoot) {
-    for (const f of ANDROID_CONFIG_FILES) {
-      if (fs.existsSync(path.join(projectRoot, f))) return { found: true, tool: 'Stryker/Pitest', file: f };
-    }
     // Check Gradle for pitest plugin
     for (const gfile of ['build.gradle', 'build.gradle.kts', path.join('app', 'build.gradle')]) {
       const fullPath = path.join(projectRoot, gfile);
@@ -91,6 +95,39 @@ try {
     return { found: false };
   }
 
+  /** Read a root file, '' when absent or unreadable. */
+  function readRoot(projectRoot, name) {
+    try { return fs.readFileSync(path.join(projectRoot, name), 'utf8'); } catch { return ''; }
+  }
+
+  /**
+   * Scan for Python mutation testing configs: mutmut or cosmic-ray.
+   */
+  function detectPythonMutation(projectRoot) {
+    for (const f of PYTHON_CONFIG_FILES) {
+      if (fs.existsSync(path.join(projectRoot, f))) return { found: true, tool: 'cosmic-ray', file: f };
+    }
+    const pyproject = PYTHON_PYPROJECT_RE.exec(readRoot(projectRoot, 'pyproject.toml'));
+    if (pyproject) return { found: true, tool: pyproject[1] || pyproject[2], file: 'pyproject.toml' };
+    const setupCfg = PYTHON_SETUP_CFG_RE.exec(readRoot(projectRoot, 'setup.cfg'));
+    if (setupCfg) return { found: true, tool: setupCfg[1], file: 'setup.cfg' };
+    return { found: false };
+  }
+
+  /**
+   * Scan for web (JS/TS) mutation testing configs: Stryker.
+   */
+  function detectWebMutation(projectRoot) {
+    let entries = [];
+    try { entries = fs.readdirSync(projectRoot); } catch { /* unreadable root */ }
+    const conf = entries.find((e) => WEB_STRYKER_RE.test(e));
+    if (conf) return { found: true, tool: 'Stryker', file: conf };
+    if (/"@stryker-mutator\//.test(readRoot(projectRoot, 'package.json'))) {
+      return { found: true, tool: 'Stryker', file: 'package.json' };
+    }
+    return { found: false };
+  }
+
   /**
    * Run a full mutation readiness scan and write results.
    */
@@ -98,6 +135,8 @@ try {
     const ios     = detectIOSMutation(projectRoot);
     const android = detectAndroidMutation(projectRoot);
     const flutter = detectFlutterMutation(projectRoot);
+    const python  = detectPythonMutation(projectRoot);
+    const web     = detectWebMutation(projectRoot);
 
     const readiness = {
       timestamp: new Date().toISOString(),
@@ -106,10 +145,16 @@ try {
       : { ready: false, hint: 'Add Muter.conf.yml for iOS mutation testing with Muter' },
       android: android.found
       ? { ready: true, tool: android.tool, config: android.file }
-      : { ready: false, hint: 'Add stryker.conf.js or apply pitest Gradle plugin for Android mutation testing' },
+      : { ready: false, hint: 'Apply the pitest Gradle plugin (info.solidsoft.pitest) for Android mutation testing' },
       flutter: flutter.found
       ? { ready: true, tool: flutter.tool, config: flutter.file }
-      : { ready: false, hint: 'Add mutation_test package to pubspec.yaml for Flutter mutation testing' }
+      : { ready: false, hint: 'Add mutation_test package to pubspec.yaml for Flutter mutation testing' },
+      python: python.found
+      ? { ready: true, tool: python.tool, config: python.file }
+      : { ready: false, hint: 'Add [tool.mutmut] to pyproject.toml (or a cosmic-ray.toml) for Python mutation testing' },
+      web: web.found
+      ? { ready: true, tool: web.tool, config: web.file }
+      : { ready: false, hint: 'Add stryker.config.json / stryker.conf.js (@stryker-mutator/core) for web mutation testing' }
     };
 
     const outputFile = resolveMetricPath('.bk-metrics/mutation-readiness.json', projectRoot);

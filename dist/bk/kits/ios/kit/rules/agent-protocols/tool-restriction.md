@@ -15,7 +15,7 @@ paths:
 | **Read-only** | bk-code-reviewer, bk-security-auditor, bk-performance-analyzer, bk-test-architect | Read, Grep, Glob, Write (reports only) | Edit, Bash, Task |
 | **Read-only+Harness** | bk-gemini-reviewer | Read, Grep, Glob, Write (reports only), Bash (harness allowlist only) | Edit, Task |
 | **Write+Run** | bk-unit-test-agent | Read, Write, Edit, Grep, Glob, Bash | Task |
-| **Write** | bk-device-test-agent | Read, Write, Edit, Grep, Glob | Bash, Task |
+| **Write** | bk-device-test-agent (mobile kits only) | Read, Write, Edit, Grep, Glob | Bash, Task |
 | **Full dev** | bk-ios-developer, bk-android-developer, bk-flutter-developer | Read, Write, Edit, Bash, Grep, Glob | Task |
 | **Edit+util** | bk-docs-writer | Read, Edit, Write, Glob, Grep | Bash, Task |
 | **Diag** | bk-debugger | Read, Bash, Glob, Grep | Edit, Task |

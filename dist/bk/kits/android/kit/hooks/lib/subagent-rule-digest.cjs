@@ -42,8 +42,10 @@ const RULE_DECISIONS = {
   'core-rules': 'digest', // §5 behavioural rules (do what was asked, read before edit); rest is routing
   'development-rules': 'digest', // code standards, no test-dodging, file handling, plan compliance
   'coding-intelligence-priority': 'digest', // Serena → LSP → Grep → Read lookup order
-  'mobile-shared-rules': 'digest', // architecture/API/security/UI-state standards for code agents
-  'platform-rules': 'digest', // {ios,android,flutter}-rules.md: essentials + pointer
+  'mobile-shared-rules': 'digest', // architecture/API/security/UI-state standards for code agents (ios/android/flutter kits)
+  'backend-shared-rules': 'digest', // layering/API contract/migrations/security for code agents (python kit)
+  'web-shared-rules': 'digest', // layering/server state/XSS-CSP/UI states for code agents (web kit)
+  'platform-rules': 'digest', // {platform}-rules.md: essentials + pointer
   'team-rules': 'digest', // Output:/Files: contract and [SIGNAL: x] markers; rest is conductor/bk-team lead
   'user-interaction-protocol': 'digest', // §5 confidence in output metadata; rest is AskUserQuestion policy
   'approval-rules': 'conductor', // gates + thresholds; each reviewer carries its own severity line
@@ -62,6 +64,8 @@ const AGENT_ROLES = {
   'bk-ios-developer': 'implement',
   'bk-android-developer': 'implement',
   'bk-flutter-developer': 'implement',
+  'bk-python-developer': 'implement',
+  'bk-web-developer': 'implement',
   'bk-code-simplifier': 'implement',
   'bk-unit-test-agent': 'implement',
   'bk-device-test-agent': 'implement',
@@ -87,8 +91,39 @@ const AGENT_ROLES = {
 const PLATFORM_ESSENTIALS = {
   ios: 'Swift, SwiftUI for new screens (no SwiftUI+UIKit mix in one screen), async/await + @MainActor, SPM; file named after its primary type',
   android: 'Kotlin only, Compose + Material 3 for new screens, Coroutines/Flow + StateFlow (no new LiveData), version catalog; file named after its primary class',
-  flutter: 'Dart, snake_case files, one state-management approach per project, const constructors, widgets > 50 lines extracted'
+  flutter: 'Dart, snake_case files, one state-management approach per project, const constructors, widgets > 50 lines extracted',
+  python: 'Python 3.11+, type hints everywhere (mypy clean), snake_case modules, router → service → repository, Pydantic v2 schemas at the boundary, async SQLAlchemy 2 + Alembic, settings from env; ruff + pytest',
+  web: 'TypeScript strict (no `any`), React function components + hooks, kebab-case files (match the project if it uses PascalCase.tsx), server state in TanStack Query, forms with zod, accessible markup; tsc --noEmit + eslint + vitest'
 };
+
+/**
+ * The shared rule file each kit ships, and its one-line digest. A kit ships exactly one of these
+ * (bk-manifest.json scopes each to its platforms), so the digest names only the file the agent's
+ * kit actually has. A platform with no entry — or an unresolved one — gets no shared-rules line
+ * rather than a pointer to a file that may not exist.
+ */
+const SHARED_RULE_DIGESTS = {
+  mobile: {
+    platforms: ['ios', 'android', 'flutter'],
+    rule: 'mobile-shared-rules',
+    text: 'Mobile standards: Clean Architecture data → domain → presentation, MVVM + Repository + UseCase, DI; no secrets in source, tokens in Keychain/Keystore/SecureStorage; loading/empty/error-with-retry states'
+  },
+  backend: {
+    platforms: ['python'],
+    rule: 'backend-shared-rules',
+    text: 'Backend standards: router → service → repository, DI, one error envelope, paginated lists, idempotent create/payment; authz before logic, owner/tenant filter on every ID lookup, parameterized queries only, secrets from env/vault, no PII/tokens in logs; migrations with downgrade'
+  },
+  web: {
+    platforms: ['web'],
+    rule: 'web-shared-rules',
+    text: 'Web standards: components → hooks → services (no `fetch` in components), server state in TanStack Query only, zod at the API boundary; no `dangerouslySetInnerHTML`/`innerHTML` with user data, no tokens in localStorage, strict CSP; loading/empty/error-with-retry states, a11y'
+  }
+};
+
+/** The shared-rules digest entry for a platform, or null. */
+function sharedRuleDigestFor(platform) {
+  return Object.values(SHARED_RULE_DIGESTS).find((d) => d.platforms.includes(platform)) || null;
+}
 
 const AGENT_NAME = /^[A-Za-z0-9_-]+$/;
 
@@ -172,8 +207,9 @@ function buildSubagentRuleDigest({ agentType, platform, fullContext = false }) {
   if (role === 'implement' || role === 'review') {
     // coding-intelligence-priority (+ CLAUDE.md "background agents: no MCP")
     lines.push(`- Code lookup: Serena MCP → LSP → Grep/Glob → Read. Grep for counts/file discovery, semantic tools for refs/hierarchy; background agents have no MCP (\`${rulesRel}/coding-intelligence-priority.md\`).`);
-    // mobile-shared-rules
-    lines.push(`- Mobile standards: Clean Architecture data → domain → presentation, MVVM + Repository + UseCase, DI; no secrets in source, tokens in Keychain/Keystore/SecureStorage; loading/empty/error-with-retry states (\`${rulesRel}/mobile-shared-rules.md\`).`);
+    // {mobile,backend,web}-shared-rules — only the one this platform's kit ships
+    const shared = sharedRuleDigestFor(platform);
+    if (shared) lines.push(`- ${shared.text} (\`${rulesRel}/${shared.rule}.md\`).`);
     // {platform}-rules
     const essentials = PLATFORM_ESSENTIALS[platform];
     if (essentials) lines.push(`- ${platform}: ${essentials} (\`${rulesRel}/${platform}-rules.md\`; commands in \`.claude/platform-context.json\`).`);
@@ -194,6 +230,7 @@ function buildSubagentRuleDigest({ agentType, platform, fullContext = false }) {
 module.exports = {
   RULE_DECISIONS,
   AGENT_ROLES,
+  SHARED_RULE_DIGESTS,
   agentOmitsClaudeMd,
   agentContextMode,
   buildSubagentRuleDigest

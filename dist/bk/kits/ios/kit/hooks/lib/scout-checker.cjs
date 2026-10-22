@@ -11,11 +11,21 @@
 
 'use strict';
 
-/** Build commands that are always allowed regardless of path */
+/**
+ * Build / dependency-install commands that are always allowed regardless of path: they read and
+ * write the heavyweight directories below by design (pod install fills Pods/, npm ci fills
+ * node_modules/, uv sync fills .venv/), which is not the "scan a vendored tree" this hook stops.
+ * Python / web entries mirror the mobile ones: installers and production builds.
+ */
 const BUILD_COMMANDS = [
   'xcodebuild', 'gradle', 'gradlew', 'flutter build', 'flutter run',
   'pod install', 'pod update', 'npm run', 'yarn build', 'swift build',
-  'fastlane', 'make', 'cmake', 'bazel'
+  'fastlane', 'make', 'cmake', 'bazel',
+  // python
+  'pip install', 'pip3 install', 'uv sync', 'uv pip install', 'poetry install',
+  // web
+  'npm install', 'npm ci', 'pnpm install', 'pnpm run', 'pnpm build', 'yarn install',
+  'next build', 'vite build'
 ];
 
 /** Heavyweight directories that should not be searched directly */
@@ -27,7 +37,16 @@ const BLOCKED_PATTERNS = [
   { pattern: /node_modules\//, label: 'node_modules/' },
   { pattern: /\.dart_tool\//, label: '.dart_tool/' },
   { pattern: /\.pub-cache\//, label: '.pub-cache/' },
-  { pattern: /\bxcuserdata\//, label: 'xcuserdata/' }
+  { pattern: /\bxcuserdata\//, label: 'xcuserdata/' },
+  // python: virtualenvs, installed packages, tool caches
+  { pattern: /(?:^|[^\w.])\.venv\//, label: '.venv/' },
+  { pattern: /\bsite-packages\//, label: 'site-packages/' },
+  { pattern: /\b__pycache__\//, label: '__pycache__/' },
+  { pattern: /(?:^|[^\w.])\.(?:mypy|pytest|ruff)_cache\//, label: '.mypy_cache/ .pytest_cache/ .ruff_cache/' },
+  { pattern: /(?:^|[^\w.])\.tox\//, label: '.tox/' },
+  // web: framework build output (node_modules/ above covers packages)
+  { pattern: /(?:^|[^\w.])\.next\//, label: '.next/' },
+  { pattern: /(?:^|[^\w.])\.turbo\//, label: '.turbo/' }
 ];
 
 /** Shell control operators: they end one simple command and start the next. */

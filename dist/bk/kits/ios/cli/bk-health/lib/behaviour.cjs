@@ -65,7 +65,7 @@ function readJson(filePath) {
  * @returns {{
  *   testGapCount: number,
  *   uiSnapshotCount: number,
- *   mutationReadiness: { ios: object, android: object, flutter: object } | null,
+ *   mutationReadiness: { ios: object, android: object, flutter: object, python?: object, web?: object } | null,
  *   pbtSuggestionCount: number,
  *   windowMs: number
  * }}
@@ -119,7 +119,8 @@ function renderBehaviourPanel(panel) {
 
   // Mutation readiness per platform
   if (mutationReadiness) {
-    const platforms = ['ios', 'android', 'flutter'];
+    // Files written before python / web existed simply lack those keys (skipped below).
+    const platforms = ['ios', 'android', 'flutter', 'python', 'web'];
     for (const platform of platforms) {
       const result = mutationReadiness[platform];
       if (!result) continue;

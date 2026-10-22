@@ -19,6 +19,8 @@
     "filterIos": "iOS",
     "filterAndroid": "Android",
     "filterFlutter": "Flutter",
+    "filterPython": "Python",
+    "filterWeb": "Web",
     "noResults": "No results match your search.",
     "platform": "Platform",
     "chooseYourPlatform": "Choose your platform",
@@ -60,12 +62,18 @@
     "bk-code-reviewer.android": "Android-specific review: Coroutines, viewModelScope, Compose state, Hilt injection, Gradle config.",
     "bk-code-reviewer.flutter": "Flutter-specific review: state management consistency (BLoC/Riverpod), const usage, widget composition.",
     "bk-code-reviewer.ios": "iOS-specific review: async/await, @MainActor, SwiftUI patterns, SPM dependencies, Info.plist.",
+    "bk-code-reviewer.python": "Python-specific review: FastAPI dependencies, async vs blocking I/O, SQLAlchemy sessions, Pydantic validation, ruff/mypy cleanliness.",
+    "bk-code-reviewer.web": "Web-specific review: React hooks and effects, server/client component boundaries, TypeScript strictness, bundle and accessibility issues.",
     "bk-debugger.android": "Android debug: Gradle build errors, crash logs (Logcat), ANR traces, ProGuard issues.",
     "bk-debugger.flutter": "Flutter debug: build errors, widget errors, state management issues, platform channel problems.",
     "bk-debugger.ios": "iOS debug: xcodebuild errors, crash logs, memory graph, Instruments analysis.",
+    "bk-debugger.python": "Python debug: tracebacks, failing pytest runs, async event-loop errors, Alembic migration and import issues.",
+    "bk-debugger.web": "Web debug: build and type errors, hydration mismatches, failing Vitest/Jest/Playwright runs, network and console errors.",
     "bk-unit-test-agent.android": "Android testing: JUnit5 @Test, @DisplayName, MockK for mocking, Turbine for Flow testing.",
     "bk-unit-test-agent.flutter": "Flutter testing: testWidgets(), group(), mocktail mocks, pump/pumpAndSettle.",
     "bk-unit-test-agent.ios": "iOS testing: XCTestCase, async test methods, mock protocols, XCTAssert variants.",
+    "bk-unit-test-agent.python": "Python testing: pytest functions and fixtures, parametrize, httpx/TestClient for endpoints, monkeypatch and mocks.",
+    "bk-unit-test-agent.web": "Web testing: Vitest/Jest with Testing Library, mocked fetch/MSW, Playwright for end-to-end flows.",
     "bk-agent-contract": "Required before dispatching agents. Defines agent I/O file contracts and implementation-result validation.",
     "bk-analyze": "Pure exploration skill — analyze project structure, architecture, and dependencies without modifying code.",
     "bk-architecture": "SOLID principles, Clean Architecture layers, MVVM pattern, Repository pattern, and dependency injection.",
@@ -112,7 +120,6 @@
     "state-machine": "Enforces valid phase transitions for FSM commands, prevents phase-skipping.",
     "task-scheduling": "All agent dispatches must include timeout expectation for resource management.",
     "user-interaction-protocol": "Unified rules for when and how to interact with user via AskUserQuestion.",
-
     "Bootstrap New Project": "Run bk init --kit <platform> → scaffolds .claude/ with agents, skills, hooks. Then use /bk-bootstrap to set up project structure, dependencies, and CI/CD.",
     "Generate API Layer from Swagger": "Import OpenAPI/Swagger spec → /bk-generate parses endpoints → generates models, API client, and repository layer with proper error handling.",
     "Debug a Crash": "Use /bk-debug with crash logs or stack trace → bk-debugger agent analyzes root cause → suggests fix with code patch → /bk-test validates the fix.",
@@ -120,6 +127,8 @@
     "Design to Code (Figma)": "Set FIGMA_API_KEY → /bk-spec --design reads Figma over its REST API and extracts components, colors, typography (design-validator + design-spec-writer + design-asset-exporter) → /bk-code generates platform-native UI code (SwiftUI/Compose/Flutter widgets). No MCP server needed; the default --engine auto runs the extraction through Gemini when this machine can, and through Claude when it cannot.",
     "iOS — SwiftUI View from Design": "Figma screen → /bk-spec --design → /bk-code → SwiftUI View with @State, @Binding, proper previews. Follows MVVM + Coordinator pattern per bk-ios rules.",
     "Android — Compose Screen from API": "OpenAPI endpoint → /bk-generate → Kotlin data classes, Retrofit service, ViewModel with StateFlow, Compose UI. Follows Clean Architecture layers.",
-    "Flutter — Widget + BLoC from Spec": "Feature spec → /bk-code → Dart models, BLoC/Cubit with states, Widget tree with BlocBuilder. Includes unit + widget tests."
+    "Flutter — Widget + BLoC from Spec": "Feature spec → /bk-code → Dart models, BLoC/Cubit with states, Widget tree with BlocBuilder. Includes unit + widget tests.",
+    "Python — FastAPI Endpoint from Spec": "Feature spec → /bk-code → Pydantic schemas, FastAPI router with dependency-injected service, SQLAlchemy repository + Alembic migration. pytest tests; ruff + mypy clean.",
+    "Web — React Page from Design": "Figma screen → /bk-spec --design → /bk-code → typed React components (Next.js or Vite), data fetching with loading/error states. Vitest/Jest unit tests + a Playwright flow."
   }
 }

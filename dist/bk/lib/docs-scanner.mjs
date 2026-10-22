@@ -82,6 +82,15 @@ function safeReaddir(dirPath) {
   }
 }
 
+/** Every kit the CLI ships (kit-resolver.mjs KIT_NAMES). */
+const PLATFORMS = 'ios|android|flutter|python|web';
+/** `bk-code-reviewer.python.md` → python */
+const PLATFORM_SECTION_RE = new RegExp(`\\.(${PLATFORMS})$`);
+/** `bk-web-developer.md` → web */
+const PLATFORM_AGENT_RE = new RegExp(`bk-(${PLATFORMS})-`);
+/** `bk-python/`, `bk-flutter-sdk/` → python, flutter; the boundary keeps a future `bk-webhooks` base */
+const PLATFORM_SKILL_RE = new RegExp(`^bk-(${PLATFORMS})(?=-|$)`);
+
 /**
  * Scan agents from either dev structure (src/agents/_base/, _platforms/, _platform-sections/)
  * or flat user structure (kit/agents/*.md, .claude/agents/*.md).
@@ -109,7 +118,7 @@ function scanAgents(agentsDir) {
     for (const file of safeReaddir(join(agentsDir, '_platform-sections'))) {
       if (!file.endsWith('.md')) continue;
       const name = basename(file, '.md');
-      const platformMatch = name.match(/\.(ios|android|flutter)$/);
+      const platformMatch = name.match(PLATFORM_SECTION_RE);
       results.push(parseAgentFile(join(agentsDir, '_platform-sections', file), 'platform', platformMatch?.[1]));
     }
   } else {
@@ -117,7 +126,7 @@ function scanAgents(agentsDir) {
     for (const file of safeReaddir(agentsDir)) {
       if (!file.endsWith('.md') || file.startsWith('_')) continue;
       const name = basename(file, '.md');
-      const platformMatch = name.match(/bk-(ios|android|flutter)-/);
+      const platformMatch = name.match(PLATFORM_AGENT_RE);
       const type = platformMatch ? 'platform' : 'base';
       results.push(parseAgentFile(join(agentsDir, file), type, platformMatch?.[1]));
     }
@@ -165,7 +174,7 @@ function scanSkills(skillsDir) {
     for (const skillDir of safeReaddir(skillsDir)) {
       const skillMdPath = join(skillsDir, skillDir, 'SKILL.md');
       if (!existsSync(skillMdPath)) continue;
-      const platformMatch = skillDir.match(/^bk-(ios|android|flutter)/);
+      const platformMatch = skillDir.match(PLATFORM_SKILL_RE);
       const type = platformMatch ? 'platform' : 'base';
       results.push(parseSkillFile(skillMdPath, skillDir, type, platformMatch?.[1]));
     }

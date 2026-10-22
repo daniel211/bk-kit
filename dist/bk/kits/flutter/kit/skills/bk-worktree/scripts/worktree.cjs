@@ -510,16 +510,24 @@ function sanitizeFeatureName(name) {
 }
 
 // Detect and run dependency installer for the worktree
-// Supports web (bun/pnpm/yarn/npm), system (poetry/pip/cargo/go),
-// and mobile (CocoaPods/Gradle/Flutter) lock files.
+// Supports web (bun/pnpm/yarn/npm), python (uv/poetry/pip), system (cargo/go),
+// and mobile (CocoaPods/Gradle/Flutter) lock files. First match wins, so a lockfile
+// always beats a bare manifest.
+//
+// Installs are reproducible where the tool allows it: a fresh worktree must get the
+// locked versions, never a re-resolve that rewrites the lockfile on the new branch
+// (`npm ci`, `--frozen-lockfile`, `uv sync` honours uv.lock). requirements.txt has no
+// lock and no project env, so it installs into the worktree's own .venv — never into
+// whatever interpreter happens to be on PATH (the system / Homebrew site-packages).
 function detectDependencyInstaller(worktreePath) {
   const lockFiles = [
     { file: 'bun.lock',            cmd: 'bun install' },
-    { file: 'pnpm-lock.yaml',      cmd: 'pnpm install' },
-    { file: 'yarn.lock',           cmd: 'yarn install' },
-    { file: 'package-lock.json',   cmd: 'npm install' },
+    { file: 'pnpm-lock.yaml',      cmd: 'pnpm install --frozen-lockfile' },
+    { file: 'yarn.lock',           cmd: 'yarn install --frozen-lockfile' },
+    { file: 'package-lock.json',   cmd: 'npm ci' },
+    { file: 'uv.lock',             cmd: 'uv sync' },
     { file: 'poetry.lock',         cmd: 'poetry install' },
-    { file: 'requirements.txt',    cmd: 'pip install -r requirements.txt' },
+    { file: 'requirements.txt',    cmd: 'python3 -m venv .venv && .venv/bin/pip install -r requirements.txt' },
     { file: 'Cargo.toml',          cmd: 'cargo build' },
     { file: 'go.mod',              cmd: 'go mod download' },
     // Mobile lock files
@@ -1216,13 +1224,15 @@ Branch prefix detection:
   screen, view, widget, component,
   composable, feature (default)            → feat
 
-Dependency auto-detection (run in worktree after creation):
+Dependency auto-detection (run in worktree after creation, first match wins):
   bun.lock              → bun install
-  pnpm-lock.yaml        → pnpm install
-  yarn.lock             → yarn install
-  package-lock.json     → npm install
+  pnpm-lock.yaml        → pnpm install --frozen-lockfile
+  yarn.lock             → yarn install --frozen-lockfile
+  package-lock.json     → npm ci
+  uv.lock               → uv sync
   poetry.lock           → poetry install
-  requirements.txt      → pip install -r requirements.txt
+  requirements.txt      → python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+                          (the worktree's own .venv, never the system interpreter)
   Cargo.toml            → cargo build
   go.mod                → go mod download
   Podfile               → pod install
@@ -1262,4 +1272,9 @@ function main() {
   }
 }
 
-main();
+// Run as a CLI; required (tests), expose the pure helpers only.
+if (require.main === module) {
+  main();
+} else {
+  module.exports = { detectDependencyInstaller };
+}

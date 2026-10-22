@@ -1,20 +1,21 @@
 # Beer Kit (`bk`)
 
-**Bộ công cụ multi-agent cho Claude Code, dành cho phát triển mobile: iOS, Android và Flutter.**
+**Bộ công cụ multi-agent cho Claude Code: mobile (iOS, Android, Flutter), backend Python và frontend web.**
 
-Beer Kit biến Claude Code từ một trợ lý chung chung thành một đội phát triển mobile có quy trình:
+Beer Kit biến Claude Code từ một trợ lý chung chung thành một đội phát triển có quy trình:
 có người lập kế hoạch, người code, người review, người test, người debug. Mỗi người đều biết rõ
-nền tảng bạn đang làm (Swift/SwiftUI, Kotlin/Compose hay Dart/BLoC). Toàn bộ chạy trong
+nền tảng bạn đang làm (Swift/SwiftUI, Kotlin/Compose, Dart/BLoC, Python/FastAPI hay
+TypeScript/React). Toàn bộ chạy trong
 `.claude/` của dự án, nên kit đi cùng repo và cả team dùng chung một bộ luật.
 
 <!-- auto:release-stats -->
 | | |
 |---|---|
-| **22** agents | planner, developer theo nền tảng, 3 reviewer, debugger, security auditor, test architect, git manager... |
-| **40** skills | `/bk-plan`, `/bk-code`, `/bk-debug`, `/bk-test`, `/bk-team`, `/bk-autopilot`... |
+| **26** agents | planner, developer theo nền tảng, 3 reviewer, debugger, security auditor, test architect, git manager... |
+| **42** skills | `/bk-plan`, `/bk-code`, `/bk-debug`, `/bk-test`, `/bk-team`, `/bk-autopilot`... |
 | **65** hooks | chặn đọc file nhạy cảm, quét secret, giới hạn context, ép phân vai, đo chi phí... |
-| **26** rules | chuẩn code từng nền tảng, giao thức điều phối, cổng phê duyệt |
-| **3** nền tảng | iOS · Android · Flutter, trong **một** package `@beerkit/bk` và **một** lệnh `bk` |
+| **32** rules | chuẩn code từng nền tảng, giao thức điều phối, cổng phê duyệt |
+| **5** nền tảng | iOS · Android · Flutter · Python (backend) · Web (frontend), trong **một** package `@beerkit/bk` và **một** lệnh `bk` |
 <!-- /auto:release-stats -->
 
 ---
@@ -46,9 +47,10 @@ Muốn đi một mạch từ ý tưởng đến code: `/bk-autopilot "Đăng nh�
 
 ## Điểm mạnh
 
-**1. Một lệnh, ba nền tảng.** `bk init --kit ios|android|flutter`, hoặc bỏ `--kit` để kit tự nhận
-từ `pubspec.yaml`, `*.xcodeproj`, `build.gradle*`. Agent, rule và lệnh build/test được dựng riêng
-cho từng nền tảng, không phải prompt chung.
+**1. Một lệnh, năm nền tảng.** `bk init --kit ios|android|flutter|python|web`, hoặc bỏ `--kit` để
+kit tự nhận từ `pubspec.yaml`, `*.xcodeproj`, `build.gradle*`, `pyproject.toml` / `requirements.txt`,
+hoặc `package.json` + `tsconfig.json`. Agent, rule và lệnh build/test được dựng riêng cho từng nền
+tảng, không phải prompt chung.
 
 **2. Chia vai thật sự, không phải một agent làm tất cả.** Người điều phối giao việc cho agent
 chuyên trách. Agent chỉ-đọc (reviewer, security auditor) bị chặn quyền ghi ngay lúc giao việc và
@@ -116,14 +118,14 @@ npm install -g ./beerkit-bk-*.tgz
 ```bash
 # Gắn vào dự án của bạn
 cd ~/MyProject
-bk init --kit ios          # hoặc android / flutter
+bk init --kit ios          # hoặc android / flutter / python / web
 bk doctor                  # kiểm tra cài đặt
 ```
 
 Mở dự án trong Claude Code rồi chạy `/bk-bootstrap`.
 
 Cài một phiên bản cụ thể: truyền tag vào lệnh tải, ví dụ
-<!-- auto:release-version -->`gh release download v0.14.0 --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz'`<!-- /auto:release-version -->.
+<!-- auto:release-version -->`gh release download v0.15.0 --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz'`<!-- /auto:release-version -->.
 
 ### Cập nhật
 

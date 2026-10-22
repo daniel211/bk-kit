@@ -3,7 +3,7 @@
  * gemini-review.mjs — Automated code review runner powered by Gemini CLI.
  *
  * Usage:
- *   node gemini-review.mjs [--feature <name>] [--platform <ios|android|flutter>] [--model <model>] [--fast] [--files <f1,f2>]
+ *   node gemini-review.mjs [--feature <name>] [--platform <ios|android|flutter|python|web>] [--model <model>] [--fast] [--files <f1,f2>]
  */
 
 import { execSync, spawn } from 'node:child_process';
@@ -90,7 +90,9 @@ function readJsonField(filePath, field) {
   }
 }
 
-const SUPPORTED_PLATFORMS = ['ios', 'android', 'flutter'];
+// Every kit the CLI ships (kit-resolver.mjs KIT_NAMES). The platform only picks
+// .claude/rules/<platform>-rules.md for the prompt, which each kit installs.
+const SUPPORTED_PLATFORMS = ['ios', 'android', 'flutter', 'python', 'web'];
 let platformSource = 'the --platform flag';
 
 if (!platform) {
@@ -104,7 +106,7 @@ if (!platform) {
 
 if (!platform) {
   console.error('\n❌ ERROR: Could not determine the target platform.');
-  console.error('  Pass --platform <ios|android|flutter>, or run from a project with');
+  console.error(`  Pass --platform <${SUPPORTED_PLATFORMS.join('|')}>, or run from a project with`);
   console.error('  .claude/platform-context.json or .bk-version.json.');
   process.exit(1);
 }

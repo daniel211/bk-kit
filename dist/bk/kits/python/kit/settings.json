@@ -1,0 +1,249 @@
+{
+  "env": {
+    "ENABLE_LSP_TOOL": "1"
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/statusline.cjs"
+  },
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ]
+    }
+  },
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs prompt-context-inject.cjs context-monitor.cjs lint-findings-inject.cjs conductor-inbox-drain.cjs"
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|resume|clear|compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs session-init.cjs project-profile.cjs"
+          }
+        ]
+      },
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs compact-recovery.cjs"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs global-kill-switch.cjs tool-repetition-detector.cjs conductor-inbox-drain.cjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs agent-memory-path-guard.cjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs agent-memory-path-guard.cjs fsm-guard.cjs anti-self-implementation.cjs descriptive-name.cjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs write-shrink-guard.cjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs privacy-block.cjs security-check.cjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Glob|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs scout-block.cjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Task|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs subagent-live-tracker.cjs context-safety.cjs parallel-safety.cjs delegation-enforcer.cjs traceability-check.cjs budget-guard.cjs subagent-iteration-cap.cjs"
+          }
+        ]
+      },
+      {
+        "matcher": "mcp_*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs mcp-health-monitor.cjs"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs checkpoint-save.cjs pattern-extractor.cjs completion-notify.cjs session-cost-rollup.cjs stop-lint-flush.cjs native-lint-flush.cjs"
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs workflow-summary-flush.cjs"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs checkpoint-save.cjs handoff-writer.cjs"
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs subagent-init.cjs team-context-inject.cjs"
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs task-completed-handler.cjs"
+          }
+        ]
+      }
+    ],
+    "TeammateIdle": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs teammate-idle-handler.cjs"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "planner|bk-planner|Plan",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs plan-complete-reminder.cjs complexity-detector.cjs"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs subagent-live-tracker.cjs workflow-metrics.cjs skill-chain-suggest.cjs subagent-cost-capture.cjs decision-tracker.cjs verify-output.cjs agent-signal-detector.cjs"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs fsm-guard.cjs no-progress-detector.cjs inferential-review.cjs test-generation-hook.cjs ui-snapshot-compare.cjs mutation-testing-sensor.cjs property-based-test-suggester.cjs post-edit-lint.cjs bootstrap-quality-gate.cjs post-edit-simplify.cjs"
+          }
+        ]
+      },
+      {
+        "matcher": "AskUser.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs preference-tracker.cjs"
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs post-commit.cjs"
+          }
+        ]
+      },
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node $CLAUDE_PROJECT_DIR/.claude/hooks/bk-dispatch.cjs token-burn-detector.cjs conductor-inbox-drain.cjs"
+          }
+        ]
+      }
+    ]
+  }
+}

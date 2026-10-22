@@ -16,7 +16,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** The kits this CLI knows how to ship, in the order they are listed to the user. */
-export const KIT_NAMES = ['ios', 'android', 'flutter'];
+export const KIT_NAMES = ['ios', 'android', 'flutter', 'python', 'web'];
 
 /**
  * Which kit wins when a project carries several markers at once.
@@ -25,14 +25,29 @@ export const KIT_NAMES = ['ios', 'android', 'flutter'];
  * a Swift package has both `Package.swift` and an `.xcodeproj`. Only the target dir's own root is
  * inspected (never nested dirs), so this only fires for genuinely mixed roots — and flutter first
  * matches the one case that actually occurs: the Flutter root is the outer project.
+ *
+ * The mobile kits come before python and web: a mobile repo often carries a requirements.txt (for
+ * fastlane or tooling scripts) or a package.json, while a backend or web root rarely carries a
+ * pubspec.yaml or an .xcodeproj. A fullstack root with both pyproject.toml and a TS package.json
+ * resolves to python, with the ambiguity note telling the user how to pick web instead.
  */
-const PREFERENCE = ['flutter', 'ios', 'android'];
+const PREFERENCE = ['flutter', 'ios', 'android', 'python', 'web'];
+
+/** Config files that make a package.json root a TypeScript / bundled web project. */
+function isWebConfigFile(name) {
+  return name === 'tsconfig.json' || /^(next|vite)\.config\.[cm]?[jt]s$/.test(name);
+}
 
 /**
  * Root-level files that identify a project's platform.
  *
  * `label` is what the failure message tells the user was searched for, so it has to read like the
  * filenames a developer would look for, not like the predicate.
+ *
+ * `matches(name, entries)` is called per root entry; `entries` is the whole root listing, for a
+ * marker that needs a companion file. web is the one that does: package.json alone also sits at
+ * the root of plain Node tools and of most mobile repos' tooling, so it only counts next to a
+ * tsconfig.json, next.config.* or vite.config.* — the files that make the root a TS/React app.
  */
 const MARKERS = [
   {
@@ -49,6 +64,16 @@ const MARKERS = [
     platform: 'android',
     label: 'build.gradle, build.gradle.kts, settings.gradle*',
     matches: (name) => name === 'build.gradle' || name === 'build.gradle.kts' || name.startsWith('settings.gradle'),
+  },
+  {
+    platform: 'python',
+    label: 'pyproject.toml, requirements.txt, manage.py, setup.py',
+    matches: (name) => ['pyproject.toml', 'requirements.txt', 'manage.py', 'setup.py'].includes(name),
+  },
+  {
+    platform: 'web',
+    label: 'package.json with tsconfig.json, next.config.* or vite.config.*',
+    matches: (name, entries) => name === 'package.json' && entries.some(isWebConfigFile),
   },
 ];
 
@@ -112,7 +137,7 @@ export function detectKitsFromMarkers(targetDir) {
 
   const found = [];
   for (const marker of markersByPreference()) {
-    const hit = entries.find((name) => marker.matches(name));
+    const hit = entries.find((name) => marker.matches(name, entries));
     if (hit) found.push({ platform: marker.platform, marker: hit });
   }
   return found;

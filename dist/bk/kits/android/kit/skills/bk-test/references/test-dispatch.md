@@ -28,7 +28,7 @@ Task(subagent_type: "bk-unit-test-agent", model: "sonnet", run_in_background: tr
   Output: bk/dev/shared/reports/unit-test-{platform}-{feature}.json
 ")
 
-# Optional — when feature has UI components or user requests device tests:
+# Optional, mobile kits only — when feature has UI components or user requests device tests:
 Task(subagent_type: "bk-device-test-agent", model: "sonnet", run_in_background: true, prompt: "
   Feature: {feature_name}
   Platform: {platform}

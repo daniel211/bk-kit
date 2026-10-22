@@ -63,7 +63,7 @@ the conductor to dispatch `bk-unit-test-agent` or write
 |------|----------|-----------|
 | Trivial | plan → code → commit | None |
 | Standard | Full pipeline | bk-code-reviewer + bk-unit-test-agent |
-| Complex | Full pipeline | bk-code-reviewer + bk-security-auditor + bk-performance-analyzer + bk-unit-test-agent + bk-device-test-agent |
+| Complex | Full pipeline | bk-code-reviewer + bk-security-auditor + bk-performance-analyzer + bk-unit-test-agent + bk-device-test-agent (mobile kits only) |
 
 ---
 

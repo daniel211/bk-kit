@@ -21,7 +21,8 @@
  *                         `agent_dispatch_history` since the batch's coding began
  *   test_subtask_report   a plan sub-task that is a TESTS sub-task has an implementation/fix
  *                         report under `<plan_dir>/research/` holding a test result line
- *                         (swift test / xcodebuild / flutter test / gradle outcomes)
+ *                         (swift test / xcodebuild / flutter test / gradle / pytest / vitest /
+ *                         jest / playwright outcomes)
  *
  * Pure apart from bounded reads of the plan dir (<= 80 sub-task files, <= 3 reports each, each
  * report's last 64 KB) and Date.now().
@@ -41,8 +42,10 @@ const MAX_REF_LENGTH = 300;
 
 /**
  * Lines that say a test run happened and what it came to. Pass OR fail counts — the question is
- * "did tests run", not "are they green" (review judges that). Generic across ios / android /
- * flutter; each pattern is one line of one tool's output or the sentence an agent writes about it.
+ * "did tests run", not "are they green" (review judges that), so nothing here ever reads a line as
+ * "passing" — a failed run is evidence of a run, never of a green suite. Generic across ios /
+ * android / flutter / python / web; each pattern is one line of one tool's output or the sentence
+ * an agent writes about it.
  */
 const RESULT_LINE_PATTERNS = [
   /\*{0,2}\s*TEST (?:SUCCEEDED|FAILED)\s*\*{0,2}/,                       // xcodebuild test
@@ -52,7 +55,15 @@ const RESULT_LINE_PATTERNS = [
   /\b\d+\s+tests?\b[^\n]{0,40}?\b(?:passed|passing|failed|failing)\b/i,   // "12 tests passed"
   /\b(?:passed|failed)\s*[:=]\s*\d+\b/i,                                  // "passed: 12"
   /\+\d+(?:\s+~\d+)?(?:\s+-\d+)?:\s+(?:all tests passed|some tests failed)/i, // flutter test
-  /\b\d+\s+tests?\s+completed,\s+\d+\s+failed\b/i                         // gradle test failure
+  /\b\d+\s+tests?\s+completed,\s+\d+\s+failed\b/i,                        // gradle test failure
+  // pytest summary: "===== 12 passed, 1 failed in 0.34s =====" / "5 passed in 0.1s". A count
+  // before "in <time>" is required, so "no tests ran in 0.01s" (an empty collection) is NOT a run.
+  /\b\d+\s+(?:passed|failed|errors?)\b[^\n]{0,80}?\bin\s+\d+(?:\.\d+)?s\b/i,
+  /^Tests?(?: Files)?\s+(?:\d+\s+\w+\s*\|\s*)*\d+\s+(?:passed|failed)\b[^\n]*\(\d+\)/, // vitest "Tests  1 failed | 11 passed (12)"
+  /^Test(?:s| Suites):\s+(?:\d+\s+\w+,\s*)*\d+\s+total\b/,               // jest "Tests:  1 failed, 11 passed, 12 total"
+  /^\d+\s+(?:passed|failed|flaky)\s+\(\d+(?:\.\d+)?(?:ms|s|m|h)\)/,             // playwright "12 passed (3.2s)"
+  /^\d+\s+(?:failed|flaky)$/,                                             // playwright "2 failed" (own line)
+  /\b(?:pytest|vitest|jest|playwright)\b[^\n]{0,40}?\b\d+\s+(?:passed|failed)\b/i // agent prose "pytest: 12 passed"
 ];
 
 /**

@@ -8,7 +8,7 @@ argument-hint: "[feature or scope to test]"
 # Test: $ARGUMENTS
 
 Dispatches bk-test-architect to define strategy, then bk-unit-test-agent to write and run tests.
-Optionally dispatches bk-device-test-agent for UI/device-level testing. No code changes — test-only.
+Optionally dispatches bk-device-test-agent for UI/device-level testing (mobile kits only). No code changes — test-only.
 
 <Use_When>
 - User wants to write or run tests for a feature
@@ -61,7 +61,8 @@ Load: `references/test-dispatch.md`
 ### Step 3: Write and Run Tests
 
 Dispatch test agents in ONE message (background, sonnet): `bk-unit-test-agent` always, plus
-`bk-device-test-agent` when the feature has UI components or the user asks for device tests.
+`bk-device-test-agent` when the feature has UI components or the user asks for device tests (mobile kits
+only — python/web kits do not ship it; web e2e is covered by bk-unit-test-agent's Playwright section).
 Load: `references/test-dispatch.md`
 
 ### Step 4: Collect Results

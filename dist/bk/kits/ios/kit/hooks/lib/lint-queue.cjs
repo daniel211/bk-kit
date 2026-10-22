@@ -44,11 +44,25 @@
 const fs = require('fs');
 const path = require('path');
 
-/** Extensions each platform's linter can actually parse. */
+/**
+ * Extensions each platform's linter can actually parse.
+ *
+ * python — ruff reads .py and .pyi stubs natively.
+ *
+ * web — every JS/TS module flavour eslint resolves: .ts/.tsx/.js/.jsx plus the ESM/CJS
+ * variants .mjs/.cjs/.mts/.cts. Declaration files (*.d.ts) stay IN on purpose: a .d.ts the
+ * agent writes is hand-authored code (module augmentation, global types), and
+ * typescript-eslint lints it like any other .ts file. Generated ones (next-env.d.ts) are not
+ * something an agent edits, and if a project's eslint config ignores them, eslint answers an
+ * explicitly passed ignored file with a warning and exit 0 — no false failure either way.
+ * Style files (.css/.scss) are deliberately absent: eslint cannot parse them.
+ */
 const LINTABLE_EXTENSIONS = {
   ios:     ['.swift'],
   android: ['.kt', '.kts', '.java'],
-  flutter: ['.dart']
+  flutter: ['.dart'],
+  python:  ['.py', '.pyi'],
+  web:     ['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs', '.mts', '.cts']
 };
 
 /**

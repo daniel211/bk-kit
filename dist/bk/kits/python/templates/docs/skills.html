@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Skills — beer-kit Docs</title>
+  <link rel="stylesheet" href="assets/style.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css" />
+</head>
+<body>
+
+  <div class="layout">
+
+    <!-- ─── SIDEBAR ─────────────────────────────────────────────── -->
+    <aside class="sidebar" aria-label="Site navigation">
+      <div class="sidebar-logo">
+        <a href="index.html" aria-label="beer-kit home">
+          <span class="logo-icon" aria-hidden="true">bk</span>
+          beer-kit
+        </a>
+      </div>
+
+      <div class="sidebar-platform">
+        <label for="platform-select">Platform</label>
+        <select id="platform-select" class="platform-select" aria-label="Select platform">
+          <option value="ios">🍎 iOS</option>
+          <option value="android">🤖 Android</option>
+          <option value="flutter">💙 Flutter</option>
+          <option value="python">🐍 Python</option>
+          <option value="web">🌐 Web</option>
+        </select>
+      </div>
+
+      <div class="sidebar-lang">
+        <label>Language</label>
+        <div class="lang-toggle" role="radiogroup" aria-label="Language">
+          <button class="lang-btn" data-lang="vi" aria-pressed="true">VI</button>
+          <button class="lang-btn" data-lang="en" aria-pressed="false">EN</button>
+        </div>
+      </div>
+
+      <nav class="sidebar-nav" aria-label="Primary navigation">
+        <a class="nav-item" href="index.html" data-page="index.html" role="menuitem" tabindex="0">
+          <span class="nav-icon" aria-hidden="true">🏠</span>
+          Home
+        </a>
+
+        <div class="nav-group" role="none">
+          <div class="nav-item" data-page="agents.html" role="menuitem" tabindex="0" aria-expanded="false" aria-haspopup="true">
+            <span class="nav-icon" aria-hidden="true">📋</span>
+            Agents
+            <span class="nav-chevron" aria-hidden="true">▶</span>
+          </div>
+          <div class="nav-sub" role="menu" aria-label="Agents submenu">
+            <a class="nav-sub-item" href="agents.html#base-agents" role="menuitem">Base Agents</a>
+            <a class="nav-sub-item" href="agents.html#platform-agents" role="menuitem">Platform Agents</a>
+          </div>
+        </div>
+
+        <div class="nav-group open" role="none">
+          <div class="nav-item active" data-page="skills.html" role="menuitem" tabindex="0" aria-expanded="true" aria-haspopup="true">
+            <span class="nav-icon" aria-hidden="true">🔧</span>
+            Skills
+            <span class="nav-chevron" aria-hidden="true">▶</span>
+          </div>
+          <div class="nav-sub" role="menu" aria-label="Skills submenu">
+            <a class="nav-sub-item" href="#base-skills" data-page="skills.html#base-skills" role="menuitem">Base Skills</a>
+            <a class="nav-sub-item" href="#platform-skills" data-page="skills.html#platform-skills" role="menuitem">Platform Skills</a>
+          </div>
+        </div>
+
+        <div class="nav-group" role="none">
+          <div class="nav-item" data-page="workflows.html" role="menuitem" tabindex="0" aria-expanded="false" aria-haspopup="true">
+            <span class="nav-icon" aria-hidden="true">⚙️</span>
+            Workflows
+            <span class="nav-chevron" aria-hidden="true">▶</span>
+          </div>
+          <div class="nav-sub" role="menu" aria-label="Workflows submenu">
+            <a class="nav-sub-item" href="workflows.html#rules" role="menuitem">Rules</a>
+            <a class="nav-sub-item" href="workflows.html#hooks" role="menuitem">Hooks</a>
+          </div>
+        </div>
+
+        <a class="nav-item" href="examples.html" data-page="examples.html" role="menuitem" tabindex="0">
+          <span class="nav-icon" aria-hidden="true">📖</span>
+          Examples
+        </a>
+      </nav>
+    </aside>
+
+    <!-- Overlay for mobile -->
+    <div class="sidebar-overlay" aria-hidden="true"></div>
+
+    <!-- ─── MAIN ──────────────────────────────────────────────── -->
+    <main class="main" id="main-content">
+
+      <div class="topbar">
+        <button class="hamburger" aria-label="Toggle navigation" aria-expanded="false" aria-controls="sidebar">
+          ☰
+        </button>
+        <div class="search-bar" role="search">
+          <span class="search-icon" aria-hidden="true">🔍</span>
+          <input
+            type="search"
+            class="search-input"
+            placeholder="{{UI_SEARCH_SKILLS}}"
+            aria-label="{{UI_SEARCH_SKILLS}}"
+          />
+        </div>
+        <span class="platform-badge" aria-live="polite">🍎 ios</span>
+      </div>
+
+      <div class="page-content">
+        <div class="page-header">
+          <h1>{{UI_SKILLS}}</h1>
+          <p class="subtitle">{{UI_SKILLS_SUBTITLE}}</p>
+        </div>
+
+        <!-- Filter tabs -->
+        <div class="filter-tabs" role="tablist" aria-label="Filter skills by type">
+          <button class="filter-tab active" data-filter="all" role="tab" aria-selected="true">All</button>
+          <button class="filter-tab" data-filter="base" role="tab" aria-selected="false">Workflow</button>
+          <button class="filter-tab" data-filter="ios" role="tab" aria-selected="false">iOS</button>
+          <button class="filter-tab" data-filter="android" role="tab" aria-selected="false">Android</button>
+          <button class="filter-tab" data-filter="flutter" role="tab" aria-selected="false">Flutter</button>
+          <button class="filter-tab" data-filter="python" role="tab" aria-selected="false">Python</button>
+          <button class="filter-tab" data-filter="web" role="tab" aria-selected="false">Web</button>
+          <button class="filter-tab" data-filter="skill" role="tab" aria-selected="false">Knowledge</button>
+        </div>
+
+        <!-- Base / Workflow Skills -->
+        <h2 class="section-title" id="base-skills">
+          <span aria-hidden="true">🔧</span> Workflow Skills
+        </h2>
+        <div class="cards-grid" aria-label="Workflow skills list">
+          {{SKILL_LIST}}
+        </div>
+
+        <!-- Platform Skills -->
+        <h2 class="section-title" id="platform-skills">
+          <span aria-hidden="true">📱</span> {{UI_PLATFORM_SKILLS}}
+        </h2>
+        <div class="cards-grid" aria-label="Platform skills list">
+          {{SIDEBAR_SKILLS}}
+        </div>
+
+        <!-- Empty state -->
+        <div class="empty-state" role="status" aria-live="polite">
+          <div class="empty-icon" aria-hidden="true">🔍</div>
+          <p>No skills match your search.</p>
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="assets/app.js"></script>
+</body>
+</html>

@@ -50,7 +50,7 @@ On MISMATCH: fix before returning. Never return "complete" with mismatched outpu
 | Agent | Output Path |
 |-------|-------------|
 | bk-unit-test-agent | `bk/dev/shared/reports/unit-test-{platform}-{feature}.md` |
-| bk-device-test-agent | `bk/dev/shared/reports/device-test-{platform}-{feature}.md` |
+| bk-device-test-agent (mobile kits only) | `bk/dev/shared/reports/device-test-{platform}-{feature}.md` |
 | bk-code-reviewer | `bk/dev/shared/reports/code-review-{feature}.md` |
 | bk-gemini-reviewer | `bk/dev/shared/reports/code-review-gemini-{feature}.md` |
 | bk-security-auditor | `bk/dev/shared/reports/security-{feature}.md` |

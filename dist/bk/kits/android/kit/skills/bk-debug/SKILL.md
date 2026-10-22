@@ -90,7 +90,7 @@ Build error retry: resume agent, max 3 attempts.
 **After fix:** parallel verification — see `references/parallel-verification.md`.
 
 ### Phase 4: Test (Standard/Complex)
-Dispatch `bk-unit-test-agent` / `bk-device-test-agent` background. Standard: unit tests. Complex: + device tests.
+Dispatch `bk-unit-test-agent` / `bk-device-test-agent` background. Standard: unit tests. Complex: + device tests (mobile kits only).
 
 ### Phase 5: Review (Standard/Complex)
 Mode-aware review cycle. Auto/HITL/Quick modes with score thresholds.

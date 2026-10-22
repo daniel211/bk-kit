@@ -1,0 +1,696 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "bk-harness-policy",
+  "type": "object",
+  "required": [
+    "version",
+    "deadloop",
+    "kill_switch",
+    "arch_fitness",
+    "monitor"
+  ],
+  "properties": {
+    "version": {
+      "type": "string"
+    },
+    "deadloop": {
+      "type": "object",
+      "required": [
+        "tool_repetition",
+        "no_progress",
+        "phase_recurrence",
+        "subagent_iteration"
+      ],
+      "properties": {
+        "tool_repetition": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "warn_threshold": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "block_threshold": {
+              "type": "integer",
+              "minimum": 3
+            },
+            "window_size": {
+              "type": "integer",
+              "minimum": 5
+            },
+            "ring_file": {
+              "type": "string"
+            },
+            "exempt_tools": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "no_progress": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "oscillation_window": {
+              "type": "integer",
+              "minimum": 4
+            },
+            "oscillation_block_threshold": {
+              "type": "integer",
+              "minimum": 3
+            },
+            "trivial_edit_max_chars": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "trivial_edit_block_threshold": {
+              "type": "integer",
+              "minimum": 3
+            },
+            "file_edit_history": {
+              "type": "string"
+            }
+          }
+        },
+        "phase_recurrence": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "warn_count": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "block_count": {
+              "type": "integer",
+              "minimum": 2
+            },
+            "halt_count": {
+              "type": "integer",
+              "minimum": 3
+            },
+            "bypass_env": {
+              "type": "string"
+            }
+          }
+        },
+        "subagent_iteration": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "default_cap": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "per_agent_caps": {
+              "type": "object",
+              "description": "Per-agent iteration cap, overriding default_cap. The unit is a windowed, fan-out-coalesced ITERATION, not a dispatch, so one concurrent wave of N agents counts as 1 — caps here are deliberately generous relative to the 3-5 waves a large feature needs. The design-* agents are per-screen batch workers rather than implementers looping on one target (the field ran 9 extractor and 16 spec-writer dispatches on a single feature), so they carry caps well above default_cap; leaving them on the default forced operators to hand-patch this file on first real use. bk-planner is 3 because /bk-plan's own documented flow dispatches it up to three times with no commit or batch in between (synthesize, Complex-tier correction after complexity-detector, apply critic fixes); at 2 the field had the skill's third step blocked. A fourth planner dispatch in one hour of planning is past what the skill prescribes (the critic allows one retry) and is still blocked."
+            },
+            "bypass_env": {
+              "type": "string"
+            },
+            "window_minutes": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Sliding-window length for dispatch counting; 0 = lifetime (legacy)"
+            },
+            "batch_coalesce_ms": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Dispatches of the same agent+feature within this span count as one iteration. Measured field fan-out waves span up to ~15s between members, so the original 5000 split one wave into several iterations."
+            },
+            "progress_scoped": {
+              "type": "boolean",
+              "default": true,
+              "description": "Count only iterations that share the current progress signature (last_commit_hash | completed_batches length | batch, plus the sub-task id when the dispatch prompt names exactly one via a 'Sub-task file:' line or the description names one 'sub-task NN'), so sequential sub-tasks inside one batch each get their own budget while a retry of the same sub-task still counts, and so a conductor that commits or completes a batch gets a fresh budget and only no-progress retries accumulate. Defaults to true when absent; ignored when window_minutes is 0."
+            },
+            "exempt_agents": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              },
+              "description": "Agents never subject to the iteration cap"
+            }
+          }
+        }
+      }
+    },
+    "kill_switch": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "min_red_signals": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "lookback_minutes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "red_signal_types": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "bypass_env": {
+          "type": "string"
+        },
+        "red_signals_file": {
+          "type": "string"
+        },
+        "min_signal_weight": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Halt threshold on the weighted sum of distinct active signal types"
+        },
+        "red_signal_weights": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "minimum": 0
+          },
+          "description": "Per-type weight; types absent default to 1.0"
+        },
+        "override_window_minutes": {
+          "type": "integer",
+          "minimum": 0,
+          "description": "How long one BK_HARNESS_OVERRIDE grant stays valid; 0 = single call (legacy)"
+        }
+      }
+    },
+    "arch_fitness": {
+      "type": "object",
+      "properties": {
+        "ios": {
+          "$ref": "#/definitions/platformFitness"
+        },
+        "android": {
+          "$ref": "#/definitions/platformFitness"
+        },
+        "flutter": {
+          "$ref": "#/definitions/platformFitness"
+        }
+      }
+    },
+    "steerer": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "min_violation_count": {
+          "type": "integer",
+          "minimum": 2
+        },
+        "lookback_days": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "draft_path": {
+          "type": "string"
+        },
+        "target_path": {
+          "type": "string"
+        },
+        "backup_dir": {
+          "type": "string"
+        }
+      }
+    },
+    "monitor": {
+      "type": "object",
+      "properties": {
+        "violations_file": {
+          "type": "string"
+        },
+        "decisions_file": {
+          "type": "string"
+        },
+        "rotate_max_lines": {
+          "type": "integer",
+          "minimum": 100
+        },
+        "statusline_cache": {
+          "type": "string"
+        },
+        "statusline_cache_ttl_ms": {
+          "type": "integer",
+          "minimum": 500
+        },
+        "ashby": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "silent_days_warn": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "warnings_file": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "token_monitoring": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "burn_rate_threshold_per_min": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "consecutive_windows": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "window_minutes": {
+          "type": "number",
+          "minimum": 0.1
+        },
+        "lookback_window_minutes": {
+          "type": "number",
+          "minimum": 1
+        },
+        "burn_window_file": {
+          "type": "string"
+        },
+        "statusline_show_tokens": {
+          "type": "boolean"
+        },
+        "statusline_show_cost": {
+          "type": "boolean"
+        },
+        "statusline_show_rate": {
+          "type": "boolean"
+        },
+        "statusline_show_usage_totals": {
+          "type": "boolean"
+        },
+        "usage_rollup_refresh_ms": {
+          "type": "integer",
+          "minimum": 30000
+        },
+        "usage_month_budget_usd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "usage_week_budget_usd": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "inferential_review": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "batch_size": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "tier1_min_diff_chars": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "tier1_max_file_size_bytes": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "file_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "exempt_path_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "quality_score_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 1000
+        },
+        "queue_file": {
+          "type": "string"
+        },
+        "results_file": {
+          "type": "string"
+        },
+        "model": {
+          "type": "string"
+        },
+        "bypass_env": {
+          "type": "string"
+        }
+      }
+    },
+    "test_generation": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "mode": {
+          "type": "string",
+          "enum": [
+            "suggest",
+            "block"
+          ]
+        },
+        "languages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "exclude_patterns": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "ui_snapshot": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "require_golden": {
+          "type": "boolean"
+        },
+        "platforms": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "mutation_testing": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "scan_on_manifest_change": {
+          "type": "boolean"
+        }
+      }
+    },
+    "pbt_suggester": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "min_cases": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "sample_threshold": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "native_lint": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "cache_ttl_seconds": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 100
+        },
+        "fallback_to_regex": {
+          "type": "boolean"
+        },
+        "ios": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "tool": {
+              "type": "string"
+            },
+            "block_on_error": {
+              "type": "boolean"
+            },
+            "config_path": {
+              "type": "string"
+            }
+          }
+        },
+        "android": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "preferred_tool": {
+              "type": "string"
+            },
+            "allow_gradle_lint": {
+              "type": "boolean"
+            },
+            "block_on_error": {
+              "type": "boolean"
+            },
+            "detekt_config": {
+              "type": "string"
+            }
+          }
+        },
+        "flutter": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "tool": {
+              "type": "string"
+            },
+            "block_on_error": {
+              "type": "boolean"
+            },
+            "analysis_options": {
+              "type": "string"
+            }
+          }
+        },
+        "red_on_error_only": {
+          "type": "boolean",
+          "description": "Emit a red signal only when the lint run produced errors; warnings go to warn_signal_file"
+        },
+        "warn_signal_file": {
+          "type": "string",
+          "description": "JSONL path for warning-severity (non-halting) lint signals"
+        }
+      }
+    },
+    "policy_overrides": {
+      "type": "object"
+    },
+    "cost_budget": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "pr_budget_usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "session_budget_usd": {
+          "type": "number",
+          "minimum": 0
+        },
+        "enforcement": {
+          "type": "string",
+          "enum": [
+            "warn",
+            "block",
+            "none"
+          ]
+        },
+        "ledger_path": {
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "insights": {
+      "type": "object",
+      "properties": {
+        "window_workflows": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "min_workflows_for_claims": {
+          "type": "integer",
+          "minimum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "subagent_observability": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "live_tracker": {
+          "type": "object",
+          "properties": {
+            "jsonl_path": {
+              "type": "string"
+            },
+            "max_entries": {
+              "type": "integer",
+              "minimum": 100
+            }
+          }
+        },
+        "accurate_parser": {
+          "type": "object",
+          "properties": {
+            "timeout_ms": {
+              "type": "integer",
+              "minimum": 100
+            },
+            "fallback_char_per_token": {
+              "type": "number",
+              "minimum": 1
+            }
+          }
+        },
+        "statusline": {
+          "type": "object",
+          "properties": {
+            "max_display": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "show_cost": {
+              "type": "boolean"
+            },
+            "show_tokens": {
+              "type": "boolean"
+            }
+          }
+        },
+        "parallel_metric": {
+          "type": "object",
+          "properties": {
+            "overlap_threshold_ms": {
+              "type": "integer",
+              "minimum": 0
+            }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "platformFitness": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "rules": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "object",
+            "properties": {
+              "enabled": {
+                "type": "boolean"
+              },
+              "severity": {
+                "type": "string",
+                "enum": [
+                  "error",
+                  "warning"
+                ]
+              },
+              "max_count": {
+                "type": "integer"
+              }
+            }
+          }
+        },
+        "presentation_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "domain_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "data_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "infra_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "exclude_paths": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}

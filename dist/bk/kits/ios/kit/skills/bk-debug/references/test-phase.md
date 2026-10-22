@@ -22,7 +22,7 @@ Task(subagent_type: "bk-unit-test-agent", model: "sonnet", run_in_background: tr
 ")
 ```
 
-### Complex (additional)
+### Complex (additional, mobile kits only — python/web kits do not ship bk-device-test-agent)
 
 ```
 Task(subagent_type: "bk-device-test-agent", model: "sonnet", run_in_background: true, prompt: "

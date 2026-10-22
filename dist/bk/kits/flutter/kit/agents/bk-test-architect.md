@@ -98,7 +98,7 @@ Protocol: `rules/agent-protocols/team-mode.md` — role class: **Reviewer (read-
 Report to lead: test-strategy report.
 
 ## When NOT to Use
-- Writing or executing actual test code — use bk-unit-test-agent or bk-device-test-agent instead
+- Writing or executing actual test code — use bk-unit-test-agent or bk-device-test-agent (mobile kits only) instead
 - Debugging test failures — use bk-debugger instead
 - Code review — use bk-code-reviewer instead
 - Implementation planning — use bk-planner instead

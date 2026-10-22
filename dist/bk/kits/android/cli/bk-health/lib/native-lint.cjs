@@ -5,8 +5,13 @@
  * Reads .bk-metrics/native-lint-{ios,android,flutter}.jsonl and produces
  * a summary panel for the bk-health dashboard.
  *
+ * python / web have no native-lint sensor (no arch-fitness-<platform>-native hook ships for them,
+ * see NATIVE_LINT_PLATFORMS in hooks/lib/native-lint-deferred.cjs), so no native-lint-python /
+ * native-lint-web file is ever written. For a project whose kit is python or web the panel says
+ * "n/a" in one line instead of three empty mobile rows.
+ *
  * Exports:
- *   buildNativeLintPanel(metricsDir) → NativeLintPanel
+ *   buildNativeLintPanel(metricsDir, platform?) → NativeLintPanel
  *   renderNativeLintPanel(panel)     → string[]
  *
  * NativeLintPanel: {
@@ -14,7 +19,8 @@
  *     ios:     PlatformData,
  *     android: PlatformData,
  *     flutter: PlatformData
- *   }
+ *   },                                   // {} when notApplicable
+ *   notApplicable?: { platform: 'python'|'web', lint: string }
  * }
  *
  * PlatformData: {
@@ -39,6 +45,23 @@ const PLATFORM_CONFIG = {
   android: { file: 'native-lint-android.jsonl', tool: 'detekt'    },
   flutter: { file: 'native-lint-flutter.jsonl', tool: 'dart'      }
 };
+
+/** Kit platforms without a native-lint sensor, and what lints them instead (per-turn batch). */
+const NO_NATIVE_LINT = {
+  python: 'ruff',
+  web:    'eslint'
+};
+
+/**
+ * The kit platform recorded at install time: <project root>/.bk-version.json, the project root
+ * being the parent of .bk-metrics/. null when absent or unreadable.
+ */
+function recordedPlatform(metricsDir) {
+  try {
+    const v = JSON.parse(fs.readFileSync(path.join(path.dirname(metricsDir), '.bk-version.json'), 'utf8'));
+    return typeof v.platform === 'string' ? v.platform : null;
+  } catch { return null; }
+}
 
 /**
  * Read last N lines from a JSONL file; silently skip malformed.
@@ -124,9 +147,15 @@ function buildPlatformData(platform, metricsDir, toolCache) {
  * Build native lint panel data from metricsDir.
  *
  * @param {string} metricsDir — absolute path to .bk-metrics/ directory
- * @returns {{ platforms: { ios: object, android: object, flutter: object } }}
+ * @param {string|null} [platform] — the project's kit platform; defaults to .bk-version.json's
+ * @returns {{ platforms: object, notApplicable?: { platform: string, lint: string } }}
  */
-function buildNativeLintPanel(metricsDir) {
+function buildNativeLintPanel(metricsDir, platform) {
+  const kit = platform === undefined ? recordedPlatform(metricsDir) : platform;
+  if (kit && NO_NATIVE_LINT[kit]) {
+    return { platforms: {}, notApplicable: { platform: kit, lint: NO_NATIVE_LINT[kit] } };
+  }
+
   const toolCache = readToolCache(metricsDir);
 
   const platforms = {};
@@ -144,6 +173,10 @@ function buildNativeLintPanel(metricsDir) {
  * @returns {string[]}
  */
 function renderNativeLintPanel(panel) {
+  if (panel && panel.notApplicable) {
+    const { platform, lint } = panel.notApplicable;
+    return [`${platform.toUpperCase()}: n/a — no native-lint sensor; ${lint} runs in the per-turn lint batch`];
+  }
   if (!panel || !panel.platforms) return ['No native lint data'];
 
   const lines = [];

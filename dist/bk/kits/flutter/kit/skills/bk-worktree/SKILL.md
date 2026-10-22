@@ -71,13 +71,14 @@ node scripts/worktree.cjs create "<SLUG>" --prefix <TYPE>
 
 ### Step 6: Install Dependencies
 
-Based on project context, run in background:
+Based on project context, run in background (first match wins; lockfiles install the locked versions):
 - `bun.lock` → `bun install`
-- `pnpm-lock.yaml` → `pnpm install`
-- `yarn.lock` → `yarn install`
-- `package-lock.json` → `npm install`
+- `pnpm-lock.yaml` → `pnpm install --frozen-lockfile`
+- `yarn.lock` → `yarn install --frozen-lockfile`
+- `package-lock.json` → `npm ci`
+- `uv.lock` → `uv sync`
 - `poetry.lock` → `poetry install`
-- `requirements.txt` → `pip install -r requirements.txt`
+- `requirements.txt` → `python3 -m venv .venv && .venv/bin/pip install -r requirements.txt` (the worktree's own venv — never `pip install` into the system interpreter)
 - `Cargo.toml` → `cargo build`
 - `go.mod` → `go mod download`
 - `Podfile` → `pod install`

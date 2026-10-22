@@ -98,6 +98,8 @@ try {
           'bk-ios-developer': 'xhigh',
           'bk-android-developer': 'xhigh',
           'bk-flutter-developer': 'xhigh',
+          'bk-python-developer': 'xhigh',
+          'bk-web-developer': 'xhigh',
           'bk-code-reviewer': 'high'
         };
         effort_reason = `complex tier: ${reason}`;
@@ -107,6 +109,8 @@ try {
           'bk-ios-developer': 'xhigh',
           'bk-android-developer': 'xhigh',
           'bk-flutter-developer': 'xhigh',
+          'bk-python-developer': 'xhigh',
+          'bk-web-developer': 'xhigh',
           'bk-code-reviewer': 'xhigh',
           'bk-docs-writer': 'xhigh',
           'bk-git-manager': 'medium',

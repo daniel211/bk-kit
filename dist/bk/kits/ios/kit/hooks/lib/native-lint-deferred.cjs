@@ -21,7 +21,7 @@
  * Every function fails open. No lint bookkeeping may block a tool call.
  *
  * Exports:
- *   NATIVE_QUEUE_NAMESPACE, MAX_BATCH_FILES, MAX_REPORTED_FINDINGS
+ *   NATIVE_QUEUE_NAMESPACE, MAX_BATCH_FILES, MAX_REPORTED_FINDINGS, NATIVE_LINT_PLATFORMS
  *   resolveNativeQueueFile(projectRoot, sessionId)
  *   enqueueNative(projectRoot, sessionId, platform, absFile)
  *   takeNativeQueue(projectRoot, sessionId)
@@ -85,6 +85,16 @@ const MAX_BATCH_FILES = 50;
  * [LINT] path truncated its raw linter output to.
  */
 const MAX_REPORTED_FINDINGS = 20;
+
+/**
+ * Platforms native-lint-runner.cjs can actually build a command for and parse. python and
+ * web are absent: no arch-fitness-<platform>-native hook ships for them yet, because feeding
+ * ruff/eslint into the kill switch needs a severity mapping first. Their lint runs through the
+ * per-turn batch (lint-batch-runner) only. If a python/web entry ever reached this queue, the
+ * batch below answers with ran:false instead of throwing out of buildCommand() — or, in mock
+ * mode, "running" a tool parseOutput() cannot read and reporting a clean pass that never was.
+ */
+const NATIVE_LINT_PLATFORMS = ['ios', 'android', 'flutter'];
 
 /**
  * Queue file for one session's deferred native lint.
@@ -191,6 +201,7 @@ async function runNativeLintBatch(opts = {}) {
     red: 0, yellow: 0, truncated: false, timedOut: false, durationMs: 0, reported: []
   };
   if (!platform || queued.length === 0) return empty;
+  if (!NATIVE_LINT_PLATFORMS.includes(platform)) return empty;
 
   const batch = queued.slice(0, MAX_BATCH_FILES);
   const overflowed = queued.length > MAX_BATCH_FILES;
@@ -260,6 +271,7 @@ module.exports = {
   NATIVE_QUEUE_NAMESPACE,
   MAX_BATCH_FILES,
   MAX_REPORTED_FINDINGS,
+  NATIVE_LINT_PLATFORMS,
   resolveNativeQueueFile,
   enqueueNative,
   takeNativeQueue,

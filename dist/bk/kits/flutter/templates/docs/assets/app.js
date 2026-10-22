@@ -156,6 +156,9 @@
   }
 
   // ─── Platform selector sync ───────────────────────────────────
+  // Every kit the CLI ships; a card whose data-type is one of these is platform-specific.
+  var PLATFORMS = ['ios', 'android', 'flutter', 'python', 'web'];
+
   function initPlatformSelector() {
     var select = document.querySelector('.platform-select');
     if (!select) return;
@@ -175,14 +178,14 @@
   function applyPlatform(platform) {
     // Update platform badge if present
     document.querySelectorAll('.platform-badge').forEach(function (badge) {
-      var icons = { ios: '🍎', android: '🤖', flutter: '💙' };
+      var icons = { ios: '🍎', android: '🤖', flutter: '💙', python: '🐍', web: '🌐' };
       badge.textContent = (icons[platform] || '') + ' ' + platform;
     });
 
     // Show/hide platform-specific cards
     document.querySelectorAll('.card[data-type]').forEach(function (card) {
       var type = card.dataset.type;
-      var isPlatformCard = type === 'ios' || type === 'android' || type === 'flutter';
+      var isPlatformCard = PLATFORMS.indexOf(type) !== -1;
       if (isPlatformCard && type !== platform) {
         card.style.display = 'none';
       } else {

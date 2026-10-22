@@ -1,0 +1,84 @@
+{
+  "platform": "web",
+  "language": "typescript",
+  "languageVersion": "5.0+",
+  "fileNaming": "kebab-case",
+  "fileExtension": ".tsx",
+  "designEngine": "auto",
+  "commands": {
+    "build": "npm run build",
+    "test": "npx vitest run --coverage",
+    "lint": "npx eslint .",
+    "typecheck": "npx tsc --noEmit",
+    "format": "npx prettier --write .",
+    "e2e": "npx playwright test",
+    "clean": "rm -rf node_modules/.vite .next dist coverage"
+  },
+  "rules": [
+    "rules/web-shared-rules.md",
+    "rules/web-rules.md"
+  ],
+  "skills": [
+    "bk-code",
+    "bk-test",
+    "bk-debug",
+    "bk-code-review-workflow",
+    "bk-web"
+  ],
+  "dirs": {
+    "source": "src/",
+    "test": "src/ (co-located *.test.tsx)",
+    "e2eTest": "e2e/",
+    "resources": "public/"
+  },
+  "conventions": {
+    "architecture": "Feature-first (UI -> hooks -> services)",
+    "framework": "React 18 — Next.js App Router or Vite SPA (match project)",
+    "fileNaming": "kebab-case files; PascalCase.tsx for components is also common — match project",
+    "async": "Promise / async-await, AbortSignal for cancellation",
+    "stateManagement": "TanStack Query (server state) + local state / Zustand (client state)",
+    "forms": "react-hook-form + zod",
+    "styling": "Tailwind CSS or CSS Modules (match project)",
+    "uiFramework": "React",
+    "testFramework": "vitest + @testing-library/react",
+    "mockFramework": "msw",
+    "e2eFramework": "playwright",
+    "packageManager": "npm / pnpm (match lockfile)"
+  },
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "description": "Library documentation lookup",
+      "scope": "foreground"
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp"
+      ],
+      "description": "Browser automation for e2e and visual checks",
+      "scope": "foreground"
+    }
+  },
+  "templateVars": {
+    "namingConvention": "kebab-case",
+    "lintCommand": "npx eslint ."
+  },
+  "externalServices": {
+    "figma": {
+      "type": "rest",
+      "script": "scripts/figma-cli.mjs",
+      "env": [
+        "FIGMA_API_KEY"
+      ],
+      "tokenFile": "~/.config/beer-kit/figma.env",
+      "description": "Design extraction reads Figma over its REST API. No MCP server: the npx figma-mcp package offers comment tools only, and Figma Dev Mode MCP has no node export.",
+      "note": "The Variables API additionally needs the file_variables:read scope and a Figma Enterprise plan; without it design tokens come from style names and raw values."
+    }
+  }
+}

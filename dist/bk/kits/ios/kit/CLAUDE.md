@@ -1,4 +1,4 @@
-# beer-kit v2 — Mobile Dev Toolkit
+# beer-kit v2 — Dev Toolkit (ios)
 
 > 20 agents | 38 skills | 61 hooks | 2 MCP servers
 
@@ -37,6 +37,8 @@ You are a **conductor** — you orchestrate, you do not implement.
 | `.xcworkspace`/`.xcodeproj` | ios | bk-ios-developer |
 | `build.gradle` (no `ios/`) | android | bk-android-developer |
 | Both `ios/` + `android/` | monorepo | bk-ios-developer + bk-android-developer |
+| `pyproject.toml` / `requirements.txt` / `manage.py` / `setup.py` | python | bk-python-developer |
+| `package.json` + `tsconfig.json` / `next.config.*` / `vite.config.*` | web | bk-web-developer |
 
 Context: `.claude/platform-context.json`. Platform skills auto-loaded by dev agents.
 
@@ -47,7 +49,7 @@ Context: `.claude/platform-context.json`. Platform skills auto-loaded by dev age
 | Planning (bk-planner, bk-brainstormer) | opus | high |
 | Development (bk-{platform}-developer) | opus | high |
 | Review (bk-gemini-reviewer, bk-code-reviewer, bk-security-auditor, bk-performance-analyzer, bk-code-simplifier) | sonnet | high/medium |
-| Support (bk-docs-writer, bk-researcher, bk-unit-test-agent, bk-device-test-agent) | haiku | medium/low |
+| Support (bk-docs-writer, bk-researcher, bk-unit-test-agent, bk-device-test-agent — mobile kits only) | haiku | medium/low |
 | Operations (bk-git-manager, bk-project-manager) | haiku | low |
 
 Choose model upfront. On failure → dispatch helper skill, NOT retry with higher model.

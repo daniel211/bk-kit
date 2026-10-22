@@ -24,7 +24,7 @@
 | Security audit | bk-security-auditor | sonnet | background |
 | Performance analysis | bk-performance-analyzer | sonnet | background |
 | Unit testing | bk-unit-test-agent | haiku | background |
-| Device testing | bk-device-test-agent | haiku | background |
+| Device testing (mobile kits only) | bk-device-test-agent | haiku | background |
 | Documentation | bk-docs-writer | haiku | background |
 | Research | bk-researcher | haiku | either |
 | Design extraction | design-validator → design-spec-writer → design-asset-exporter (via /bk-spec) | sonnet | mixed |
@@ -57,7 +57,7 @@ Workflow completing with fewer Task() calls than minimum → INCOMPLETE.
 | bk-debug Trivial | bk-{platform}-developer (single fix) | 1 |
 | bk-refactor | bk-{platform}-developer; bk-unit-test-agent; bk-git-manager; Finalize conditional | 3+ |
 | bk-review | bk-code-reviewer; bk-security-auditor (conditional) | 1–2 |
-| bk-test | bk-test-architect; bk-unit-test-agent; bk-device-test-agent (conditional) | 2–3 |
+| bk-test | bk-test-architect; bk-unit-test-agent; bk-device-test-agent (conditional, mobile kits only) | 2–3 |
 | bk-commit | bk-git-manager | 1 |
 | bk-docs | bk-docs-writer | 1 |
 | bk-research | bk-researcher ×1 (quick) or ×3 (deep) | 1–3 |

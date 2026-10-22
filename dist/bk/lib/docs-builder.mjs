@@ -132,6 +132,8 @@ function defaultExamples() {
     { name: 'iOS — SwiftUI View from Design', type: 'ios', platform: 'ios', description: 'Figma screen → /bk-spec --design → /bk-code → SwiftUI View with @State, @Binding, proper previews. Follows MVVM + Coordinator pattern per bk-ios rules.' },
     { name: 'Android — Compose Screen from API', type: 'android', platform: 'android', description: 'OpenAPI endpoint → /bk-generate → Kotlin data classes, Retrofit service, ViewModel with StateFlow, Compose UI. Follows Clean Architecture layers.' },
     { name: 'Flutter — Widget + BLoC from Spec', type: 'flutter', platform: 'flutter', description: 'Feature spec → /bk-code → Dart models, BLoC/Cubit with states, Widget tree with BlocBuilder. Includes unit + widget tests.' },
+    { name: 'Python — FastAPI Endpoint from Spec', type: 'python', platform: 'python', description: 'Feature spec → /bk-code → Pydantic schemas, FastAPI router with dependency-injected service, SQLAlchemy repository + Alembic migration. pytest tests; ruff + mypy clean.' },
+    { name: 'Web — React Page from Design', type: 'web', platform: 'web', description: 'Figma screen → /bk-spec --design → /bk-code → typed React components (Next.js or Vite), data fetching with loading/error states. Vitest/Jest unit tests + a Playwright flow.' },
   ];
 }
 
@@ -164,7 +166,7 @@ function applyReplacements(template, replacements) {
  * @param {{ agents: Array, skills: Array, rules: Array, examples?: Array }} catalog
  * @param {string} templateDir - Absolute path to templates/docs/ directory
  * @param {string} outDir - Absolute path to write output
- * @param {string} platform - Active platform (ios | android | flutter)
+ * @param {string} platform - Active platform (ios | android | flutter | python | web)
  * @param {string} [lang='vi'] - Language code (en | vi)
  */
 export function buildDocs(catalog, templateDir, outDir, platform, lang = 'vi') {

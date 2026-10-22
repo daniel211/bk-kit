@@ -40,7 +40,8 @@ try {
       // Detect platform. Filesystem signals are authoritative; doc keywords are only a
       // fallback, and this order is the one core-rules.md and CLAUDE.md.tmpl already
       // document (pubspec.yaml -> flutter, xcodeproj -> ios, ios/+android/ -> monorepo,
-      // build.gradle -> android).
+      // build.gradle -> android), then python and web, the kit-resolver order.
+      // platform: 'flutter'|'ios'|'android'|'monorepo'|'python'|'web'|'unknown'
       //
       // Keyword order alone misread EVERY Flutter repo as ios: a Flutter overview
       // legitimately names "iOS Keychain" and carries an `ios/` build-target row, and the
@@ -62,6 +63,11 @@ try {
         }
       };
       const XCODE_PROJECT = /\.xc(workspace|odeproj)$/;
+      // python / web: the same root markers as kit-resolver.mjs (bk init), tested AFTER the
+      // mobile ones — a mobile repo often carries a requirements.txt or a package.json for its
+      // tooling. web needs a package.json PLUS a TS / bundler config next to it.
+      const PYTHON_MARKER = /^(?:pyproject\.toml|requirements\.txt|manage\.py|setup\.py)$/;
+      const WEB_CONFIG = /^(?:tsconfig\.json|(?:next|vite)\.config\.[cm]?[jt]s)$/;
 
       let platform = 'unknown';
       if (hasEntry('pubspec.yaml')) {
@@ -75,12 +81,20 @@ try {
         || hasEntry('build.gradle') || hasEntry('build.gradle.kts')
       ) {
         platform = 'android';
+      } else if (dirHasEntry('.', PYTHON_MARKER)) {
+        platform = 'python';
+      } else if (hasEntry('package.json') && dirHasEntry('.', WEB_CONFIG)) {
+        platform = 'web';
       } else if (/Flutter|Dart|pubspec/i.test(overviewContent)) {
         platform = 'flutter';
       } else if (/iOS|Swift|UIKit|SwiftUI|Xcode/i.test(overviewContent)) {
         platform = 'ios';
       } else if (/Android|Kotlin|Jetpack|Gradle/i.test(overviewContent)) {
         platform = 'android';
+      } else if (/\bPython\b|FastAPI|Django|Flask|pytest|pyproject/i.test(overviewContent)) {
+        platform = 'python';
+      } else if (/\bReact\b|Next\.js|\bVite\b/i.test(overviewContent)) {
+        platform = 'web';
       }
 
       // Count source file references (rough estimate of project size)

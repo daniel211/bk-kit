@@ -14,6 +14,8 @@
 | apple-multiplatform | `.xcworkspace`/`.xcodeproj` with iOS + macOS targets | bk-ios-developer |
 | android-only | `build.gradle`, no `ios/` | bk-android-developer |
 | monorepo | Both `ios/` + `android/` (no pubspec.yaml) | bk-ios-developer + bk-android-developer |
+| python | `pyproject.toml` / `requirements.txt` / `manage.py` / `setup.py` | bk-python-developer |
+| web | `package.json` + `tsconfig.json` / `next.config.*` / `vite.config.*` | bk-web-developer |
 
 Platform context: `.claude/platform-context.json`. Conventions: `.claude/rules/{platform}-rules.md`.
 
@@ -33,9 +35,11 @@ Platform context: `.claude/platform-context.json`. Conventions: `.claude/rules/{
 
 FSM commands follow state-machine.md. Hook-guarded commands enforce I/O via hooks.
 
-## 3. MOBILE STANDARDS
+## 3. PLATFORM STANDARDS
 
-See `.claude/rules/mobile-shared-rules.md` (architecture, API, security, UI/UX, testing, CI/CD, git).
+See the shared rule this kit ships in `.claude/rules/`: `mobile-shared-rules.md` (ios/android/flutter),
+`backend-shared-rules.md` (python) or `web-shared-rules.md` (web) — architecture, API, security, UI/UX or
+observability, testing, CI/CD, git.
 
 ## 4. Agent Dispatch → See conductor-role.md §2-2B
 

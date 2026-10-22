@@ -12,6 +12,7 @@
 
 const CODE_WRITING_AGENTS = new Set([
   'bk-ios-developer', 'bk-android-developer', 'bk-flutter-developer',
+  'bk-python-developer', 'bk-web-developer',
   'bk-unit-test-agent', 'bk-device-test-agent', 'bk-code-simplifier'
 ]);
 

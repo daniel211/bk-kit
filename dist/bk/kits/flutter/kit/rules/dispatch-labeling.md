@@ -42,7 +42,7 @@ Defaults at install:
 |-------|--------|
 | opus | bk-planner, bk-brainstormer, bk-{ios,android,flutter}-developer |
 | sonnet | bk-code-reviewer, bk-debugger, bk-security-auditor, bk-test-architect, bk-performance-analyzer, bk-code-simplifier, bk-gemini-reviewer, design-* |
-| haiku | bk-researcher, bk-project-manager, bk-docs-writer, bk-unit-test-agent, bk-device-test-agent, bk-git-manager |
+| haiku | bk-researcher, bk-project-manager, bk-docs-writer, bk-unit-test-agent, bk-device-test-agent (mobile kits only), bk-git-manager |
 
 Built-in agents (`Explore`, `Plan`, `general-purpose`) follow the same labeling rule;
 label them with the model actually passed, or with the session default when none is passed.

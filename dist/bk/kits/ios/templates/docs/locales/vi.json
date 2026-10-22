@@ -19,6 +19,8 @@
     "filterIos": "iOS",
     "filterAndroid": "Android",
     "filterFlutter": "Flutter",
+    "filterPython": "Python",
+    "filterWeb": "Web",
     "noResults": "Không tìm thấy kết quả phù hợp.",
     "platform": "Nền tảng",
     "chooseYourPlatform": "Chọn nền tảng của bạn",
@@ -60,12 +62,18 @@
     "bk-code-reviewer.android": "Review Android: Coroutines, viewModelScope, Compose state, Hilt injection, cấu hình Gradle.",
     "bk-code-reviewer.flutter": "Review Flutter: nhất quán state management (BLoC/Riverpod), dùng const, widget composition.",
     "bk-code-reviewer.ios": "Review iOS: async/await, @MainActor, SwiftUI pattern, SPM dependencies, Info.plist.",
+    "bk-code-reviewer.python": "Review Python: dependency FastAPI, async vs I/O chặn, session SQLAlchemy, validate Pydantic, sạch ruff/mypy.",
+    "bk-code-reviewer.web": "Review Web: React hook và effect, ranh giới server/client component, TypeScript strict, bundle và accessibility.",
     "bk-debugger.android": "Debug Android: lỗi build Gradle, crash log (Logcat), ANR trace, vấn đề ProGuard.",
     "bk-debugger.flutter": "Debug Flutter: lỗi build, lỗi widget, vấn đề state management, lỗi platform channel.",
     "bk-debugger.ios": "Debug iOS: lỗi xcodebuild, crash log, memory graph, phân tích Instruments.",
+    "bk-debugger.python": "Debug Python: traceback, pytest lỗi, lỗi event loop async, migration Alembic và lỗi import.",
+    "bk-debugger.web": "Debug Web: lỗi build và type, hydration mismatch, Vitest/Jest/Playwright lỗi, lỗi network và console.",
     "bk-unit-test-agent.android": "Test Android: JUnit5 @Test, @DisplayName, MockK để mock, Turbine để test Flow.",
     "bk-unit-test-agent.flutter": "Test Flutter: testWidgets(), group(), mocktail mocks, pump/pumpAndSettle.",
     "bk-unit-test-agent.ios": "Test iOS: XCTestCase, async test method, mock protocol, các biến thể XCTAssert.",
+    "bk-unit-test-agent.python": "Test Python: hàm và fixture pytest, parametrize, httpx/TestClient cho endpoint, monkeypatch và mock.",
+    "bk-unit-test-agent.web": "Test Web: Vitest/Jest với Testing Library, mock fetch/MSW, Playwright cho luồng end-to-end.",
     "bk-agent-contract": "Bắt buộc trước khi dispatch agent. Định nghĩa I/O file contract của agent và xác thực kết quả.",
     "bk-analyze": "Skill khám phá thuần túy — phân tích cấu trúc dự án, kiến trúc và dependency mà không sửa code.",
     "bk-architecture": "Nguyên tắc SOLID, các lớp Clean Architecture, MVVM pattern, Repository pattern và dependency injection.",
@@ -112,7 +120,6 @@
     "state-machine": "Đảm bảo chuyển đổi phase hợp lệ cho lệnh FSM, ngăn bỏ qua phase.",
     "task-scheduling": "Tất cả dispatch agent phải kèm thời gian timeout dự kiến để quản lý tài nguyên.",
     "user-interaction-protocol": "Quy tắc thống nhất về thời điểm và cách tương tác với người dùng qua AskUserQuestion.",
-
     "Bootstrap New Project": "Chạy bk init --kit <platform> → khởi tạo .claude/ với agents, skills, hooks. Sau đó dùng /bk-bootstrap để cấu hình cấu trúc dự án, dependencies và CI/CD.",
     "Generate API Layer from Swagger": "Import spec OpenAPI/Swagger → /bk-generate phân tích endpoints → sinh models, API client và repository layer với xử lý lỗi đầy đủ.",
     "Debug a Crash": "Dùng /bk-debug với crash logs hoặc stack trace → bk-debugger phân tích nguyên nhân gốc → đề xuất fix kèm code patch → /bk-test xác thực bản sửa.",
@@ -120,6 +127,8 @@
     "Design to Code (Figma)": "Đặt FIGMA_API_KEY → /bk-spec --design đọc Figma qua REST API, trích xuất components, màu sắc, typography (design-validator + design-spec-writer + design-asset-exporter) → /bk-code sinh code UI native (SwiftUI/Compose/Flutter widgets). Không cần MCP server; mặc định --engine auto tự chạy bằng Gemini khi máy đủ điều kiện, không thì chạy bằng Claude.",
     "iOS — SwiftUI View from Design": "Figma screen → /bk-spec --design → /bk-code → SwiftUI View với @State, @Binding, previews đúng chuẩn. Theo pattern MVVM + Coordinator của bk-ios.",
     "Android — Compose Screen from API": "OpenAPI endpoint → /bk-generate → Kotlin data classes, Retrofit service, ViewModel với StateFlow, Compose UI. Theo Clean Architecture layers.",
-    "Flutter — Widget + BLoC from Spec": "Feature spec → /bk-code → Dart models, BLoC/Cubit với states, Widget tree với BlocBuilder. Bao gồm unit + widget tests."
+    "Flutter — Widget + BLoC from Spec": "Feature spec → /bk-code → Dart models, BLoC/Cubit với states, Widget tree với BlocBuilder. Bao gồm unit + widget tests.",
+    "Python — FastAPI Endpoint from Spec": "Feature spec → /bk-code → schema Pydantic, router FastAPI với service inject qua dependency, repository SQLAlchemy + migration Alembic. Test pytest; sạch ruff + mypy.",
+    "Web — React Page from Design": "Màn hình Figma → /bk-spec --design → /bk-code → React component có type (Next.js hoặc Vite), lấy dữ liệu với trạng thái loading/error. Unit test Vitest/Jest + một luồng Playwright."
   }
 }

@@ -400,6 +400,8 @@ a:hover { color: var(--accent); }
 .badge-ios     { background: #e3f2fd; color: #1565c0; }
 .badge-android { background: #fce4ec; color: #c62828; }
 .badge-flutter { background: #e8eaf6; color: #283593; }
+.badge-python  { background: #fffde7; color: #8d6e00; }
+.badge-web     { background: #e0f2f1; color: #00695c; }
 .badge-shared  { background: #fff3e0; color: #e65100; }
 .badge-skill   { background: #f3e5f5; color: #6a1b9a; }
 .badge-hook    { background: #e0f7fa; color: #00695c; }

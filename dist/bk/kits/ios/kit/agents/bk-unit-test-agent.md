@@ -104,7 +104,7 @@ Write and run tests inside the assigned scope only.
 
 ## When NOT to Use
 - Implementing production code — use platform dev agents instead
-- Integration or E2E tests — use bk-device-test-agent instead
+- Integration or E2E tests on a device — use bk-device-test-agent instead (mobile kits; a web kit's Playwright e2e is in this agent's platform section)
 - Test strategy planning — use bk-test-architect instead
 - Code review — use bk-code-reviewer instead
 - Debugging test infrastructure issues — use bk-debugger instead

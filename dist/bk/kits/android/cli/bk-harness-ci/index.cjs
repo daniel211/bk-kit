@@ -86,32 +86,46 @@ function tryLoadPolicy(projectRoot) {
 
 // ─── Project detection ────────────────────────────────────────────────────────
 
+/**
+ * Every platform whose root markers sit in `projectRoot` (a list: a mixed root reports all of
+ * them, unlike bk init's single pick). Markers follow kit-resolver.mjs for python / web.
+ *
+ * This used to ask project-detector's detectProjectType(), which answers
+ * monorepo|library|single-repo — never a platform — and ignores its argument, so every
+ * arch-fitness platform was reported "not detected".
+ *
+ * @param {string} projectRoot
+ * @returns {Array<'ios'|'android'|'flutter'|'python'|'web'>}
+ */
 function detectPlatforms(projectRoot) {
-  const platforms = [];
-  try {
-    const detectorPath = path.join(__dirname, '..', '..', 'hooks', '_base', 'lib', 'project-detector.cjs');
-    if (fs.existsSync(detectorPath)) {
-      const detector = require(detectorPath);
-      if (typeof detector.detectProjectType === 'function') {
-        const result = detector.detectProjectType(projectRoot);
-        if (result) platforms.push(result);
-        return platforms;
-      }
-    }
-  } catch { /* fall through */ }
+  let entries = [];
+  try { entries = fs.readdirSync(projectRoot); } catch { return []; }
+  const has = (name) => entries.includes(name);
 
-  // Heuristic fallback
-  if (fs.existsSync(path.join(projectRoot, 'Podfile')) || fs.existsSync(path.join(projectRoot, 'Package.swift'))) {
+  const platforms = [];
+  if (has('Podfile') || has('Package.swift') || entries.some(e => /\.xc(?:odeproj|workspace)$/.test(e))) {
     platforms.push('ios');
   }
-  if (fs.existsSync(path.join(projectRoot, 'build.gradle')) || fs.existsSync(path.join(projectRoot, 'gradlew'))) {
+  if (has('build.gradle') || has('build.gradle.kts') || has('gradlew')) {
     platforms.push('android');
   }
-  if (fs.existsSync(path.join(projectRoot, 'pubspec.yaml'))) {
+  if (has('pubspec.yaml')) {
     platforms.push('flutter');
+  }
+  if (['pyproject.toml', 'requirements.txt', 'manage.py', 'setup.py'].some(has)) {
+    platforms.push('python');
+  }
+  if (has('package.json') && entries.some(e => /^(?:tsconfig\.json|(?:next|vite)\.config\.[cm]?[jt]s)$/.test(e))) {
+    platforms.push('web');
   }
   return platforms;
 }
+
+/** Platforms with arch-fitness rules in the harness policy. */
+const ARCH_FITNESS_PLATFORMS = ['ios', 'android', 'flutter'];
+
+/** Platforms the kit supports that have no arch-fitness rules yet: reported n/a, never "disabled". */
+const NO_ARCH_FITNESS_PLATFORMS = ['python', 'web'];
 
 // ─── Arch-fitness static check ────────────────────────────────────────────────
 
@@ -122,7 +136,7 @@ function runArchFitness(projectRoot, policy) {
   const platforms = detectPlatforms(projectRoot);
   const af = policy.arch_fitness;
 
-  for (const platform of ['ios', 'android', 'flutter']) {
+  for (const platform of ARCH_FITNESS_PLATFORMS) {
     const pCfg = af[platform] || {};
     if (!pCfg.enabled) {
       checks.push({
@@ -144,6 +158,14 @@ function runArchFitness(projectRoot, policy) {
         passed: true, message: `Platform ${platform} not detected in project — rules not applicable`
       });
     }
+  }
+
+  for (const platform of NO_ARCH_FITNESS_PLATFORMS) {
+    if (!platforms.includes(platform)) continue;
+    checks.push({
+      platform, rule: `arch-fitness-${platform}`,
+      passed: true, message: `no arch-fitness rules ship for ${platform} — n/a`
+    });
   }
 
   // Policy schema check

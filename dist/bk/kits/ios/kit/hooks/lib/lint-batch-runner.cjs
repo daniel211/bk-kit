@@ -43,7 +43,10 @@ const DEFAULT_LINT_COMMANDS = {
   ios:     (paths) => `swiftlint lint --quiet ${paths}`,
   // ktlint via gradle is whole-project; individual paths are neither needed nor accepted.
   android: ()      => './gradlew ktlintCheck',
-  flutter: (paths) => `dart analyze ${paths}`
+  flutter: (paths) => `dart analyze ${paths}`,
+  // ruff and eslint both take a list of paths positionally and lint only those.
+  python:  (paths) => `ruff check ${paths}`,
+  web:     (paths) => `npx eslint ${paths}`
 };
 
 /**
@@ -53,7 +56,20 @@ const DEFAULT_LINT_COMMANDS = {
  * carry bare commands like `dart analyze` and `swiftlint lint --strict`.
  * Android is absent on purpose: its lint is a whole-project gradle task.
  */
-const PATH_TAKING_PLATFORMS = ['ios', 'flutter'];
+const PATH_TAKING_PLATFORMS = ['ios', 'flutter', 'python', 'web'];
+
+/**
+ * A bare command whose last argument is the project root — `ruff check .`, `npx eslint .`,
+ * which is exactly what the shipped python and web platform contexts carry.
+ *
+ * Appending the batch to it verbatim would give `ruff check . "a.py"`: both tools lint the
+ * union of their path arguments, so the `.` makes every Stop lint the WHOLE repo and report
+ * every pre-existing finding against the turn that touched one file. The trailing `.` is
+ * therefore dropped before the batch is appended — the edited paths replace the root target,
+ * they do not add to it. Only a lone final `.` or `./` token counts; `--config ./x.toml` or a
+ * real subdirectory target is left alone.
+ */
+const WHOLE_PROJECT_TARGET = /\s+\.\/?\s*$/;
 
 /**
  * Platforms where a file already queued for the Stop-time native lint does NOT also
@@ -85,6 +101,14 @@ const PATH_TAKING_PLATFORMS = ['ios', 'flutter'];
  * `./gradlew detekt --format xml --input <paths>` (static analysis) are different
  * tools checking different things. Deduping there would silently drop all ktlint
  * coverage. android must keep running both.
+ *
+ * python and web are absent for a more basic reason: there is no native run to defer
+ * to. No arch-fitness-python-native / arch-fitness-web-native hook ships, so nothing
+ * ever enqueues their files on the native queue, and the batch lint is the ONLY lint
+ * they get. Adding them here would at best be a no-op (computeDeferredPaths reads an
+ * empty native queue) and at worst, once a native hook did exist without a ruff/eslint
+ * severity mapping for the kill switch, silently trade the batch run for a weaker one.
+ * They have no NATIVE_LINT_BINARIES entry either, so usesSameBinaryAsNative() is false.
  */
 const NATIVE_SUPERSET_PLATFORMS = ['flutter'];
 
@@ -137,11 +161,12 @@ function buildBatchCommands(opts) {
     if (!takesFiles) {
       // No placeholder. Scope it to the batch where the platform's linter takes
       // paths; otherwise it is a whole-project command — run it verbatim, once.
+      const scoped = lintCommand.replace(WHOLE_PROJECT_TARGET, '');
       if (PATH_TAKING_PLATFORMS.includes(platform) && mode !== 'per-file') {
-        return [`${lintCommand} ${list.map(quotePath).join(' ')}`];
+        return [`${scoped} ${list.map(quotePath).join(' ')}`];
       }
       if (PATH_TAKING_PLATFORMS.includes(platform)) {
-        return list.slice(0, MAX_PER_FILE_RUNS).map((f) => `${lintCommand} ${quotePath(f)}`);
+        return list.slice(0, MAX_PER_FILE_RUNS).map((f) => `${scoped} ${quotePath(f)}`);
       }
       return [lintCommand];
     }

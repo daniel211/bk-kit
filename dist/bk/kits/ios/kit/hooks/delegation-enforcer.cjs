@@ -14,6 +14,7 @@ try {
   // Known valid agent types for beer-kit v2 (bk- prefixed)
   const KNOWN_AGENTS = new Set([
     'bk-ios-developer', 'bk-android-developer', 'bk-flutter-developer',
+    'bk-python-developer', 'bk-web-developer',
     'bk-code-reviewer', 'bk-gemini-reviewer', 'bk-security-auditor', 'bk-performance-analyzer',
     'bk-unit-test-agent', 'bk-device-test-agent', 'bk-test-architect',
     'bk-debugger', 'bk-researcher',
@@ -40,12 +41,13 @@ try {
     if (out) process.stdout.write(JSON.stringify({ additionalContext: out }) + '\n');
   }
 
-  // Agents whose output changes with the platform: the three developers, the unit/device test
+  // Agents whose output changes with the platform: the platform developers, the unit/device test
   // agents (test command, framework, report name are per platform) and bk-debugger (build/test
   // commands, log locations). Reviewers and auditors get their platform checklist baked in at
   // build time (agents/_platform-sections/), and git/docs/PM agents are platform-agnostic.
   const PLATFORM_AGENTS = new Set([
     'bk-ios-developer', 'bk-android-developer', 'bk-flutter-developer',
+    'bk-python-developer', 'bk-web-developer',
     'bk-unit-test-agent', 'bk-device-test-agent', 'bk-debugger'
   ]);
 
@@ -179,7 +181,10 @@ try {
       }
 
       // Foreground-only agents: warn if dispatched as background (CR-P1-12, CR-P1-15)
-      const FOREGROUND_AGENTS = new Set(['bk-ios-developer', 'bk-android-developer', 'bk-flutter-developer', 'bk-planner']);
+      const FOREGROUND_AGENTS = new Set([
+        'bk-ios-developer', 'bk-android-developer', 'bk-flutter-developer',
+        'bk-python-developer', 'bk-web-developer', 'bk-planner'
+      ]);
       if (FOREGROUND_AGENTS.has(agentType) && toolInput.run_in_background === true) {
         contextParts.push(`[DISPATCH-WARN] Agent "${agentType}" requires foreground mode for MCP access. Background dispatch will lose MCP tools.`);
       }

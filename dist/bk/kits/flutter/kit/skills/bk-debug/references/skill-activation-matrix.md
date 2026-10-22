@@ -12,7 +12,7 @@
 |------|------------------|
 | Trivial | None (main session fixes directly) |
 | Standard | bk-debugger → bk-{platform}-developer → bk-unit-test-agent → bk-code-reviewer |
-| Complex | All Standard + bk-brainstormer + bk-researcher + bk-security-auditor + bk-performance-analyzer + bk-device-test-agent |
+| Complex | All Standard + bk-brainstormer + bk-researcher + bk-security-auditor + bk-performance-analyzer + bk-device-test-agent (mobile kits only) |
 
 ## Parallel Patterns
 
@@ -20,7 +20,7 @@
 |------|----------|
 | Analyze phase | bk-debugger + 2-3 Explore scouts (parallel) |
 | After code phase | Bash agents: build + lint (parallel) |
-| Test phase | bk-unit-test-agent [+ bk-device-test-agent] (parallel) |
+| Test phase | bk-unit-test-agent [+ bk-device-test-agent, mobile kits only] (parallel) |
 | Review phase (Complex) | bk-code-reviewer + bk-security-auditor + bk-performance-analyzer (parallel) |
 | Complex analyze | bk-brainstormer + bk-researcher (parallel) |
 

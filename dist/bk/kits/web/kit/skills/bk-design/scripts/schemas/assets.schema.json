@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "required": ["screen", "assets"],
+  "properties": {
+    "screen": { "type": "string" },
+    "assets": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "nodeId", "format"],
+        "properties": {
+          "name": { "type": "string", "pattern": "^(ic|img|bg)-[a-z0-9-]+$" },
+          "nodeId": { "type": "string", "pattern": "^I?\\d+:\\d+(;\\d+:\\d+)*$" },
+          "format": { "type": "string", "enum": ["PDF", "SVG", "PNG"] },
+          "rendering": { "type": "string", "enum": ["template", "original"] }
+        }
+      }
+    }
+  }
+}

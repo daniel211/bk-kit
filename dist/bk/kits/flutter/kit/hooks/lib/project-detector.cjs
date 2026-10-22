@@ -1,7 +1,8 @@
 /**
- * project-detector.cjs - Project and mobile platform detection
+ * project-detector.cjs - Project and platform detection
  *
- * Adds: detectMobilePlatform() for ios|android|flutter|unknown
+ * Adds: detectPlatform() for ios|android|flutter|python|web|unknown
+ *       (detectMobilePlatform() is the historical name of the same function)
  */
 
 'use strict';
@@ -72,18 +73,28 @@ function detectPackageManager(override) {
   return null;
 }
 
+/** python root markers — the same set kit-resolver.mjs (bk init) uses. */
+const PYTHON_MARKERS = ['pyproject.toml', 'requirements.txt', 'manage.py', 'setup.py'];
+
+/** Files that make a package.json root a TypeScript / bundled web app (kit-resolver.mjs). */
+const WEB_CONFIG_RE = /^(?:tsconfig\.json|(?:next|vite)\.config\.[cm]?[jt]s)$/;
+
 /**
- * Detect mobile platform from project structure
+ * Detect the project's platform from its root
  *
- * Priority order:
+ * Priority order (mobile first, then the kit-resolver.mjs order — a mobile repo often carries a
+ * requirements.txt or a package.json for its tooling; a backend or web root rarely carries an
+ * .xcodeproj or a pubspec.yaml):
  *   1. flutter  — pubspec.yaml exists
  *   2. ios      — *.xcworkspace or *.xcodeproj found, no android/build.gradle
  *   3. android  — android/build.gradle or build.gradle with android plugin
- *   4. unknown  — none of the above
+ *   4. python   — pyproject.toml | requirements.txt | manage.py | setup.py at the root
+ *   5. web      — package.json AND (tsconfig.json | next.config.* | vite.config.*) at the root
+ *   6. unknown  — none of the above
  *
- * @returns {'ios'|'android'|'flutter'|'unknown'}
+ * @returns {'ios'|'android'|'flutter'|'python'|'web'|'unknown'}
  */
-function detectMobilePlatform() {
+function detectPlatform() {
   const cwd = resolveProjectRoot();
 
   // Flutter: pubspec.yaml is the definitive indicator
@@ -113,8 +124,20 @@ function detectMobilePlatform() {
     return 'ios';
   }
 
+  let entries = [];
+  try { entries = fs.readdirSync(cwd); } catch { /* unreadable root: unknown */ }
+  if (entries.some(e => PYTHON_MARKERS.includes(e))) return 'python';
+  if (entries.includes('package.json') && entries.some(e => WEB_CONFIG_RE.test(e))) return 'web';
+
   return 'unknown';
 }
+
+/**
+ * Historical name: callers (session-init, statusline) use it as "the platform", so it now also
+ * answers python / web.
+ * @returns {'ios'|'android'|'flutter'|'python'|'web'|'unknown'}
+ */
+const detectMobilePlatform = detectPlatform;
 
 /**
  * Find any file with a given suffix in cwd's top-level or ios/ subdirectory
@@ -169,6 +192,7 @@ module.exports = {
   execSafe,
   detectProjectType,
   detectPackageManager,
+  detectPlatform,
   detectMobilePlatform,
   getGitBranch,
   getGitRoot,
