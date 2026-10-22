@@ -204,8 +204,10 @@ Review code changes in Sources/Features/Auth/ for the auth-refactor feature. Cha
 - Idempotency key on create/payment endpoints; outbound HTTP has timeout + bounded retry; SSRF allowlist
 - No blocking I/O in `async def`; type hints on all signatures; lockfile updated with dependencies
 
+- Django: viewset `get_queryset()` scoped to `request.user`/tenant; serializer `fields` explicit (no `"__all__"`); writes in a service under `transaction.atomic()`; `select_related`/`prefetch_related` on lists; model change ships with its migration
+
 ## Lint Command
-- `ruff check .` and `mypy .` (tests: `pytest --cov`)
+- `ruff check .` and `mypy .` (tests: platform-context `commands.test`; Django also `python manage.py makemigrations --check --dry-run`)
 
 ## Naming Validation
 - snake_case: modules, files, functions, variables

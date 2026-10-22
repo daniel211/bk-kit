@@ -8,14 +8,27 @@
 - `Decimal` for money (never `float`); `datetime` always timezone-aware (UTC)
 - No mutable default arguments; no bare `except:`; raise domain exceptions, not `HTTPException`, below the router
 
-## FastAPI Patterns
+## Framework Variants
+Read `framework` from `.claude/platform-context.json` (missing = `generic`); commands come from its `commands`.
+
+### FastAPI
 - Router -> service -> repository; routers only parse, authorize, call a service, map the result
 - DI via `Depends` (session, current user, services); never construct dependencies in a handler
 - Pydantic v2 schemas for request/response (`model_config = ConfigDict(extra="forbid")` on input)
 - Never return ORM objects directly — `response_model` + `from_attributes=True`
 - Async all the way: `async def` handlers use async drivers (asyncpg, httpx.AsyncClient); blocking work goes to `run_in_threadpool`
 - Settings via `pydantic-settings` from env/vault; one cached `get_settings()`
-- Django (if the project uses it): views -> services -> ORM managers, DRF serializers for validation, `select_related`/`prefetch_related`
+
+### Django + DRF
+- `<app>/` with models, managers, services, serializers, views, urls; views -> services -> managers/querysets
+- `get_queryset()` always filtered by `request.user` / tenant — never `Model.objects.get(pk=pk)` on a client id; object permission as a second layer
+- DRF `DEFAULT_PERMISSION_CLASSES` = `IsAuthenticated` (never `AllowAny` globally); serializers list `fields` explicitly, never `"__all__"`; money `DecimalField(min_value=...)`
+- Writes in a service under `transaction.atomic()` + `select_for_update()`; side effects in `on_commit`
+- Settings from env: `DEBUG=False` default, `SECRET_KEY` without default, explicit `ALLOWED_HOSTS`; CSRF middleware stays on
+- `makemigrations --check` in CI; `select_related`/`prefetch_related` on every list
+
+### Generic (Flask, scripts, libs)
+- Follow the project's structure; same rules: layered, owner-scoped queries, bound params, settings from env
 
 ## Dependencies
 - Declared in `pyproject.toml`; lockfile committed (`uv.lock` / `poetry.lock` / pinned `requirements.txt`)
@@ -23,30 +36,9 @@
 - Prefer stdlib and well-maintained packages; audit with `pip-audit`
 
 ## Project Structure
-```
-app/
-├── main.py                 # App factory, routers, middleware
-├── core/                   # config.py, security.py, logging.py, errors.py
-├── db/                     # session.py, base.py
-├── features/
-│   └── orders/
-│       ├── router.py
-│       ├── schemas.py      # Pydantic models
-│       ├── service.py      # Business logic
-│       ├── repository.py   # SQLAlchemy queries
-│       └── models.py       # ORM models
-└── deps.py                 # Shared Depends providers
-alembic/versions/           # Migrations
-tests/
-├── unit/
-├── integration/
-└── conftest.py
-```
+- FastAPI: `app/{main.py, core/, db/, deps.py}` + `app/features/<feature>/{router,schemas,service,repository,models}.py`; `alembic/versions/`
+- Django: layout in `references/django-patterns.md`
+- `tests/{unit,integration}/` + `conftest.py`
 
-## Build & Test Commands
-- Install: `uv sync` (or `pip install -e ".[dev]"`)
-- Compile check: `python -m compileall -q app`
-- Test: `pytest --cov` (single: `pytest tests/unit/test_x.py -x`)
-- Lint: `ruff check .` — Format: `ruff format .` — Types: `mypy .`
-- Migrate: `alembic upgrade head`; new: `alembic revision --autogenerate -m "msg"`
-- Security: `bandit -r app`, `pip-audit`
+## Commands
+Use `commands.*` from platform-context (install, build, test, lint, format, typecheck, migrate, migrationsCheck); single test: `pytest path::test -x`. Security: `bandit -r <src>`, `pip-audit`.

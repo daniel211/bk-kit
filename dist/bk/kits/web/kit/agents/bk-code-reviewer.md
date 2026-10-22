@@ -204,6 +204,9 @@ Review code changes in Sources/Features/Auth/ for the auth-refactor feature. Cha
 - Components > ~150 lines extracted; `'use client'` only at interactive leaves (Next.js)
 - `tsc --noEmit`, `eslint`, `vitest run` clean; critical flows covered by Playwright e2e
 
+- Next: no secrets/DB rows passed to client components; Server Actions + route handlers validate with zod and check ownership; explicit `cache`/`revalidate`, mutations call `revalidatePath`/`revalidateTag`
+- Vite: routes lazy-loaded; route guards treated as UX only; no secrets in `VITE_*`
+
 ## Lint Command
 - `npx eslint .` and `npx tsc --noEmit`
 

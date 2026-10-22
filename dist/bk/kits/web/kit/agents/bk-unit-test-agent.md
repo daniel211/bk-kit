@@ -238,8 +238,14 @@ class InMemoryTransactionCache: TransactionCacheProtocol {
 - `renderHook()` + wrapper for hooks; `vi.useFakeTimers()` + `userEvent.setup({ advanceTimers })`
 - Cover loading / empty / error-with-retry states and zod schema edge cases
 
+
+## Runner + Framework
+- Runner from platform-context `commands.test`: Vitest (`vi.fn`, `vi.mock`) or Jest (`jest.fn`, `jest.mock`) — never mix APIs
+- Next: async Server Components are not RTL-renderable — test their data functions and Server Actions directly (unauthorized, invalid input, other user's id), cover pages with Playwright on `next build && next start`
+- Vite: route tests with `createMemoryRouter` + `RouterProvider`
+
 ## Post-steps
-- Run `npx vitest run --coverage`
+- Run `commands.test` with coverage (`npx vitest run --coverage` / `npx jest --coverage`)
 - Check `coverage/` (v8) — >80% on hooks, utils, schemas
 
 ## E2E

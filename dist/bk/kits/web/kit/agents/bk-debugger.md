@@ -232,6 +232,8 @@ func setup() {
 - Network: inspect failing requests (status, CORS preflight, cookies `SameSite`/`Secure`, CSRF header) via Playwright MCP or DevTools
 - Rendering: React DevTools — component tree, props, "why did this render", Profiler
 - Data: TanStack Query Devtools — stale keys, wrong `queryKey`, missing invalidation
+- Next: "only works in a Client Component" / "server-only cannot be imported" = RSC boundary wrong — move the hook to a `'use client'` leaf, keep secrets server-side; stale data = `fetch` cache / missing `revalidatePath`
+- Tests: runner from platform-context `commands.test` (Vitest or Jest)
 
 ## Common Fixes
 - "Hydration failed / text content does not match": remove `Date.now()`/`Math.random()`/`window` reads from render, move to `useEffect`
@@ -243,6 +245,6 @@ func setup() {
 ## Debug Commands
 - Typecheck: `npx tsc --noEmit 2>&1`
 - Build: `npm run build 2>&1`
-- Test: `npx vitest run <file> 2>&1`
+- Test: `npx vitest run <file> 2>&1` (Jest: `npx jest <file> 2>&1`)
 - E2E with trace: `npx playwright test <spec> --trace on 2>&1`
 - Clean: `rm -rf node_modules/.vite .next && npm ci`

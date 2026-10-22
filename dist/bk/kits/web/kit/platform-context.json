@@ -5,6 +5,8 @@
   "fileNaming": "kebab-case",
   "fileExtension": ".tsx",
   "designEngine": "auto",
+  "framework": "generic",
+  "testRunner": "vitest",
   "commands": {
     "build": "npm run build",
     "test": "npx vitest run --coverage",
@@ -33,7 +35,7 @@
   },
   "conventions": {
     "architecture": "Feature-first (UI -> hooks -> services)",
-    "framework": "React 18 — Next.js App Router or Vite SPA (match project)",
+    "framework": "React 18 — none detected; match project (CRA, Remix, webpack)",
     "fileNaming": "kebab-case files; PascalCase.tsx for components is also common — match project",
     "async": "Promise / async-await, AbortSignal for cancellation",
     "stateManagement": "TanStack Query (server state) + local state / Zustand (client state)",
@@ -44,6 +46,39 @@
     "mockFramework": "msw",
     "e2eFramework": "playwright",
     "packageManager": "npm / pnpm (match lockfile)"
+  },
+  "frameworks": {
+    "next": {
+      "commands": {
+        "build": "npm run build",
+        "dev": "npm run dev",
+        "start": "npm run start"
+      },
+      "conventions": {
+        "architecture": "App Router: app/ routes -> server components -> services; client components only where interactive",
+        "framework": "Next.js App Router (React Server Components)",
+        "dataFetching": "server components / route handlers / server actions; TanStack Query for client-side server state",
+        "routing": "file-based app/ routes (page.tsx, layout.tsx, route.ts)"
+      },
+      "references": [
+        "skills/bk-web/references/nextjs-patterns.md"
+      ]
+    },
+    "vite": {
+      "commands": {
+        "build": "npm run build",
+        "dev": "npm run dev",
+        "preview": "npm run preview"
+      },
+      "conventions": {
+        "architecture": "Feature-first SPA (UI -> hooks -> services)",
+        "framework": "React 18 + Vite SPA",
+        "routing": "client-side router (React Router / TanStack Router — match project)"
+      },
+      "references": [
+        "skills/bk-web/references/vite-spa-patterns.md"
+      ]
+    }
   },
   "mcpServers": {
     "context7": {

@@ -232,6 +232,7 @@ func setup() {
 - Logging: `--log-cli-level=DEBUG`; `echo=True` on the engine to see SQL (never in production)
 - Async pitfalls: un-awaited coroutine warnings, blocking calls in `async def`, "Event loop is closed" / loop-scope mismatch in pytest-asyncio fixtures
 - DB sessions: `MissingGreenlet` = lazy load in async (use `selectinload`); pool exhaustion = sessions not closed; "transaction already begun" = autobegin before `session.begin()`
+- Django: `python manage.py check`, `showmigrations`, `sqlmigrate <app> <n>`; `connection.queries` / `CaptureQueriesContext` for SQL; `--ds=config.settings.test` when pytest-django picks the wrong settings
 
 ## Common Fixes
 - `ModuleNotFoundError`: wrong venv or missing install — `uv sync` / `pip install -e ".[dev]"`
@@ -239,6 +240,8 @@ func setup() {
 - `MissingGreenlet` / `DetachedInstanceError`: eager-load relations, `expire_on_commit=False`
 - `alembic` "Multiple head revisions": `alembic merge heads` or fix `down_revision`
 - mypy errors after a change: fix the type, do not add `# type: ignore`
+- Django `InconsistentMigrationHistory` / conflicting migrations: `makemigrations --merge`; never edit an applied migration
+- Django `DisallowedHost` / CSRF 403: check `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS` and the `X-CSRFToken` header — do not add `@csrf_exempt`
 
 ## Debug Commands
 - Test: `pytest -x -vv 2>&1`

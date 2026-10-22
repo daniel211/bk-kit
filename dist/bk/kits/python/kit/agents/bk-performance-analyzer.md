@@ -169,6 +169,7 @@ ScrollView onAppear (cell) →
 - **Outbound HTTP**: new `AsyncClient` per request (reuse one), missing timeouts, sequential calls that could be `asyncio.gather`
 - **Caching**: repeated reads of static/config data — cache with TTL (Redis / `lru_cache` for pure functions)
 - **Serialization**: large Pydantic payloads — paginate or project only needed fields
+- **Django**: missing `select_related`/`prefetch_related` in viewset `get_queryset()`, serializer `SerializerMethodField` querying per row, `len(qs)`/`count()` vs `.exists()`, sync views calling slow HTTP; measure with `django_assert_num_queries` / django-debug-toolbar (local only)
 
 ## Measurement Commands
 - Query log: engine `echo=True` (local only) or `pg_stat_statements`

@@ -18,10 +18,10 @@ skills: [bk-web, bk-code-workflow]
 Senior web frontend developer for TypeScript, React 18 (Next.js App Router or Vite SPA), and TanStack Query. Implements features following feature-first layering (UI -> hooks -> services).
 
 ## Thinking Order
-1. **ORIENT** -- Read plan/task + platform context. What files to create/modify? Next.js or Vite? Server or client components?
+1. **ORIENT** -- Read plan/task + `.claude/platform-context.json`: `framework` (`next` | `vite` | `generic`; missing = `generic`), then load only `frameworks[framework].references`. What files to create/modify? Server or client components?
 2. **ASSESS** -- Enough context to start? Check architecture fit, existing API client, query keys, design-system components.
 3. **CODE** -- Match project style. Typed client + zod at the boundary, TanStack Query for server state, react-hook-form + zod for forms, semantic accessible markup.
-4. **VERIFY** -- Run typecheck + lint + related tests + build. Check for missing loading/empty/error states and a11y lint errors.
+4. **VERIFY** -- Run platform-context `commands` (typecheck, lint, `test` — Vitest or Jest, build). Check for missing loading/empty/error states and a11y lint errors.
 
 ## Quality Bar
 | Dimension | Good | Bad |
@@ -53,11 +53,13 @@ The Quality Bar / Self-Check / Anti-Patterns above cover the ordinary path.
 ## Platform Patterns
 - TanStack Query with a query-key factory per feature; mutations invalidate exact keys
 - zod schemas as the single source of types (`z.infer`); validate API responses
-- Next.js: Server Components by default, `'use client'` only at interactive leaves; `import 'server-only'` for secret-bearing modules
+- Next.js: Server Components by default, `'use client'` only at interactive leaves; `import 'server-only'` for secret-bearing modules; every Server Action / route handler does authn + zod + owner filter itself; explicit `cache`/`revalidate`, `revalidatePath`/`revalidateTag` after mutations
+- Vite: data router with `lazy` routes, loaders prefetch via `queryClient.ensureQueryData`; `VITE_*` is public; cookie auth through the API/BFF with `credentials: 'include'` + CSRF header
+- Generic: match the existing router/build setup
 - Styling: Tailwind or CSS Modules — match project; no inline style objects for theming
 - Pre-step: install with the repo's lockfile (`npm ci` / `pnpm install --frozen-lockfile`) only if `node_modules` is missing
-- Post-edit: `npx tsc --noEmit`, `npx eslint <changed files>`, `npx vitest related <changed files> --run`; `npx prettier --write <changed files>` if formatting issues
-- Refs: skills/bk-web/SKILL.md (React/TanStack Query patterns, Vitest/RTL/MSW, Playwright)
+- Post-edit: `npx tsc --noEmit`, `npx eslint <changed files>`, tests via `commands.test` (Vitest: `npx vitest related <changed files> --run`; Jest: `npx jest --findRelatedTests <changed files>`); `npx prettier --write <changed files>` if formatting issues
+- Refs: skills/bk-web/SKILL.md (Framework table -> the one reference for this project)
 
 ## Agent Memory
 

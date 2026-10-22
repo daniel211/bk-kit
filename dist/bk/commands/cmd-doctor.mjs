@@ -14,6 +14,7 @@ import { kitLayout, packageRootFrom } from '../lib/package-layout.mjs';
 import { addKitOption, resolveKitOrExit } from '../lib/kit-resolver.mjs';
 import { detectDrift, formatDriftList, readDoctorIgnore } from '../lib/kit-drift.mjs';
 import { OMIT_CLAUDE_MD_MIN_VERSION, compareVersions, detectClaudeVersion } from '../lib/claude-code-version.mjs';
+import { compareRecordedFramework } from '../lib/framework-detector.mjs';
 import { agentsOutOfMode, readSubagentContextMode } from '../lib/subagent-context-mode.mjs';
 import { matchedPreset, haikuEffortWarnings, locallyEditedAgents } from '../lib/model-override-doctor.mjs';
 import { readAgentDefaults } from '../lib/model-presets.mjs';
@@ -201,6 +202,23 @@ export async function runDoctor(targetDir, platform, { pkgAgentsDir } = {}) {
     const data = JSON.parse(readFileSync(ctxPath, 'utf8'));
     return data.platform === platform;
   });
+
+  // 3b. python / web: the framework variant on record, against what the project looks like now.
+  //     Informational: a mismatch warns (the project moved on, or the choice was deliberate),
+  //     an unreadable context is check 3's error, not this one's.
+  let installedCtx = null;
+  try { installedCtx = JSON.parse(readFileSync(join(claudeDir, 'platform-context.json'), 'utf8')); } catch { /* check 3 */ }
+  const fw = installedCtx && compareRecordedFramework(installedCtx, platform, targetDir);
+  if (fw) {
+    const runner = fw.recordedRunner ? `, tests: ${fw.recordedRunner}` : '';
+    check(`Framework: ${fw.recorded}${runner}`, () => {
+      if (fw.differences.length === 0) return true;
+      console.log('    The project no longer matches what platform-context.json records:');
+      for (const d of fw.differences) console.log(`      ${d}`);
+      console.log('    If it changed, rerun /bk-bootstrap, or edit `framework` and `commands` in .claude/platform-context.json.');
+      return 'warn';
+    });
+  }
 
   // 4. settings.json exists and valid (CR-P1-26)
   check('settings.json valid', () => {

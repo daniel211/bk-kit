@@ -169,6 +169,8 @@ ScrollView onAppear (cell) →
 - Images: missing `width`/`height` (CLS), no lazy loading below the fold, unoptimized formats, LCP image not prioritized
 - Lists: > ~200 rows without virtualization; expensive work in render
 - Fonts/third parties: render-blocking scripts, no `font-display: swap`, unused CSS
+- Next: `'use client'` high in the tree (whole subtree shipped as JS), sequential awaits in Server Components (use `Promise.all` + `<Suspense>` streaming), missing `next/image`/`next/font`, dynamic rendering where `revalidate` would do
+- Vite: routes not `lazy()`-loaded, vendor chunk bloat (`build.rollupOptions.output.manualChunks`), loaders not prefetching into the query cache
 
 ## Evidence (read-only — no Bash)
 - Read existing build output / chunk reports, `@next/bundle-analyzer` or Lighthouse JSON if present; otherwise recommend `npm run build` + `npx lighthouse <url> --only-categories=performance`

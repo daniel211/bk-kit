@@ -50,6 +50,24 @@ Read existing platform-context.json template
 → Write updated platform-context.json
 ```
 
+**python / web — framework variant** (same precedence as `bk init`, first match wins):
+
+| Kit | `framework` | Evidence |
+|-----|-------------|----------|
+| python | `django` | `manage.py` at root, or `django` in pyproject / requirements*.txt / Pipfile |
+| python | `fastapi` | `fastapi` in a dependency file |
+| web | `next` | `next.config.*`, or `next` in package.json deps |
+| web | `vite` | `vite.config.*`, or `vite` in deps — only when not next (Next + vitest pulls vite) |
+| both | `generic` | none of the above |
+
+Web `testRunner`: `vitest` if in deps, else `jest` if in deps, else `vitest`; set `commands.test`
+to `npx vitest run --coverage` / `npx jest --coverage` to match.
+
+Merge: shallow-merge `frameworks[framework].commands` into `commands` and `.conventions` into
+`conventions` (generic merges nothing); then scan-verified values win. Django without
+`pytest-django` → `commands.test` = `python manage.py test`. Never delete the `frameworks` map —
+agents read `frameworks[framework].references`.
+
 ## Cross-Link Rule
 
 Every foundation doc MUST link to related docs:

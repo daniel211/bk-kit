@@ -172,6 +172,14 @@ LoginViewModel.swift:45: Logger.debug("Login: \(email), \(password)") (HIGH — 
 - **Business logic**: money as `Decimal` with `gt=0`; idempotency on payment endpoints
 - **Config**: CORS allowlist (no `*` + credentials), security headers, `/docs` + `/openapi.json` off in prod
 
+## Django (when `framework` = django)
+- Settings: `DEBUG`/`SECRET_KEY`/`ALLOWED_HOSTS` from env, `DEBUG` False by default, no `ALLOWED_HOSTS = ["*"]`; `SECURE_SSL_REDIRECT`, `SESSION_COOKIE_SECURE`, `CSRF_COOKIE_SECURE`, `SECURE_HSTS_SECONDS` set for prod
+- CSRF: `@csrf_exempt` on cookie-authenticated views, `CsrfViewMiddleware` removed, broad `CSRF_TRUSTED_ORIGINS`
+- Injection: `raw()` / `extra()` / `RawSQL` / `cursor.execute` built with f-strings or `%` — params list only
+- XSS: `mark_safe`, `|safe`, `{% autoescape off %}`, `format_html` misuse on user data
+- DRF: `DEFAULT_PERMISSION_CLASSES` not `AllowAny`; `get_queryset()` scoped to user/tenant + `has_object_permission`; serializers with `fields = "__all__"` or writable `owner`/`is_staff`
+- Admin at `/admin/` exposed to the Internet without SSO/VPN; `manage.py check --deploy` warnings
+
 ## Tooling to Suggest
 - `bandit -r app -ll` (SAST), `pip-audit` (dependency CVEs), `gitleaks detect --source .` (secrets)
 

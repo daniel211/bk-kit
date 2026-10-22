@@ -21,8 +21,8 @@
  *                         `agent_dispatch_history` since the batch's coding began
  *   test_subtask_report   a plan sub-task that is a TESTS sub-task has an implementation/fix
  *                         report under `<plan_dir>/research/` holding a test result line
- *                         (swift test / xcodebuild / flutter test / gradle / pytest / vitest /
- *                         jest / playwright outcomes)
+ *                         (swift test / xcodebuild / flutter test / gradle / pytest /
+ *                         manage.py test / vitest / jest / playwright outcomes)
  *
  * Pure apart from bounded reads of the plan dir (<= 80 sub-task files, <= 3 reports each, each
  * report's last 64 KB) and Date.now().
@@ -73,6 +73,17 @@ const RESULT_LINE_PATTERNS = [
  */
 const GRADLE_TASK_RE = /\b(?:test\w*UnitTest|connected\w*AndroidTest|gradle(?:w)?\s[^\n]*\btest\b)/i;
 const GRADLE_OUTCOME_RE = /\bBUILD (?:SUCCESSFUL|FAILED)\b/;
+
+/**
+ * Django `manage.py test` (unittest) prints the count and the outcome on separate lines:
+ *   Ran 12 tests in 0.345s        then, after a blank line,
+ *   OK  |  OK (skipped=2)  |  FAILED (failures=1, errors=2)
+ * The count alone says nothing about the result, so it counts only together with the outcome,
+ * and the returned line carries both — a failed run must never read as a bare "Ran 12 tests".
+ * `Ran 0 tests` is an empty collection, like pytest's "no tests ran": not a run.
+ */
+const DJANGO_RAN_RE = /^Ran\s+([1-9]\d*)\s+tests?\s+in\s+\d+(?:\.\d+)?s$/;
+const DJANGO_OUTCOME_RE = /^(?:OK|FAILED)(?:\s+\([^)]*\))?$/;
 
 /** Last `phase_history` entry's start of the batch's coding: first `coding` after the last reset. */
 function batchCodingStart(state) {
@@ -155,10 +166,18 @@ function isTestsSubtask(fileName, head) {
 function findResultLine(text) {
   const lines = text.split('\n');
   let sinceGradleTask = -1;
+  let ranLine = null;
+  let sinceRan = 0;
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
     if (RESULT_LINE_PATTERNS.some((re) => re.test(line))) return line.slice(0, 160);
+    if (DJANGO_RAN_RE.test(line)) {
+      ranLine = line;
+      sinceRan = 0;
+      continue;
+    }
+    if (ranLine && ++sinceRan <= 3 && DJANGO_OUTCOME_RE.test(line)) return `${ranLine} — ${line}`.slice(0, 160);
     if (GRADLE_TASK_RE.test(line)) sinceGradleTask = 0;
     else if (sinceGradleTask >= 0 && ++sinceGradleTask <= 8 && GRADLE_OUTCOME_RE.test(line)) return line.slice(0, 160);
   }

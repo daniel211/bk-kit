@@ -80,7 +80,9 @@ ALL modes dispatch agents — the conductor NEVER scans or writes docs inline.
    Load: `references/serena-integration.md` § Step 6
 
 7. **Update Platform Context** — write `platform-context.json` from real scan data, never
-   template defaults (detected platform, build commands, SDK versions).
+   template defaults (detected platform, build commands, SDK versions). python / web: also set
+   `framework` (+ web `testRunner`) and merge `frameworks[framework]`; keep the `frameworks` map.
+   Load: `references/foundation-synthesis.md` § Platform Context Update
 
 8. **Report** — show the summary, then suggest the next step (see below).
 

@@ -239,6 +239,13 @@ class InMemoryTransactionCache: TransactionCacheProtocol {
 - `respx` for outbound HTTP; per-test transaction rollback for DB tests
 - Every new endpoint: success, 401, 403/404 (other user's resource), 422 cases
 
+
+## Django
+- pytest-django: `@pytest.mark.django_db`, `APIClient` + `force_authenticate`, `django_assert_num_queries` on list endpoints, `factory_boy` factories
+- `transaction=True` (or `django_capture_on_commit_callbacks`) for `on_commit` / `select_for_update` code
+- No pytest-django in the project: `python manage.py test` with `TestCase` / `APITestCase` — use `commands.test`
+- DRF validation errors are 400, not 422 — assert what the project's exception handler returns
+
 ## Pre-steps
 - Install deps if needed: `uv sync` (or `pip install -e ".[dev]"`)
 - Integration tests: DB available (testcontainers or `TEST_DATABASE_URL`), `alembic upgrade head`
@@ -248,4 +255,4 @@ class InMemoryTransactionCache: TransactionCacheProtocol {
 - Report coverage per touched module; target >80% on services
 
 ## Knowledge References
-- skills/bk-python/references/pytest-patterns.md
+- skills/bk-python/references/pytest-patterns.md (Django: test section of django-patterns.md)

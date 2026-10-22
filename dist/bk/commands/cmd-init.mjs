@@ -19,6 +19,7 @@ import { parseModelsOption, resolveModelPreset, persistModelPreset, recordPristi
 import {
   gitPrefix, writeGitignoreEntries,
 } from '../lib/session-state-gitignore.mjs';
+import { applyFrameworkToInstalledContext, resolveFrameworkOption } from '../lib/framework-detector.mjs';
 
 // Re-exported: callers and tests have always imported the list from here.
 export { NEVER_COMMIT, writeGitignoreEntries } from '../lib/session-state-gitignore.mjs';
@@ -38,6 +39,7 @@ export function registerInit(program) {
     .option('--gitignore', "Add the kit's per-machine state files to .gitignore (default in a git repo)")
     .option('--no-gitignore', "Do not touch .gitignore")
     .option('--models <preset>', 'Agent model preset: quality | balanced | economy (asks when interactive)')
+    .option('--framework <id>', 'python: fastapi | django | generic; web: next | vite | generic (default: detected)')
     .option('--yes', 'Skip prompts and use defaults');
 
   addKitOption(command)
@@ -76,6 +78,17 @@ export function registerInit(program) {
       const kitDir = layout.kitDir;
       if (!existsSync(kitDir)) {
         console.error(`Error: kits/${platform}/kit not found in package. Package may be corrupted.`);
+        process.exit(1);
+      }
+
+      // --framework is checked against the kit's own `frameworks` map, still before any write.
+      let forcedFramework;
+      try {
+        let kitCtx = null;
+        try { kitCtx = JSON.parse(readFileSync(join(kitDir, 'platform-context.json'), 'utf8')); } catch { /* validated below */ }
+        forcedFramework = resolveFrameworkOption(platform, kitCtx, opts.framework);
+      } catch (err) {
+        console.error(`Error: ${err.message}`);
         process.exit(1);
       }
 
@@ -136,6 +149,17 @@ export function registerInit(program) {
 
       // Copy kit → .claude/ (excluding settings.json — handled separately via merge)
       copyDirFiltered(kitDir, claudeDir, ['settings.json']);
+
+      // python / web: pick the framework variant and fold its commands into the installed
+      // platform-context.json (user-owned from here on; `bk update` never rewrites it). Before
+      // hashing, so .bk-version.json records the file as written. Mobile kits: null, no output.
+      const fw = applyFrameworkToInstalledContext({
+        ctxPath: join(claudeDir, 'platform-context.json'),
+        platform,
+        projectRoot: targetDir,
+        forced: forcedFramework,
+      });
+      if (fw) console.log(`  ✓ Framework: ${fw.line}`);
 
       // Model preset first: it writes `.bk.json` models, which the block below then applies.
       const preset = await resolveModelPreset({ explicit: explicitPreset, yes: opts.yes });

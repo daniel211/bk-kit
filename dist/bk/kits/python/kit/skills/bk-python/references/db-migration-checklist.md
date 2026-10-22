@@ -1,4 +1,4 @@
-# DB Migration Checklist (Alembic)
+# DB Migration Checklist (Alembic + Django)
 
 ## Workflow
 1. Change the ORM model.
@@ -65,5 +65,30 @@ def downgrade() -> None:
 - [ ] Migration runs as its own deploy step before the new code (expand) or after (contract)
 - [ ] Tested on a production-sized copy for duration and locks when touching big tables
 - [ ] Rollback plan: `alembic downgrade <rev>` verified, or a forward-fix documented
-- Django (if the project uses it): `makemigrations --check` in CI, `sqlmigrate` to review SQL,
-  `SeparateDatabaseAndState` / `AddIndexConcurrently` (with `atomic = False`) for big tables
+
+## Django Migrations
+Same expand/contract, lock and data rules as above; Django-specific mechanics:
+- CI: `python manage.py makemigrations --check --dry-run` — fails when a model change has no migration
+- Review: `python manage.py sqlmigrate <app> <number>`; verify `migrate <app> <previous>` then `migrate`
+- Never edit a migration that has been applied anywhere; fix forward with a new one
+- Data migrations: `RunPython(forward, reverse_code=backward)` (or `RunPython.noop` with a reason),
+  use `apps.get_model("app", "Model")` — never import the app's models; batch by pk
+- Postgres big tables: `AddIndexConcurrently` / `RemoveIndexConcurrently` in a migration with
+  `atomic = False` (from `django.contrib.postgres.operations`)
+- `atomic = False` also for long batched `RunPython`, so each batch commits on its own
+- Rename / move without a table rewrite: `SeparateDatabaseAndState(state_operations=[...],
+  database_operations=[...])` — state changes in Django, DDL done explicitly (or not at all)
+- Raw SQL: `RunSQL(sql, reverse_sql=...)` with params (`[("... WHERE id = %s", [x])]`), never formatted strings
+
+```python
+from django.contrib.postgres.operations import AddIndexConcurrently
+from django.db import migrations, models
+
+class Migration(migrations.Migration):
+    atomic = False                                   # CONCURRENTLY can't run in a transaction
+    dependencies = [("transfers", "0008_backfill_transfer_status")]
+    operations = [
+        AddIndexConcurrently("transfer", models.Index(
+            fields=["owner", "status", "-created_at"], name="ix_tr_owner_status_created")),
+    ]
+```

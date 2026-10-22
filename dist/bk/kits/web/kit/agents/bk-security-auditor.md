@@ -171,6 +171,16 @@ LoginViewModel.swift:45: Logger.debug("Login: \(email), \(password)") (HIGH — 
 - Dependencies: lockfile present, no `latest`/`*` in `package.json`; recommend `npm audit --omit=dev` in CI (no Bash here)
 - Authz is server-side: client route guards are UX only — flag features relying on them
 
+## Next.js (when `framework` = next)
+- Every `'use server'` export and `route.ts` handler: authn + zod parse + owner filter inside it — page-level checks do not protect actions
+- `NEXT_PUBLIC_*` holding secrets or internal URLs; secret-reading modules missing `import 'server-only'`
+- `middleware.ts` treated as the authz layer, or `matcher` gaps leaving routes/APIs unguarded (CVE-2025-29927 bypass class)
+- Per-user data in shared caches (`revalidate`, `unstable_cache` without user key); `error.tsx` rendering server error messages
+
+## Vite SPA (when `framework` = vite)
+- `VITE_*` vars or `define` holding keys/tokens; `envPrefix` widened to `''`
+- `server.proxy` assumed in prod / `vite preview` or dev server used as prod server; public source maps in `dist/`
+
 ## Secret Grep (Grep tool)
 - Pattern `(api[_-]?key|secret|token|password)\s*[:=]\s*['"]` over `src/`, excluding `*.test.*`
 - Pattern `(localStorage|sessionStorage)\.setItem` — inspect what is stored

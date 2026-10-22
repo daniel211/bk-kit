@@ -1,6 +1,6 @@
 ---
 name: bk-web
-description: "TypeScript/React patterns + TanStack Query, react-hook-form/zod, Vitest/Testing Library/MSW, Playwright. Platform knowledge for bk-web-developer."
+description: "TypeScript/React patterns (Next.js App Router or Vite SPA) + TanStack Query, react-hook-form/zod, Vitest/Testing Library/MSW, Playwright. Platform knowledge for bk-web-developer."
 user-invocable: false
 ---
 
@@ -25,9 +25,21 @@ full, copy-paste examples.
 - **Tests**: `renderWithProviders` (fresh `QueryClient`, `retry: false`), `user-event`, role
   queries, MSW at the HTTP boundary; Playwright with page objects + `getByRole` + axe scan.
 
-## References
+## Framework
 
-- Feature folder, typed client, query hooks, forms, error boundary, Next.js server/client notes:
+Read `framework` from `.claude/platform-context.json` (missing = `generic`), then open only
+`frameworks[framework].references` plus the shared references below — skip the other framework's.
+Test command comes from `commands.test` (Vitest or Jest).
+
+| `framework` | Reference |
+|---|---|
+| `next` | `references/nextjs-patterns.md` — App Router, RSC/client boundary, caching, Server Actions, middleware |
+| `vite` | `references/vite-spa-patterns.md` — data router, lazy routes, `VITE_*` env, dev proxy, cookie auth |
+| `generic` | shared references only; follow the project's existing structure |
+
+## Shared References
+
+- Feature folder, typed client, query hooks, forms, error boundary:
   `references/react-patterns.md`
 - Providers wrapper, user-event, MSW, hook tests, fake timers: `references/vitest-rtl-patterns.md`
 - Page objects, auth state reuse, network mocking, axe, visual snapshots:

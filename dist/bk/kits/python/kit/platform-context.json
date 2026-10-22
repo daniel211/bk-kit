@@ -4,14 +4,14 @@
   "languageVersion": "3.11+",
   "fileNaming": "snake_case",
   "fileExtension": ".py",
+  "framework": "generic",
   "commands": {
-    "build": "python -m compileall -q app",
+    "build": "python -m compileall -q -x venv .",
     "test": "pytest --cov",
     "lint": "ruff check .",
     "typecheck": "mypy .",
     "format": "ruff format .",
     "clean": "rm -rf .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage",
-    "migrate": "alembic upgrade head",
     "install": "uv sync"
   },
   "rules": [
@@ -26,20 +26,63 @@
     "bk-python"
   ],
   "dirs": {
-    "source": "app/",
-    "test": "tests/",
-    "migrations": "alembic/versions/"
+    "source": "match project (src/ layout or a top-level package)",
+    "test": "tests/"
   },
   "conventions": {
-    "architecture": "Layered: router -> service -> repository",
-    "framework": "FastAPI (Django: views -> services -> ORM managers)",
-    "async": "async/await (asyncio)",
-    "di": "FastAPI Depends",
-    "validation": "Pydantic v2",
-    "orm": "SQLAlchemy 2 async + Alembic",
-    "settings": "pydantic-settings (env / vault)",
-    "testFramework": "pytest + pytest-asyncio + httpx",
-    "mockFramework": "pytest-mock / respx"
+    "architecture": "Layered: entry point (router / view / CLI) -> service -> repository",
+    "framework": "None detected — match project (Flask, plain scripts, library)",
+    "async": "sync by default; async/await (asyncio) where the project already uses it",
+    "validation": "Pydantic v2 or dataclasses at the boundaries (match project)",
+    "settings": "env / vault (pydantic-settings or os.environ) — never hardcoded",
+    "testFramework": "pytest",
+    "mockFramework": "pytest-mock"
+  },
+  "frameworks": {
+    "fastapi": {
+      "commands": {
+        "build": "python -m compileall -q app",
+        "migrate": "alembic upgrade head",
+        "migrationsCheck": "alembic check"
+      },
+      "conventions": {
+        "architecture": "Layered: router -> service -> repository",
+        "framework": "FastAPI",
+        "async": "async/await (asyncio)",
+        "di": "FastAPI Depends",
+        "validation": "Pydantic v2",
+        "orm": "SQLAlchemy 2 async + Alembic",
+        "migrations": "alembic/versions/",
+        "settings": "pydantic-settings (env / vault)",
+        "testFramework": "pytest + pytest-asyncio + httpx",
+        "mockFramework": "pytest-mock / respx"
+      },
+      "references": [
+        "skills/bk-python/references/fastapi-patterns.md"
+      ]
+    },
+    "django": {
+      "commands": {
+        "build": "python manage.py check",
+        "test": "pytest --cov",
+        "migrate": "python manage.py migrate",
+        "migrationsCheck": "python manage.py makemigrations --check --dry-run"
+      },
+      "conventions": {
+        "architecture": "Layered: views / DRF viewsets -> services -> ORM managers / querysets",
+        "framework": "Django + Django REST Framework",
+        "async": "sync views by default; async views only where the project already uses them",
+        "validation": "DRF serializers / Django forms",
+        "orm": "Django ORM",
+        "migrations": "<app>/migrations/ (makemigrations; never edit an applied migration)",
+        "settings": "settings module split per env; secrets from env / vault",
+        "testFramework": "pytest + pytest-django (projects without pytest-django: python manage.py test — bk init detects this and sets commands.test)",
+        "mockFramework": "pytest-mock / unittest.mock"
+      },
+      "references": [
+        "skills/bk-python/references/django-patterns.md"
+      ]
+    }
   },
   "mcpServers": {
     "context7": {

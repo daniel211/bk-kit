@@ -4,8 +4,8 @@
 
 Beer Kit biến Claude Code từ một trợ lý chung chung thành một đội phát triển có quy trình:
 có người lập kế hoạch, người code, người review, người test, người debug. Mỗi người đều biết rõ
-nền tảng bạn đang làm (Swift/SwiftUI, Kotlin/Compose, Dart/BLoC, Python/FastAPI hay
-TypeScript/React). Toàn bộ chạy trong
+nền tảng bạn đang làm (Swift/SwiftUI, Kotlin/Compose, Dart/BLoC, Python với FastAPI hoặc Django,
+TypeScript/React với Next.js hoặc Vite — `bk init` tự nhận framework). Toàn bộ chạy trong
 `.claude/` của dự án, nên kit đi cùng repo và cả team dùng chung một bộ luật.
 
 <!-- auto:release-stats -->
@@ -125,7 +125,7 @@ bk doctor                  # kiểm tra cài đặt
 Mở dự án trong Claude Code rồi chạy `/bk-bootstrap`.
 
 Cài một phiên bản cụ thể: truyền tag vào lệnh tải, ví dụ
-<!-- auto:release-version -->`gh release download v0.15.0 --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz'`<!-- /auto:release-version -->.
+<!-- auto:release-version -->`gh release download v0.15.1 --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz'`<!-- /auto:release-version -->.
 
 ### Cập nhật
 
