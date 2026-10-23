@@ -182,8 +182,6 @@ Write unit tests for Sources/Features/Transactions/Data/TransactionRepository.sw
 | # | Test File | Tests | Passed | Failed | Skipped |
 |---|-----------|-------|--------|--------|---------|
 | 1 | Tests/Features/Transactions/TransactionRepositoryTests.swift | 6 | 6 | 0 | 0 |
-| 2 | Tests/Features/Transactions/Fakes/FakeTransactionAPI.swift | — | — | — | — |
-| 3 | Tests/Features/Transactions/Fakes/InMemoryTransactionCache.swift | — | — | — | — |
 
 ### Test Cases
 | # | Test Name | Category | Description |
@@ -211,13 +209,7 @@ class FakeTransactionAPI: TransactionAPIProtocol {
         return try result.get()
     }
 }
-
-class InMemoryTransactionCache: TransactionCacheProtocol {
-    var stored: [Transaction] = []
-    func save(_ transactions: [Transaction]) { stored = transactions }
-    func load() -> [Transaction] { stored }
-    func clear() { stored = [] }
-}
+// + InMemoryTransactionCache (array-backed save/load/clear)
 ```
 
 ### Failed Tests
@@ -232,27 +224,13 @@ class InMemoryTransactionCache: TransactionCacheProtocol {
 # bk-unit-test-agent — Python Section
 
 ## pytest Patterns
-- `pytest` + `pytest-asyncio` (`asyncio_mode = "auto"`); plain `def test_*` / `async def test_*`
-- `@pytest.mark.parametrize` for validation edges (0, negative, too long, wrong format)
-- `mocker.AsyncMock(spec=Repository)` (pytest-mock) for service tests; fakes where state matters
-- `httpx.AsyncClient(transport=ASGITransport(app=app))` + `app.dependency_overrides` for API tests
-- `respx` for outbound HTTP; per-test transaction rollback for DB tests
-- Every new endpoint: success, 401, 403/404 (other user's resource), 422 cases
+- pytest + pytest-asyncio; `parametrize` validation edges (0, negative, too long, bad format)
+- FastAPI: `httpx.AsyncClient(ASGITransport(app))` + `dependency_overrides`; `respx` for outbound HTTP
+- Django: pytest-django (`django_db`, `APIClient`, `django_assert_num_queries`) or `TestCase`; DRF errors are 400
+- Every new endpoint: success, 401, 403/404 (other user's resource), validation error
 
-
-## Django
-- pytest-django: `@pytest.mark.django_db`, `APIClient` + `force_authenticate`, `django_assert_num_queries` on list endpoints, `factory_boy` factories
-- `transaction=True` (or `django_capture_on_commit_callbacks`) for `on_commit` / `select_for_update` code
-- No pytest-django in the project: `python manage.py test` with `TestCase` / `APITestCase` — use `commands.test`
-- DRF validation errors are 400, not 422 — assert what the project's exception handler returns
-
-## Pre-steps
-- Install deps if needed: `uv sync` (or `pip install -e ".[dev]"`)
-- Integration tests: DB available (testcontainers or `TEST_DATABASE_URL`), `alembic upgrade head`
-
-## Post-steps
-- Run `pytest --cov=app --cov-report=term-missing`
-- Report coverage per touched module; target >80% on services
+## Run
+- `commands.test` with coverage; per touched module, >80% on services
 
 ## Knowledge References
-- skills/bk-python/references/pytest-patterns.md (Django: test section of django-patterns.md)
+- skills/bk-python/references/pytest-patterns.md (Django: django-patterns.md tests)

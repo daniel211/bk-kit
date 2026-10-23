@@ -340,7 +340,22 @@ try {
             .filter(([k, v]) => v != null && !k.endsWith('Note'))
             .map(([k, v]) => `${k}: ${v}`)
             .join(', ');
-          if (cmds) contextParts.push(`[CMD] ${cmds}`);
+          // A single kit rooted below the project (`root: "backend"`) runs its commands there.
+          const root = typeof platformCtx.root === 'string' ? platformCtx.root.replace(/^\.\/|\/+$/g, '') : '';
+          if (cmds) contextParts.push(root && root !== '.' ? `[CMD] (in ${root}/) ${cmds}` : `[CMD] ${cmds}`);
+        }
+        // Composite kit (fullstack): no top-level commands — one [CMD] line per component, run
+        // with cwd = its root. Dev agents: bk-python-developer owns the python component,
+        // bk-web-developer the web one (both are already in PLATFORM_AGENTS).
+        if (Array.isArray(platformCtx.components)) {
+          for (const c of platformCtx.components) {
+            if (!c || c.present === false || !c.commands || typeof c.commands !== 'object') continue;
+            const cmds = Object.entries(c.commands)
+              .filter(([k, v]) => v != null && !k.endsWith('Note'))
+              .map(([k, v]) => `${k}: ${v}`)
+              .join(', ');
+            if (cmds) contextParts.push(`[CMD] ${c.id || c.platform} (cwd ${c.root || '.'}): ${cmds}`);
+          }
         }
 
         // Mark as injected for this session via env file

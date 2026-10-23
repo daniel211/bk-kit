@@ -1,6 +1,6 @@
 # Beer Kit (`bk`)
 
-**Bộ công cụ multi-agent cho Claude Code: mobile (iOS, Android, Flutter), backend Python và frontend web.**
+**Bộ công cụ multi-agent cho Claude Code: mobile (iOS, Android, Flutter), backend Python, frontend web và repo fullstack.**
 
 Beer Kit biến Claude Code từ một trợ lý chung chung thành một đội phát triển có quy trình:
 có người lập kế hoạch, người code, người review, người test, người debug. Mỗi người đều biết rõ
@@ -12,10 +12,10 @@ TypeScript/React với Next.js hoặc Vite — `bk init` tự nhận framework).
 | | |
 |---|---|
 | **26** agents | planner, developer theo nền tảng, 3 reviewer, debugger, security auditor, test architect, git manager... |
-| **42** skills | `/bk-plan`, `/bk-code`, `/bk-debug`, `/bk-test`, `/bk-team`, `/bk-autopilot`... |
+| **43** skills | `/bk-plan`, `/bk-code`, `/bk-debug`, `/bk-test`, `/bk-team`, `/bk-autopilot`... |
 | **65** hooks | chặn đọc file nhạy cảm, quét secret, giới hạn context, ép phân vai, đo chi phí... |
-| **32** rules | chuẩn code từng nền tảng, giao thức điều phối, cổng phê duyệt |
-| **5** nền tảng | iOS · Android · Flutter · Python (backend) · Web (frontend), trong **một** package `@beerkit/bk` và **một** lệnh `bk` |
+| **33** rules | chuẩn code từng nền tảng, giao thức điều phối, cổng phê duyệt |
+| **6** kit | iOS · Android · Flutter · Python (backend) · Web (frontend) · Fullstack (Python + web), trong **một** package `@beerkit/bk` và **một** lệnh `bk` |
 <!-- /auto:release-stats -->
 
 ---
@@ -47,10 +47,15 @@ Muốn đi một mạch từ ý tưởng đến code: `/bk-autopilot "Đăng nh�
 
 ## Điểm mạnh
 
-**1. Một lệnh, năm nền tảng.** `bk init --kit ios|android|flutter|python|web`, hoặc bỏ `--kit` để
+**1. Một lệnh, sáu kit.** `bk init --kit ios|android|flutter|python|web|fullstack`, hoặc bỏ `--kit` để
 kit tự nhận từ `pubspec.yaml`, `*.xcodeproj`, `build.gradle*`, `pyproject.toml` / `requirements.txt`,
-hoặc `package.json` + `tsconfig.json`. Agent, rule và lệnh build/test được dựng riêng cho từng nền
-tảng, không phải prompt chung.
+hoặc `package.json` + `tsconfig.json` — ở thư mục gốc hoặc một thư mục con như `backend/`. Agent, rule
+và lệnh build/test được dựng riêng cho từng nền tảng, không phải prompt chung; lệnh chạy qua trình quản
+lý của project (`uv`, `poetry`, `pnpm`, `yarn`, `npm`).
+
+**Fullstack trong một repo.** Có cả BE Python và FE web (cùng thư mục gốc hoặc `backend/` + `frontend/`)
+thì kit `fullstack` giao việc BE cho `bk-python-developer`, FE cho `bk-web-developer`, chạy song song,
+mỗi bên lint và test trong thư mục của mình; đổi API thì sửa BE trước, FE dùng type sinh từ OpenAPI.
 
 **2. Chia vai thật sự, không phải một agent làm tất cả.** Người điều phối giao việc cho agent
 chuyên trách. Agent chỉ-đọc (reviewer, security auditor) bị chặn quyền ghi ngay lúc giao việc và
@@ -118,14 +123,14 @@ npm install -g ./beerkit-bk-*.tgz
 ```bash
 # Gắn vào dự án của bạn
 cd ~/MyProject
-bk init --kit ios          # hoặc android / flutter / python / web
+bk init --kit ios          # hoặc android / flutter / python / web / fullstack
 bk doctor                  # kiểm tra cài đặt
 ```
 
 Mở dự án trong Claude Code rồi chạy `/bk-bootstrap`.
 
 Cài một phiên bản cụ thể: truyền tag vào lệnh tải, ví dụ
-<!-- auto:release-version -->`gh release download v0.15.1 --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz'`<!-- /auto:release-version -->.
+<!-- auto:release-version -->`gh release download v0.16.0 --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz'`<!-- /auto:release-version -->.
 
 ### Cập nhật
 

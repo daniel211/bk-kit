@@ -95,7 +95,7 @@ function tryLoadPolicy(projectRoot) {
  * arch-fitness platform was reported "not detected".
  *
  * @param {string} projectRoot
- * @returns {Array<'ios'|'android'|'flutter'|'python'|'web'>}
+ * @returns {Array<'ios'|'android'|'flutter'|'python'|'web'|'fullstack'>}
  */
 function detectPlatforms(projectRoot) {
   let entries = [];
@@ -112,12 +112,20 @@ function detectPlatforms(projectRoot) {
   if (has('pubspec.yaml')) {
     platforms.push('flutter');
   }
-  if (['pyproject.toml', 'requirements.txt', 'manage.py', 'setup.py'].some(has)) {
-    platforms.push('python');
-  }
-  if (has('package.json') && entries.some(e => /^(?:tsconfig\.json|(?:next|vite)\.config\.[cm]?[jt]s)$/.test(e))) {
-    platforms.push('web');
-  }
+  // python / web also count from a first-level subdir (backend/ + frontend/), as the fullstack
+  // kit's components do; both present -> fullstack too.
+  const dirs = [entries].concat(entries
+    .filter(e => !e.startsWith('.') && !['node_modules', '.venv', 'venv'].includes(e))
+    .filter(e => { try { return fs.statSync(path.join(projectRoot, e)).isDirectory(); } catch { return false; } })
+    .map(e => { try { return fs.readdirSync(path.join(projectRoot, e)); } catch { return []; } }));
+  const isPython = (list) => ['pyproject.toml', 'requirements.txt', 'manage.py', 'setup.py'].some(n => list.includes(n));
+  const isWeb = (list) => list.includes('package.json')
+    && list.some(e => /^(?:tsconfig\.json|(?:next|vite)\.config\.[cm]?[jt]s)$/.test(e));
+  const python = dirs.some(isPython);
+  const web = dirs.some(isWeb);
+  if (python) platforms.push('python');
+  if (web) platforms.push('web');
+  if (python && web) platforms.push('fullstack');
   return platforms;
 }
 
@@ -125,7 +133,7 @@ function detectPlatforms(projectRoot) {
 const ARCH_FITNESS_PLATFORMS = ['ios', 'android', 'flutter'];
 
 /** Platforms the kit supports that have no arch-fitness rules yet: reported n/a, never "disabled". */
-const NO_ARCH_FITNESS_PLATFORMS = ['python', 'web'];
+const NO_ARCH_FITNESS_PLATFORMS = ['python', 'web', 'fullstack'];
 
 // ─── Arch-fitness static check ────────────────────────────────────────────────
 

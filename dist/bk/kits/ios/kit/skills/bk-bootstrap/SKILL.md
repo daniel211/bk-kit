@@ -81,7 +81,10 @@ ALL modes dispatch agents — the conductor NEVER scans or writes docs inline.
 
 7. **Update Platform Context** — write `platform-context.json` from real scan data, never
    template defaults (detected platform, build commands, SDK versions). python / web: also set
-   `framework` (+ web `testRunner`) and merge `frameworks[framework]`; keep the `frameworks` map.
+   `root` (dir holding the markers), `framework` (+ web `testRunner`) detected there, merge
+   `frameworks[framework]`, then `runner` + runner-prefixed commands; keep the `frameworks` map.
+   fullstack: do this per entry of `components` (its `root`, framework, runner; `present: false`
+   when its markers are gone, `true` when found); never drop `components` or a component's `frameworks`.
    Load: `references/foundation-synthesis.md` § Platform Context Update
 
 8. **Report** — show the summary, then suggest the next step (see below).

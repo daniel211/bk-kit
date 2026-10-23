@@ -50,6 +50,9 @@ Read existing platform-context.json template
 → Write updated platform-context.json
 ```
 
+**python / web — `root`** (top-level field): the dir carrying the kit's markers, chosen exactly as
+a fullstack component root below (step 1); markers at `.` keep `.`. Detect framework and runner there.
+
 **python / web — framework variant** (same precedence as `bk init`, first match wins):
 
 | Kit | `framework` | Evidence |
@@ -67,6 +70,34 @@ Merge: shallow-merge `frameworks[framework].commands` into `commands` and `.conv
 `conventions` (generic merges nothing); then scan-verified values win. Django without
 `pytest-django` → `commands.test` = `python manage.py test`. Never delete the `frameworks` map —
 agents read `frameworks[framework].references`.
+
+**Runner** (after the framework merge, once — never prefix a command that already starts with
+`uv run` / `poetry run`). Lockfile at `root`, first match wins; write `runner`:
+
+| Lockfile | `runner` | Commands | `install` |
+|----------|----------|----------|-----------|
+| `uv.lock` | `uv` | `uv run --frozen <cmd>` for build/test/lint/format/typecheck/migrate/migrationsCheck | `uv sync --frozen` |
+| `poetry.lock` | `poetry` | `poetry run <cmd>`, same keys | `poetry install` |
+| none (python) | `pip` | unchanged | unchanged |
+| `pnpm-lock.yaml` | `pnpm` | `npx ` → `pnpm exec `, `npm run ` → `pnpm run ` | `pnpm install --frozen-lockfile` |
+| `yarn.lock` | `yarn` | `npx x` / `npm run x` → `yarn x` | `yarn install --frozen-lockfile` |
+| `package-lock.json` | `npm` | unchanged | `npm ci` |
+| none (web) | `npm` | unchanged | unchanged |
+
+**fullstack — per component** (same rules as `bk init`). For each entry of `components`:
+
+1. `root`: the dir carrying that platform's root markers (python: pyproject.toml / requirements.txt
+   / manage.py / setup.py; web: package.json next to tsconfig.json / next.config.* / vite.config.*)
+   — the project root (`.`) or a first-level subdir (skip node_modules, .venv, venv, dot-dirs and docs, doc, scripts, tools, examples, e2e, tests, test).
+   Several qualify → conventional name first (python: backend, api, server; web: frontend, web,
+   client, app), else `.`, else the first alphabetically; tell the user which was picked.
+   None → set `"present": false` and leave the rest of the component as is (hooks skip it);
+   found → `"present": true` + `root` (this turns a previously absent component back on).
+2. `framework` (+ web `testRunner`) detected at that root with the table above; merge into the
+   component's own `commands` / `conventions`; then the runner table at that root.
+
+Keep the `components` array, each component's `id` / `platform` / `frameworks`, and the top-level
+`rules` / `skills` / `mcpServers`. Never flatten components into top-level `commands`.
 
 ## Cross-Link Rule
 

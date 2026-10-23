@@ -14,7 +14,8 @@ import { kitLayout, packageRootFrom } from '../lib/package-layout.mjs';
 import { addKitOption, resolveKitOrExit } from '../lib/kit-resolver.mjs';
 import { detectDrift, formatDriftList, readDoctorIgnore } from '../lib/kit-drift.mjs';
 import { OMIT_CLAUDE_MD_MIN_VERSION, compareVersions, detectClaudeVersion } from '../lib/claude-code-version.mjs';
-import { compareRecordedFramework } from '../lib/framework-detector.mjs';
+import { FRAMEWORK_PLATFORMS, compareRecordedFramework } from '../lib/framework-detector.mjs';
+import { checkComponents, dirExists } from '../lib/component-detector.mjs';
 import { agentsOutOfMode, readSubagentContextMode } from '../lib/subagent-context-mode.mjs';
 import { matchedPreset, haikuEffortWarnings, locallyEditedAgents } from '../lib/model-override-doctor.mjs';
 import { readAgentDefaults } from '../lib/model-presets.mjs';
@@ -208,14 +209,55 @@ export async function runDoctor(targetDir, platform, { pkgAgentsDir } = {}) {
   //     an unreadable context is check 3's error, not this one's.
   let installedCtx = null;
   try { installedCtx = JSON.parse(readFileSync(join(claudeDir, 'platform-context.json'), 'utf8')); } catch { /* check 3 */ }
-  const fw = installedCtx && compareRecordedFramework(installedCtx, platform, targetDir);
+  // `root` (Phase 4.1): where the markers sit, and where hooks lint. Missing = '.'.
+  const singleRoot = installedCtx && FRAMEWORK_PLATFORMS.has(platform)
+    ? ((typeof installedCtx.root === 'string' && installedCtx.root) || '.') : null;
+  const singleRootExists = singleRoot !== null && dirExists(join(targetDir, singleRoot));
+  if (singleRoot !== null && singleRoot !== '.') {
+    check(`Root: ${singleRoot}/${singleRootExists ? '' : ' — not found'}`, () => {
+      if (singleRootExists) return true;
+      console.log('    Set `root` in .claude/platform-context.json, or rerun /bk-bootstrap.');
+      return false;
+    });
+  }
+  const fw = installedCtx && singleRootExists && compareRecordedFramework(installedCtx, platform, join(targetDir, singleRoot));
   if (fw) {
-    const runner = fw.recordedRunner ? `, tests: ${fw.recordedRunner}` : '';
+    const runner = (fw.recordedRunner ? `, tests: ${fw.recordedRunner}` : '')
+      + (installedCtx.runner ? `, runner: ${installedCtx.runner}` : '');
     check(`Framework: ${fw.recorded}${runner}`, () => {
       if (fw.differences.length === 0) return true;
       console.log('    The project no longer matches what platform-context.json records:');
       for (const d of fw.differences) console.log(`      ${d}`);
       console.log('    If it changed, rerun /bk-bootstrap, or edit `framework` and `commands` in .claude/platform-context.json.');
+      return 'warn';
+    });
+  }
+
+  // 3c. fullstack: per component, the recorded root must exist (hooks lint with cwd = root), and
+  //     its framework is compared with a fresh detection there — a mismatch only warns, as in 3b.
+  for (const c of checkComponents(installedCtx, targetDir)) {
+    if (c.present === false) {
+      // Informational, not counted: a repo without (yet) a frontend is a valid fullstack install.
+      console.log(`  ℹ Component ${c.id}: not present (${c.platform}) — /bk-bootstrap turns it on once its markers exist`);
+      continue;
+    }
+    const label = `Component ${c.id}: ${c.root === '.' ? './' : `${c.root}/`} (${c.platform}`;
+    if (!c.rootExists) {
+      check(`${label}) — root not found`, () => {
+        console.log(`    Set components[].root for "${c.id}" in .claude/platform-context.json, or rerun /bk-bootstrap.`);
+        return false;
+      });
+      continue;
+    }
+    const fwc = c.framework;
+    const recordedRunner = (installedCtx.components.find((x) => x.id === c.id) || {}).runner;
+    const runner = (fwc && fwc.recordedRunner ? `, tests: ${fwc.recordedRunner}` : '')
+      + (recordedRunner ? `, runner: ${recordedRunner}` : '');
+    check(`${label}${fwc ? `, ${fwc.recorded}${runner}` : ''})`, () => {
+      if (!fwc || fwc.differences.length === 0) return true;
+      console.log(`    ${c.id} no longer matches what platform-context.json records:`);
+      for (const d of fwc.differences) console.log(`      ${d}`);
+      console.log('    If it changed, rerun /bk-bootstrap, or edit the component\'s `framework` and `commands` in .claude/platform-context.json.');
       return 'warn';
     });
   }

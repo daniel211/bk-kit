@@ -1,3 +1,19 @@
+---
+paths:
+  - "**/*.ts"
+  - "**/*.tsx"
+  - "**/*.js"
+  - "**/*.jsx"
+  - "**/*.mjs"
+  - "**/*.cjs"
+  - "**/package.json"
+  - "**/tsconfig*.json"
+  - "**/next.config.*"
+  - "**/vite.config.*"
+---
+
+<!-- Scoped to TS/JS sources + project files: loads when one is Read, so the resident set stays small and the fullstack kit does not carry both stacks. See docs/kit-dev/add-rule.md. -->
+
 # Web Platform Rules
 
 ## Language & Conventions

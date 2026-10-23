@@ -83,12 +83,12 @@ function safeReaddir(dirPath) {
 }
 
 /** Every kit the CLI ships (kit-resolver.mjs KIT_NAMES). */
-const PLATFORMS = 'ios|android|flutter|python|web';
+const PLATFORMS = 'ios|android|flutter|python|web|fullstack';
 /** `bk-code-reviewer.python.md` → python */
 const PLATFORM_SECTION_RE = new RegExp(`\\.(${PLATFORMS})$`);
 /** `bk-web-developer.md` → web */
 const PLATFORM_AGENT_RE = new RegExp(`bk-(${PLATFORMS})-`);
-/** `bk-python/`, `bk-flutter-sdk/` → python, flutter; the boundary keeps a future `bk-webhooks` base */
+/** `bk-python/`, `bk-flutter-sdk/`, `bk-fullstack/` → python, flutter, fullstack; the boundary keeps a future `bk-webhooks` base */
 const PLATFORM_SKILL_RE = new RegExp(`^bk-(${PLATFORMS})(?=-|$)`);
 
 /**

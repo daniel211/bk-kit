@@ -85,6 +85,10 @@ Based on project context, run in background (first match wins; lockfiles install
 - `build.gradle` / `build.gradle.kts` → `./gradlew build`
 - `pubspec.yaml` → `flutter pub get`
 
+`create` returns `dependencyInstallers: [{ root, cmd }]` — run each as `cd <worktreePath>/<root> && <cmd>`.
+fullstack (`components` in `.claude/platform-context.json`): one entry per component, in its `root`,
+with only that platform's installers (python: uv/poetry/requirements; web: bun/pnpm/yarn/npm).
+
 ## Commands
 
 | Command | Usage | Description |

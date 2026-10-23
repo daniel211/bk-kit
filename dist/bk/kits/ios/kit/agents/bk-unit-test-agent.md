@@ -182,8 +182,6 @@ Write unit tests for Sources/Features/Transactions/Data/TransactionRepository.sw
 | # | Test File | Tests | Passed | Failed | Skipped |
 |---|-----------|-------|--------|--------|---------|
 | 1 | Tests/Features/Transactions/TransactionRepositoryTests.swift | 6 | 6 | 0 | 0 |
-| 2 | Tests/Features/Transactions/Fakes/FakeTransactionAPI.swift | — | — | — | — |
-| 3 | Tests/Features/Transactions/Fakes/InMemoryTransactionCache.swift | — | — | — | — |
 
 ### Test Cases
 | # | Test Name | Category | Description |
@@ -211,13 +209,7 @@ class FakeTransactionAPI: TransactionAPIProtocol {
         return try result.get()
     }
 }
-
-class InMemoryTransactionCache: TransactionCacheProtocol {
-    var stored: [Transaction] = []
-    func save(_ transactions: [Transaction]) { stored = transactions }
-    func load() -> [Transaction] { stored }
-    func clear() { stored = [] }
-}
+// + InMemoryTransactionCache (array-backed save/load/clear)
 ```
 
 ### Failed Tests

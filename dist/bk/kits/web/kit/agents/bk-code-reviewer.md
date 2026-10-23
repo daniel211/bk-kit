@@ -195,23 +195,18 @@ Review code changes in Sources/Features/Auth/ for the auth-refactor feature. Cha
 
 ## TypeScript / React Review Focus
 - No `dangerouslySetInnerHTML`/`innerHTML` with user data; no tokens in localStorage; no secrets in `NEXT_PUBLIC_`/`VITE_` vars
-- Every async view has loading / empty / error (with retry) states
-- Server state only via TanStack Query — not copied into `useState` or a store; mutations invalidate exact keys
+- Every async view: loading / empty / error (with retry)
+- Server state only in TanStack Query (not copied to `useState`/store); mutations invalidate exact keys
 - No `fetch` in components; API responses validated with zod
-- a11y: labelled inputs, semantic elements/roles, focus management, contrast; `eslint-plugin-jsx-a11y` clean
-- Perf: no needless re-renders or effect-derived state, routes code-split, images sized/optimized (Core Web Vitals)
-- Strict TS: no `any`, `@ts-ignore`, non-null `!` on external data; hooks deps complete; stable list keys
-- Components > ~150 lines extracted; `'use client'` only at interactive leaves (Next.js)
-- `tsc --noEmit`, `eslint`, `vitest run` clean; critical flows covered by Playwright e2e
-
-- Next: no secrets/DB rows passed to client components; Server Actions + route handlers validate with zod and check ownership; explicit `cache`/`revalidate`, mutations call `revalidatePath`/`revalidateTag`
-- Vite: routes lazy-loaded; route guards treated as UX only; no secrets in `VITE_*`
+- a11y: labelled inputs, semantic roles, focus management, contrast; `jsx-a11y` clean
+- Perf: no needless re-renders or effect-derived state; routes code-split; images sized (CWV)
+- Strict TS: no `any`, `@ts-ignore`, `!` on external data; complete hook deps; stable list keys
+- Components > ~150 lines extracted; `'use client'` only at interactive leaves
+- Next: no secrets/DB rows to client components; Server Actions + route handlers validate with zod and check ownership; explicit `cache`/`revalidate`, mutations `revalidatePath`/`revalidateTag`
+- Vite: lazy routes; route guards are UX only
 
 ## Lint Command
-- `npx eslint .` and `npx tsc --noEmit`
+- `npx eslint .`, `npx tsc --noEmit`, `vitest run`; critical flows in Playwright e2e
 
 ## Naming Validation
-- kebab-case: files and folders (PascalCase.tsx components if the project uses it)
-- PascalCase: components, types, interfaces
-- camelCase: variables, functions, hooks (`useX`)
-- UPPER_SNAKE_CASE: module constants
+- kebab-case files/folders (PascalCase.tsx if the project uses it); PascalCase components/types; camelCase vars/functions/hooks (`useX`); UPPER_SNAKE constants

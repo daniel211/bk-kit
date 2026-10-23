@@ -1,0 +1,230 @@
+{
+  "platform": "fullstack",
+  "components": [
+    {
+      "id": "backend",
+      "root": ".",
+      "platform": "python",
+      "language": "python",
+      "languageVersion": "3.11+",
+      "fileNaming": "snake_case",
+      "fileExtension": ".py",
+      "framework": "generic",
+      "commands": {
+        "build": "python -m compileall -q -x venv .",
+        "test": "pytest --cov",
+        "lint": "ruff check .",
+        "typecheck": "mypy .",
+        "format": "ruff format .",
+        "clean": "rm -rf .pytest_cache .mypy_cache .ruff_cache htmlcov .coverage",
+        "install": "uv sync"
+      },
+      "rules": [
+        "rules/backend-shared-rules.md",
+        "rules/python-rules.md"
+      ],
+      "skills": [
+        "bk-code",
+        "bk-test",
+        "bk-debug",
+        "bk-code-review-workflow",
+        "bk-python"
+      ],
+      "dirs": {
+        "source": "match project (src/ layout or a top-level package)",
+        "test": "tests/"
+      },
+      "conventions": {
+        "architecture": "Layered: entry point (router / view / CLI) -> service -> repository",
+        "framework": "None detected — match project (Flask, plain scripts, library)",
+        "async": "sync by default; async/await (asyncio) where the project already uses it",
+        "validation": "Pydantic v2 or dataclasses at the boundaries (match project)",
+        "settings": "env / vault (pydantic-settings or os.environ) — never hardcoded",
+        "testFramework": "pytest",
+        "mockFramework": "pytest-mock"
+      },
+      "frameworks": {
+        "fastapi": {
+          "commands": {
+            "migrate": "alembic upgrade head",
+            "migrationsCheck": "alembic check"
+          },
+          "conventions": {
+            "architecture": "Layered: router -> service -> repository",
+            "framework": "FastAPI",
+            "async": "async/await (asyncio)",
+            "di": "FastAPI Depends",
+            "validation": "Pydantic v2",
+            "orm": "SQLAlchemy 2 async + Alembic",
+            "migrations": "alembic/versions/",
+            "settings": "pydantic-settings (env / vault)",
+            "testFramework": "pytest + pytest-asyncio + httpx",
+            "mockFramework": "pytest-mock / respx"
+          },
+          "references": [
+            "skills/bk-python/references/fastapi-patterns.md"
+          ]
+        },
+        "django": {
+          "commands": {
+            "build": "python manage.py check",
+            "test": "pytest --cov",
+            "migrate": "python manage.py migrate",
+            "migrationsCheck": "python manage.py makemigrations --check --dry-run"
+          },
+          "conventions": {
+            "architecture": "Layered: views / DRF viewsets -> services -> ORM managers / querysets",
+            "framework": "Django + Django REST Framework",
+            "async": "sync views by default; async views only where the project already uses them",
+            "validation": "DRF serializers / Django forms",
+            "orm": "Django ORM",
+            "migrations": "<app>/migrations/ (makemigrations; never edit an applied migration)",
+            "settings": "settings module split per env; secrets from env / vault",
+            "testFramework": "pytest + pytest-django (projects without pytest-django: python manage.py test — bk init detects this and sets commands.test)",
+            "mockFramework": "pytest-mock / unittest.mock"
+          },
+          "references": [
+            "skills/bk-python/references/django-patterns.md"
+          ]
+        }
+      }
+    },
+    {
+      "id": "frontend",
+      "root": ".",
+      "platform": "web",
+      "language": "typescript",
+      "languageVersion": "5.0+",
+      "fileNaming": "kebab-case",
+      "fileExtension": ".tsx",
+      "designEngine": "auto",
+      "framework": "generic",
+      "testRunner": "vitest",
+      "commands": {
+        "build": "npm run build",
+        "test": "npx vitest run --coverage",
+        "lint": "npx eslint .",
+        "typecheck": "npx tsc --noEmit",
+        "format": "npx prettier --write .",
+        "e2e": "npx playwright test",
+        "clean": "rm -rf node_modules/.vite .next dist coverage"
+      },
+      "rules": [
+        "rules/web-shared-rules.md",
+        "rules/web-rules.md"
+      ],
+      "skills": [
+        "bk-code",
+        "bk-test",
+        "bk-debug",
+        "bk-code-review-workflow",
+        "bk-web"
+      ],
+      "dirs": {
+        "source": "src/",
+        "test": "src/ (co-located *.test.tsx)",
+        "e2eTest": "e2e/",
+        "resources": "public/"
+      },
+      "conventions": {
+        "architecture": "Feature-first (UI -> hooks -> services)",
+        "framework": "React 18 — none detected; match project (CRA, Remix, webpack)",
+        "fileNaming": "kebab-case files; PascalCase.tsx for components is also common — match project",
+        "async": "Promise / async-await, AbortSignal for cancellation",
+        "stateManagement": "TanStack Query (server state) + local state / Zustand (client state)",
+        "forms": "react-hook-form + zod",
+        "styling": "Tailwind CSS or CSS Modules (match project)",
+        "uiFramework": "React",
+        "testFramework": "vitest + @testing-library/react",
+        "mockFramework": "msw",
+        "e2eFramework": "playwright",
+        "packageManager": "npm / pnpm (match lockfile)"
+      },
+      "frameworks": {
+        "next": {
+          "commands": {
+            "build": "npm run build",
+            "dev": "npm run dev",
+            "start": "npm run start"
+          },
+          "conventions": {
+            "architecture": "App Router: app/ routes -> server components -> services; client components only where interactive",
+            "framework": "Next.js App Router (React Server Components)",
+            "dataFetching": "server components / route handlers / server actions; TanStack Query for client-side server state",
+            "routing": "file-based app/ routes (page.tsx, layout.tsx, route.ts)"
+          },
+          "references": [
+            "skills/bk-web/references/nextjs-patterns.md"
+          ]
+        },
+        "vite": {
+          "commands": {
+            "build": "npm run build",
+            "dev": "npm run dev",
+            "preview": "npm run preview"
+          },
+          "conventions": {
+            "architecture": "Feature-first SPA (UI -> hooks -> services)",
+            "framework": "React 18 + Vite SPA",
+            "routing": "client-side router (React Router / TanStack Router — match project)"
+          },
+          "references": [
+            "skills/bk-web/references/vite-spa-patterns.md"
+          ]
+        }
+      }
+    }
+  ],
+  "rules": [
+    "rules/backend-shared-rules.md",
+    "rules/python-rules.md",
+    "rules/web-shared-rules.md",
+    "rules/web-rules.md",
+    "rules/fullstack-rules.md"
+  ],
+  "skills": [
+    "bk-code",
+    "bk-test",
+    "bk-debug",
+    "bk-code-review-workflow",
+    "bk-python",
+    "bk-web",
+    "bk-fullstack"
+  ],
+  "mcpServers": {
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "description": "Library documentation lookup",
+      "scope": "foreground"
+    },
+    "playwright": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@playwright/mcp"
+      ],
+      "description": "Browser automation for e2e and visual checks",
+      "scope": "foreground"
+    }
+  },
+  "templateVars": {
+    "namingConvention": "",
+    "lintCommand": ""
+  },
+  "externalServices": {
+    "figma": {
+      "type": "rest",
+      "script": "scripts/figma-cli.mjs",
+      "env": [
+        "FIGMA_API_KEY"
+      ],
+      "tokenFile": "~/.config/beer-kit/figma.env",
+      "description": "Design extraction reads Figma over its REST API. No MCP server: the npx figma-mcp package offers comment tools only, and Figma Dev Mode MCP has no node export.",
+      "note": "The Variables API additionally needs the file_variables:read scope and a Figma Enterprise plan; without it design tokens come from style names and raw values."
+    }
+  }
+}

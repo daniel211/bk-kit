@@ -13,11 +13,16 @@
 | macos-only | `.xcworkspace`/`.xcodeproj` with macOS target only | bk-ios-developer |
 | apple-multiplatform | `.xcworkspace`/`.xcodeproj` with iOS + macOS targets | bk-ios-developer |
 | android-only | `build.gradle`, no `ios/` | bk-android-developer |
-| monorepo | Both `ios/` + `android/` (no pubspec.yaml) | bk-ios-developer + bk-android-developer |
+| monorepo | Both `ios/` + `android/` (no pubspec.yaml) | bk-ios-developer (ios kit; composite mobile kit is future work) |
+| fullstack | python + web markers at root or a first-level subdir | bk-python-developer + bk-web-developer |
 | python | `pyproject.toml` / `requirements.txt` / `manage.py` / `setup.py` | bk-python-developer |
 | web | `package.json` + `tsconfig.json` / `next.config.*` / `vite.config.*` | bk-web-developer |
 
 Platform context: `.claude/platform-context.json`. Conventions: `.claude/rules/{platform}-rules.md`.
+
+Fullstack: one sub-task per component (`components[]`: root, platform), dispatched to that component's
+dev agent; backend + frontend sub-tasks run in parallel when their `Files:` don't overlap; an API contract
+change = backend sub-task first, frontend after it (see `fullstack-rules.md`).
 
 ## 2. COMMAND ROUTING
 
@@ -38,7 +43,7 @@ FSM commands follow state-machine.md. Hook-guarded commands enforce I/O via hook
 ## 3. PLATFORM STANDARDS
 
 See the shared rule this kit ships in `.claude/rules/`: `mobile-shared-rules.md` (ios/android/flutter),
-`backend-shared-rules.md` (python) or `web-shared-rules.md` (web) — architecture, API, security, UI/UX or
+`backend-shared-rules.md` (python), `web-shared-rules.md` (web) or both (fullstack) — architecture, API, security, UI/UX or
 observability, testing, CI/CD, git.
 
 ## 4. Agent Dispatch → See conductor-role.md §2-2B
@@ -58,4 +63,4 @@ observability, testing, CI/CD, git.
 - Approval gates: `.claude/rules/approval-rules.md`
 - Dispatch labeling: `.claude/rules/dispatch-labeling.md`
 - Agent protocols: `.claude/rules/agent-protocols/`
-- Platform rules: `.claude/rules/{ios,android,flutter}-rules.md`
+- Platform rules: `.claude/rules/{platform}-rules.md` (fullstack: python + web + fullstack)

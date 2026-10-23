@@ -22,7 +22,7 @@
  *
  * Exports:
  *   LINTABLE_EXTENSIONS      — map of platform → extensions the linter can read
- *   isLintable(platform, f)  — should this file be queued at all?
+ *   isLintable(platform, f, root?) — should this file be queued at all? (root: composite kits)
  *   sanitizeSessionId(id)    — filesystem-safe session key
  *   resolveQueueFile(root, sessionId, namespace?)
  *   enqueueFile(queueFile, absFile, extra?)
@@ -68,12 +68,21 @@ const LINTABLE_EXTENSIONS = {
 /**
  * Is this a file the platform linter can read?
  * Keeps .md/.json/.yaml edits out of the batch — they only produce noise.
+ *
+ * A composite platform (`fullstack`) has no linter of its own: the file is lintable when it
+ * belongs to one of the project's components (lib/component-resolver.cjs — root prefix AND an
+ * extension that component's platform lints), which needs `projectRoot`.
  * @param {string} platform
  * @param {string} filePath
+ * @param {string} [projectRoot] — required for a composite platform; ignored otherwise
  * @returns {boolean}
  */
-function isLintable(platform, filePath) {
+function isLintable(platform, filePath, projectRoot) {
   if (!filePath || typeof filePath !== 'string') return false;
+  const resolver = require('./component-resolver.cjs');
+  if (resolver.isComposite(platform)) {
+    return Boolean(projectRoot) && resolver.componentForFile(filePath, projectRoot) !== null;
+  }
   const exts = LINTABLE_EXTENSIONS[platform];
   if (!exts) return false;
   return exts.includes(path.extname(filePath).toLowerCase());

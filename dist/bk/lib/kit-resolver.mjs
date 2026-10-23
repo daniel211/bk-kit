@@ -16,7 +16,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** The kits this CLI knows how to ship, in the order they are listed to the user. */
-export const KIT_NAMES = ['ios', 'android', 'flutter', 'python', 'web'];
+export const KIT_NAMES = ['ios', 'android', 'flutter', 'python', 'web', 'fullstack'];
 
 /**
  * Which kit wins when a project carries several markers at once.
@@ -28,10 +28,55 @@ export const KIT_NAMES = ['ios', 'android', 'flutter', 'python', 'web'];
  *
  * The mobile kits come before python and web: a mobile repo often carries a requirements.txt (for
  * fastlane or tooling scripts) or a package.json, while a backend or web root rarely carries a
- * pubspec.yaml or an .xcodeproj. A fullstack root with both pyproject.toml and a TS package.json
- * resolves to python, with the ambiguity note telling the user how to pick web instead.
+ * pubspec.yaml or an .xcodeproj. fullstack sits between them: python AND web markers, at the
+ * root or in a first-level subdir (see detectFullstack), mean one repo with both stacks.
  */
-const PREFERENCE = ['flutter', 'ios', 'android', 'python', 'web'];
+const PREFERENCE = ['flutter', 'ios', 'android', 'fullstack', 'python', 'web'];
+
+/**
+ * The single-platform kits a composite kit is made of (src/bk-manifest.json `components`).
+ * Only what the resolver needs: which marker sets must both be present.
+ */
+export const COMPOSITE_KITS = { fullstack: ['python', 'web'] };
+
+/**
+ * First-level dirs never scanned for component markers: dependencies, venvs, and dirs that hold
+ * tooling rather than a component (a `docs/requirements.txt` for mkdocs must not turn a web repo
+ * into fullstack). Dot-dirs are skipped separately. MUST equal SKIPPED_SUBDIRS in
+ * hooks/_base/lib/project-detector.cjs (the hooks' copy) — a test asserts the two lists match.
+ */
+export const SKIPPED_SUBDIRS = new Set([
+  'node_modules', '.venv', 'venv',
+  'docs', 'doc', 'scripts', 'tools', 'examples', 'e2e', 'tests', 'test'
+]);
+
+/**
+ * Conventional component dir names, most likely first. Picks among several first-level subdirs
+ * carrying the same platform's markers — for a fullstack component root (component-detector) and
+ * for a single-stack kit whose markers sit only in a subdir (detectKitsFromMarkers). Only these
+ * platforms are looked for in subdirs; mobile kits are detected at the root only.
+ */
+export const CONVENTIONAL_DIRS = {
+  python: ['backend', 'api', 'server'],
+  web: ['frontend', 'web', 'client', 'app'],
+};
+
+/**
+ * The dir to use among a platform's marker hits (platformMarkerDirs order): a conventional
+ * subdir name first, else the root, else the first subdir alphabetically. The one rule both
+ * kit detection and `bk init`'s root detection apply.
+ *
+ * @param {string} platform
+ * @param {Array<{dir: string, marker: string}>} hits
+ * @returns {{dir: string, marker: string}|null}
+ */
+export function pickMarkerDir(platform, hits) {
+  if (!hits || hits.length === 0) return null;
+  const conventional = (CONVENTIONAL_DIRS[platform] || [])
+    .map((name) => hits.find((h) => h.dir === name))
+    .find(Boolean);
+  return conventional || hits.find((h) => h.dir === '.') || hits[0];
+}
 
 /** Config files that make a package.json root a TypeScript / bundled web project. */
 function isWebConfigFile(name) {
@@ -82,6 +127,61 @@ function markersByPreference() {
   return [...MARKERS].sort((a, b) => PREFERENCE.indexOf(a.platform) - PREFERENCE.indexOf(b.platform));
 }
 
+/** The root marker file of `platform` in a directory listing, or null. */
+function markerIn(platform, entries) {
+  const marker = MARKERS.find((m) => m.platform === platform);
+  return (marker && entries.find((name) => marker.matches(name, entries))) || null;
+}
+
+/** Directory listing, [] when unreadable. */
+function listDir(dir, withFileTypes = false) {
+  try { return readdirSync(dir, { withFileTypes }); } catch { return []; }
+}
+
+/**
+ * Where a platform's markers sit: the root ('.') and/or first-level subdirs.
+ *
+ * One readdir of the root plus one per subdir — no deeper walk. SKIPPED_SUBDIRS and dot-dirs
+ * are skipped. Shared by fullstack detection and `bk init`'s component roots, so both
+ * see the same marker sets as single-platform detection.
+ *
+ * @param {string} targetDir - project root
+ * @param {string} platform - 'python' | 'web' | any MARKERS platform
+ * @returns {Array<{dir: string, marker: string}>} root first, then subdirs alphabetically
+ */
+export function platformMarkerDirs(targetDir, platform) {
+  const found = [];
+  const rootHit = markerIn(platform, listDir(targetDir));
+  if (rootHit) found.push({ dir: '.', marker: rootHit });
+  const subdirs = listDir(targetDir, true)
+    .filter((e) => e.isDirectory() && !e.name.startsWith('.') && !SKIPPED_SUBDIRS.has(e.name))
+    .map((e) => e.name)
+    .sort();
+  for (const name of subdirs) {
+    const hit = markerIn(platform, listDir(join(targetDir, name)));
+    if (hit) found.push({ dir: name, marker: hit });
+  }
+  return found;
+}
+
+/**
+ * A composite kit whose component platforms all have markers (root or first-level subdir).
+ * The marker text names the first hit of each, e.g. `backend/manage.py + frontend/package.json`.
+ *
+ * @param {string} targetDir
+ * @returns {Array<{platform: string, marker: string}>}
+ */
+function detectComposites(targetDir) {
+  const found = [];
+  for (const [kit, parts] of Object.entries(COMPOSITE_KITS)) {
+    const hits = parts.map((p) => platformMarkerDirs(targetDir, p)[0]);
+    if (hits.every(Boolean)) {
+      found.push({ platform: kit, marker: hits.map((h) => (h.dir === '.' ? h.marker : `${h.dir}/${h.marker}`)).join(' + ') });
+    }
+  }
+  return found;
+}
+
 /**
  * The kits actually present in the installed package.
  *
@@ -122,12 +222,20 @@ export function recordedKit(targetDir) {
 }
 
 /**
- * Platforms whose marker files sit in the target dir's own root.
+ * Platforms whose marker files sit in the target dir's own root, plus composite kits
+ * (fullstack) whose component markers sit at the root or in first-level subdirs; when neither
+ * matched, python / web markers in a first-level subdir (detectSubdirSingles).
+ *
+ * A detected composite replaces its parts in the list: python and web are what fullstack is
+ * made of, not alternatives to it, and listing them would turn every fullstack init into an
+ * ambiguity note.
  *
  * @param {string} targetDir — project root
+ * @param {string[]} [known] — kits the package ships; a composite it does not ship is neither
+ *   reported nor allowed to hide its parts
  * @returns {Array<{platform: string, marker: string}>} matches, best candidate first
  */
-export function detectKitsFromMarkers(targetDir) {
+export function detectKitsFromMarkers(targetDir, known = KIT_NAMES) {
   let entries;
   try {
     entries = readdirSync(targetDir);
@@ -135,17 +243,48 @@ export function detectKitsFromMarkers(targetDir) {
     return [];
   }
 
-  const found = [];
+  let found = [];
   for (const marker of markersByPreference()) {
     const hit = entries.find((name) => marker.matches(name, entries));
     if (hit) found.push({ platform: marker.platform, marker: hit });
   }
+  const composites = detectComposites(targetDir).filter((c) => known.includes(c.platform));
+  if (composites.length > 0) {
+    const parts = new Set(composites.flatMap((c) => COMPOSITE_KITS[c.platform]));
+    found = found.filter((f) => !parts.has(f.platform)).concat(composites);
+    found.sort((a, b) => PREFERENCE.indexOf(a.platform) - PREFERENCE.indexOf(b.platform));
+  }
+  if (found.length === 0) found = detectSubdirSingles(targetDir);
   return found;
+}
+
+/**
+ * Single-stack kits whose markers sit only in first-level subdirs (AHub: `backend/pyproject.toml`,
+ * nothing at the root). Consulted only when the root itself matched nothing — root markers always
+ * win — and after the composite check, so python + web in two subdirs stays fullstack. The marker
+ * names the dir pickMarkerDir chooses, e.g. `backend/pyproject.toml`.
+ *
+ * @param {string} targetDir
+ * @returns {Array<{platform: string, marker: string}>} in PREFERENCE order
+ */
+function detectSubdirSingles(targetDir) {
+  const found = [];
+  for (const platform of Object.keys(CONVENTIONAL_DIRS)) {
+    const pick = pickMarkerDir(platform, platformMarkerDirs(targetDir, platform).filter((h) => h.dir !== '.'));
+    if (pick) found.push({ platform, marker: `${pick.dir}/${pick.marker}` });
+  }
+  return found.sort((a, b) => PREFERENCE.indexOf(a.platform) - PREFERENCE.indexOf(b.platform));
 }
 
 /** The marker list as the failure message prints it. */
 function searchedMarkersText() {
-  return markersByPreference().map((m) => `    ${m.platform.padEnd(8)} ${m.label}`).join('\n');
+  const lines = markersByPreference().map((m) => `    ${m.platform.padEnd(9)} ${m.label}`);
+  for (const [kit, parts] of Object.entries(COMPOSITE_KITS)) {
+    lines.push(`    ${kit.padEnd(9)} ${parts.join(' and ')} markers, at the root or in first-level subdirs`);
+  }
+  lines.push(`    ${Object.keys(CONVENTIONAL_DIRS).join(' / ')} markers in one first-level subdir when the root has none`
+    + ` (backend/, frontend/, …; not ${['docs', 'scripts', 'tests'].join('/')}/ or dot-dirs)`);
+  return lines.join('\n');
 }
 
 /**
@@ -180,7 +319,7 @@ export function resolveKit({ packageRoot, targetDir, explicit, useRecorded = tru
     }
   }
 
-  const detected = detectKitsFromMarkers(targetDir).filter((d) => known.includes(d.platform));
+  const detected = detectKitsFromMarkers(targetDir, known).filter((d) => known.includes(d.platform));
   if (detected.length === 1) {
     return { ok: true, platform: detected[0].platform, source: 'marker' };
   }

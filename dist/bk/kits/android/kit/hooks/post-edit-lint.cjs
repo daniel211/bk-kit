@@ -44,16 +44,16 @@ try {
       }
 
       const platform = PLATFORM || 'unknown';
+      const projectRoot = resolveProjectRoot(data);
+      const absFile = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
 
       // Only queue files this platform's linter can actually read. Queueing a
-      // .md or .json edit would just hand `dart analyze` noise.
-      if (!isLintable(platform, filePath)) {
+      // .md or .json edit would just hand `dart analyze` noise. A composite kit
+      // (fullstack) asks which component owns the file, hence the project root.
+      if (!isLintable(platform, absFile, projectRoot)) {
         timer.end({ status: 'ok', exit: 0 });
         process.exit(0);
       }
-
-      const projectRoot = resolveProjectRoot(data);
-      const absFile = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
 
       const queueFile = resolveQueueFile(projectRoot, data.session_id || data.sessionId || '');
       const queued = enqueueFile(queueFile, absFile);

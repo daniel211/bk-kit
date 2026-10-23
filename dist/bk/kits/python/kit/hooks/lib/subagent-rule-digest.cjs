@@ -32,6 +32,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { isComposite, defaultComponents } = require('./component-resolver.cjs');
 
 /**
  * Per always-on rule: 'digest' = its subagent-facing part is summarised here;
@@ -46,6 +47,7 @@ const RULE_DECISIONS = {
   'backend-shared-rules': 'digest', // layering/API contract/migrations/security for code agents (python kit)
   'web-shared-rules': 'digest', // layering/server state/XSS-CSP/UI states for code agents (web kit)
   'platform-rules': 'digest', // {platform}-rules.md: essentials + pointer
+  'fullstack-rules': 'digest', // component ownership + BE-first API contract; code agents split work by it (fullstack kit)
   'team-rules': 'digest', // Output:/Files: contract and [SIGNAL: x] markers; rest is conductor/bk-team lead
   'user-interaction-protocol': 'digest', // §5 confidence in output metadata; rest is AskUserQuestion policy
   'approval-rules': 'conductor', // gates + thresholds; each reviewer carries its own severity line
@@ -172,13 +174,64 @@ function agentContextMode(projectRoot, agentType) {
 }
 
 /**
+ * Per component platform of a composite kit: the essentials of {platform}-rules AND its shared
+ * rules in one line, for agents that see every component. Shorter than PLATFORM_ESSENTIALS +
+ * SHARED_RULE_DIGESTS on purpose — a reviewer in the fullstack kit already carries the python,
+ * web and fullstack review sections, and its spawn total has to stay under agentSpawnTotal.
+ */
+const COMPONENT_ESSENTIALS = {
+  python: 'type hints, router → service → repository, Pydantic v2 at the boundary, authz + owner filter, parameterized SQL',
+  web: 'TS strict, components → hooks → services, TanStack Query, zod at the API boundary, no innerHTML/localStorage tokens'
+};
+
+/** `backend/ — python (django)`: where a component lives and what it is. */
+function componentLabel(c) {
+  const root = !c.root || c.root === '.' ? './' : `${c.root}/`;
+  const fw = c.framework && c.framework !== 'generic' ? ` (${c.framework})` : '';
+  return `${root} — ${c.platform}${fw}`;
+}
+
+/**
+ * The platform lines of a composite kit (fullstack). A platform developer
+ * (bk-<platform>-developer) sees only its own component(s), with the same shared + essentials
+ * lines a single-stack kit gives it. Every other agent sees each component in one short line plus
+ * one line of the composite rule (ownership + contract). Components come from the installed
+ * platform-context.json (subagent-init passes them); without one, the shipped defaults.
+ */
+function compositeLines({ agentType, platform, components, rulesRel }) {
+  // An array (even []: every component `present: false`) is the installed truth; null → defaults.
+  const all = Array.isArray(components) ? components : defaultComponents(platform);
+  const own = /^bk-([a-z]+)-developer$/.exec(agentType || '');
+  const mine = own ? all.filter((c) => c.platform === own[1]) : [];
+  const lines = [];
+  for (const c of mine) {
+    const shared = sharedRuleDigestFor(c.platform);
+    if (shared) lines.push(`- ${shared.text} (\`${rulesRel}/${shared.rule}.md\`).`);
+    const essentials = PLATFORM_ESSENTIALS[c.platform];
+    if (essentials) lines.push(`- ${componentLabel(c)}: ${essentials} (\`${rulesRel}/${c.platform}-rules.md\`; stay in this root; commands: its \`components[]\`).`);
+  }
+  if (mine.length > 0) return lines;
+  for (const c of all) {
+    const shared = sharedRuleDigestFor(c.platform);
+    const essentials = COMPONENT_ESSENTIALS[c.platform];
+    if (!essentials) continue;
+    const refs = [`${c.platform}-rules`, ...(shared ? [shared.rule] : [])].map((r) => `\`${rulesRel}/${r}.md\``).join(', ');
+    lines.push(`- ${componentLabel(c)}: ${essentials} (${refs}).`);
+  }
+  lines.push(`- ${platform}: one component per sub-task, cwd = its root; BE OpenAPI is the contract, FE regenerates (\`${rulesRel}/${platform}-rules.md\`).`);
+  return lines;
+}
+
+/**
  * Build the digest lines for one kit agent.
- * @param {{ agentType: string, platform: string, fullContext?: boolean }} opts
+ * @param {{ agentType: string, platform: string, fullContext?: boolean, components?: object[] }} opts
  *   fullContext — the agent also loads CLAUDE.md + rules natively (agentContextMode 'full');
  *   only the header changes.
+ *   components — the installed components (lib/component-resolver readComponents); a plain
+ *   platform only reads its single component's `root`.
  * @returns {string[]}
  */
-function buildSubagentRuleDigest({ agentType, platform, fullContext = false }) {
+function buildSubagentRuleDigest({ agentType, platform, fullContext = false, components = null }) {
   const role = AGENT_ROLES[agentType] || 'review';
   const rulesRel = '.claude/rules';
   const lines = [];
@@ -207,12 +260,19 @@ function buildSubagentRuleDigest({ agentType, platform, fullContext = false }) {
   if (role === 'implement' || role === 'review') {
     // coding-intelligence-priority (+ CLAUDE.md "background agents: no MCP")
     lines.push(`- Code lookup: Serena MCP → LSP → Grep/Glob → Read. Grep for counts/file discovery, semantic tools for refs/hierarchy; background agents have no MCP (\`${rulesRel}/coding-intelligence-priority.md\`).`);
-    // {mobile,backend,web}-shared-rules — only the one this platform's kit ships
-    const shared = sharedRuleDigestFor(platform);
-    if (shared) lines.push(`- ${shared.text} (\`${rulesRel}/${shared.rule}.md\`).`);
-    // {platform}-rules
-    const essentials = PLATFORM_ESSENTIALS[platform];
-    if (essentials) lines.push(`- ${platform}: ${essentials} (\`${rulesRel}/${platform}-rules.md\`; commands in \`.claude/platform-context.json\`).`);
+    if (isComposite(platform)) {
+      lines.push(...compositeLines({ agentType, platform, components, rulesRel }));
+    } else {
+      // {mobile,backend,web}-shared-rules — only the one this platform's kit ships
+      const shared = sharedRuleDigestFor(platform);
+      if (shared) lines.push(`- ${shared.text} (\`${rulesRel}/${shared.rule}.md\`).`);
+      // {platform}-rules
+      const essentials = PLATFORM_ESSENTIALS[platform];
+      // A single kit rooted below the project (`root: "backend"`) runs its commands there.
+      const root = Array.isArray(components) && components[0] && components[0].root;
+      const where = root && root !== '.' ? `, run in \`${root}/\`` : '';
+      if (essentials) lines.push(`- ${platform}: ${essentials} (\`${rulesRel}/${platform}-rules.md\`; commands in \`.claude/platform-context.json\`${where}).`);
+    }
     // traceability (the agent side; the rule itself is scoped to requirement files)
     lines.push(`- Requirement IDs (UC-/NFR-/REQ-/TC-) are copied verbatim into \`reqs:\`, \`// @trace\` and \`requirements_satisfied\` — never renumbered (\`${rulesRel}/traceability.md\`).`);
   }

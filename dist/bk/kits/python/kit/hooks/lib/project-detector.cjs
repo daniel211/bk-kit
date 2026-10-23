@@ -1,7 +1,9 @@
 /**
  * project-detector.cjs - Project and platform detection
  *
- * Adds: detectPlatform() for ios|android|flutter|python|web|unknown
+ * Adds: detectPlatform() for ios|android|flutter|fullstack|python|web|unknown
+ *       hasFullstackMarkers(root) — python + web markers at the root or a first-level subdir
+ *       detectSingleStack(root)   — python / web kit and its root ('.' or one first-level subdir)
  *       (detectMobilePlatform() is the historical name of the same function)
  */
 
@@ -80,6 +82,91 @@ const PYTHON_MARKERS = ['pyproject.toml', 'requirements.txt', 'manage.py', 'setu
 const WEB_CONFIG_RE = /^(?:tsconfig\.json|(?:next|vite)\.config\.[cm]?[jt]s)$/;
 
 /**
+ * First-level dirs never scanned for component markers: dependencies, venvs, and dirs that hold
+ * tooling rather than a component (a `docs/requirements.txt` for mkdocs must not turn a web repo
+ * into fullstack). Dot-dirs are skipped separately. MUST equal kit-resolver.mjs SKIPPED_SUBDIRS
+ * (bk init) — the hooks cannot import that ESM module, so a test asserts the two lists match.
+ */
+const SKIPPED_SUBDIRS = new Set([
+  'node_modules', '.venv', 'venv',
+  'docs', 'doc', 'scripts', 'tools', 'examples', 'e2e', 'tests', 'test'
+]);
+
+/** python marker in a directory listing. */
+function hasPythonMarker(entries) {
+  return entries.some(e => PYTHON_MARKERS.includes(e));
+}
+
+/** web marker in a directory listing: package.json AND a TS / bundler config. */
+function hasWebMarker(entries) {
+  return entries.includes('package.json') && entries.some(e => WEB_CONFIG_RE.test(e));
+}
+
+/**
+ * Python AND web markers, each at the root or in a first-level subdir (SKIPPED_SUBDIRS and
+ * dot-dirs skipped) — the `fullstack` composite kit (`backend/` + `frontend/`, or both at the
+ * root). Same rule as kit-resolver.mjs, so `bk init` and the hooks agree. One readdir of the
+ * root plus one per subdir; never deeper. Fail-open: unreadable → false.
+ * @param {string} root
+ * @returns {boolean}
+ */
+function hasFullstackMarkers(root) {
+  let top;
+  try { top = fs.readdirSync(root, { withFileTypes: true }); } catch { return false; }
+  const listings = [top.map(e => e.name)];
+  for (const e of top) {
+    if (!e.isDirectory() || e.name.startsWith('.') || SKIPPED_SUBDIRS.has(e.name)) continue;
+    try { listings.push(fs.readdirSync(path.join(root, e.name))); } catch { /* skip unreadable */ }
+  }
+  return listings.some(hasPythonMarker) && listings.some(hasWebMarker);
+}
+
+/**
+ * Conventional component dir names, most likely first. MUST equal CONVENTIONAL_DIRS in
+ * cli/user-cli/lib/component-detector.mjs (bk init) — a test asserts the two match.
+ */
+const CONVENTIONAL_DIRS = {
+  python: ['backend', 'api', 'server'],
+  web: ['frontend', 'web', 'client', 'app']
+};
+
+const MARKER_TESTS = { python: hasPythonMarker, web: hasWebMarker };
+
+/**
+ * The single-stack kit (python, then web) and its root — run AFTER the fullstack check, so at
+ * most one of the two stacks has markers anywhere. Root markers win: `.` when the root has them.
+ * Otherwise the first-level subdirs (SKIPPED_SUBDIRS and dot-dirs skipped) that carry them:
+ * a conventional name first (python: backend/api/server; web: frontend/web/client/app), else the
+ * first alphabetically — the component-detector.mjs rule, so `bk init` writes the same `root`.
+ * Fail-open: unreadable → null.
+ * @param {string} root
+ * @returns {{platform: 'python'|'web', root: string}|null}
+ */
+function detectSingleStack(root) {
+  let top;
+  try { top = fs.readdirSync(root, { withFileTypes: true }); } catch { return null; }
+  const names = top.map(e => e.name);
+  const subdirs = top
+    .filter(e => e.isDirectory() && !e.name.startsWith('.') && !SKIPPED_SUBDIRS.has(e.name))
+    .map(e => e.name)
+    .sort();
+  const listings = new Map();
+  for (const name of subdirs) {
+    try { listings.set(name, fs.readdirSync(path.join(root, name))); } catch { /* skip unreadable */ }
+  }
+  for (const platform of ['python', 'web']) {
+    if (MARKER_TESTS[platform](names)) return { platform, root: '.' };
+  }
+  for (const platform of ['python', 'web']) {
+    const hits = subdirs.filter(d => listings.has(d) && MARKER_TESTS[platform](listings.get(d)));
+    if (hits.length === 0) continue;
+    const conventional = CONVENTIONAL_DIRS[platform].find(d => hits.includes(d));
+    return { platform, root: conventional || hits[0] };
+  }
+  return null;
+}
+
+/**
  * Detect the project's platform from its root
  *
  * Priority order (mobile first, then the kit-resolver.mjs order — a mobile repo often carries a
@@ -88,11 +175,13 @@ const WEB_CONFIG_RE = /^(?:tsconfig\.json|(?:next|vite)\.config\.[cm]?[jt]s)$/;
  *   1. flutter  — pubspec.yaml exists
  *   2. ios      — *.xcworkspace or *.xcodeproj found, no android/build.gradle
  *   3. android  — android/build.gradle or build.gradle with android plugin
- *   4. python   — pyproject.toml | requirements.txt | manage.py | setup.py at the root
- *   5. web      — package.json AND (tsconfig.json | next.config.* | vite.config.*) at the root
- *   6. unknown  — none of the above
+ *   4. fullstack — python AND web markers, each at the root or in a first-level subdir
+ *   5. python   — pyproject.toml | requirements.txt | manage.py | setup.py at the root
+ *   6. web      — package.json AND (tsconfig.json | next.config.* | vite.config.*) at the root
+ *   7. python, then web — the same markers in a first-level subdir only (`backend/` with uv)
+ *   8. unknown  — none of the above
  *
- * @returns {'ios'|'android'|'flutter'|'python'|'web'|'unknown'}
+ * @returns {'ios'|'android'|'flutter'|'fullstack'|'python'|'web'|'unknown'}
  */
 function detectPlatform() {
   const cwd = resolveProjectRoot();
@@ -124,18 +213,16 @@ function detectPlatform() {
     return 'ios';
   }
 
-  let entries = [];
-  try { entries = fs.readdirSync(cwd); } catch { /* unreadable root: unknown */ }
-  if (entries.some(e => PYTHON_MARKERS.includes(e))) return 'python';
-  if (entries.includes('package.json') && entries.some(e => WEB_CONFIG_RE.test(e))) return 'web';
+  if (hasFullstackMarkers(cwd)) return 'fullstack';
 
-  return 'unknown';
+  const single = detectSingleStack(cwd);
+  return single ? single.platform : 'unknown';
 }
 
 /**
  * Historical name: callers (session-init, statusline) use it as "the platform", so it now also
- * answers python / web.
- * @returns {'ios'|'android'|'flutter'|'python'|'web'|'unknown'}
+ * answers fullstack / python / web.
+ * @returns {'ios'|'android'|'flutter'|'fullstack'|'python'|'web'|'unknown'}
  */
 const detectMobilePlatform = detectPlatform;
 
@@ -194,6 +281,10 @@ module.exports = {
   detectPackageManager,
   detectPlatform,
   detectMobilePlatform,
+  hasFullstackMarkers,
+  detectSingleStack,
+  SKIPPED_SUBDIRS,
+  CONVENTIONAL_DIRS,
   getGitBranch,
   getGitRoot,
   getGitRemoteUrl

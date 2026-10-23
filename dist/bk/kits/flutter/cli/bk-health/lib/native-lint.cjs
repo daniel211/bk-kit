@@ -7,7 +7,7 @@
  *
  * python / web have no native-lint sensor (no arch-fitness-<platform>-native hook ships for them,
  * see NATIVE_LINT_PLATFORMS in hooks/lib/native-lint-deferred.cjs), so no native-lint-python /
- * native-lint-web file is ever written. For a project whose kit is python or web the panel says
+ * native-lint-web file is ever written. For a project whose kit is python, web or fullstack the panel says
  * "n/a" in one line instead of three empty mobile rows.
  *
  * Exports:
@@ -20,7 +20,7 @@
  *     android: PlatformData,
  *     flutter: PlatformData
  *   },                                   // {} when notApplicable
- *   notApplicable?: { platform: 'python'|'web', lint: string }
+ *   notApplicable?: { platform: 'python'|'web'|'fullstack', lint: string }
  * }
  *
  * PlatformData: {
@@ -48,8 +48,10 @@ const PLATFORM_CONFIG = {
 
 /** Kit platforms without a native-lint sensor, and what lints them instead (per-turn batch). */
 const NO_NATIVE_LINT = {
-  python: 'ruff',
-  web:    'eslint'
+  python:    'ruff',
+  web:       'eslint',
+  // Composite: each component's own linter, run in its root by the per-turn batch.
+  fullstack: 'ruff (backend) + eslint (frontend)'
 };
 
 /**
@@ -175,7 +177,8 @@ function buildNativeLintPanel(metricsDir, platform) {
 function renderNativeLintPanel(panel) {
   if (panel && panel.notApplicable) {
     const { platform, lint } = panel.notApplicable;
-    return [`${platform.toUpperCase()}: n/a — no native-lint sensor; ${lint} runs in the per-turn lint batch`];
+    const verb = lint.includes(' + ') ? 'run' : 'runs';
+    return [`${platform.toUpperCase()}: n/a — no native-lint sensor; ${lint} ${verb} in the per-turn lint batch`];
   }
   if (!panel || !panel.platforms) return ['No native lint data'];
 

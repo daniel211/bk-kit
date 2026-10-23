@@ -26,7 +26,9 @@ try {
   const { resolveQueueFile, readQueuedFiles } = require('./lib/lint-queue.cjs');
   const { spawnLintWorker, computeDeferredPaths } = require('./lib/lint-worker-spawn.cjs');
 
-  // Template-injected values
+  // Template-injected values. A composite kit (fullstack) renders an empty lint_command: the
+  // worker groups the batch by component and runs each component's own commands.lint with
+  // cwd = its root (lint-batch-runner.buildComponentBatches).
   const PLATFORM = 'ios';
   const LINT_COMMAND = 'swiftlint lint --strict';
 

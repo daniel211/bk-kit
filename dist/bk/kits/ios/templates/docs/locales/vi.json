@@ -129,6 +129,7 @@
     "Android — Compose Screen from API": "OpenAPI endpoint → /bk-generate → Kotlin data classes, Retrofit service, ViewModel với StateFlow, Compose UI. Theo Clean Architecture layers.",
     "Flutter — Widget + BLoC from Spec": "Feature spec → /bk-code → Dart models, BLoC/Cubit với states, Widget tree với BlocBuilder. Bao gồm unit + widget tests.",
     "Python — FastAPI Endpoint from Spec": "Feature spec → /bk-code → schema Pydantic, router FastAPI với service inject qua dependency, repository SQLAlchemy + migration Alembic. Test pytest; sạch ruff + mypy.",
-    "Web — React Page from Design": "Màn hình Figma → /bk-spec --design → /bk-code → React component có type (Next.js hoặc Vite), lấy dữ liệu với trạng thái loading/error. Unit test Vitest/Jest + một luồng Playwright."
+    "Web — React Page from Design": "Màn hình Figma → /bk-spec --design → /bk-code → React component có type (Next.js hoặc Vite), lấy dữ liệu với trạng thái loading/error. Unit test Vitest/Jest + một luồng Playwright.",
+    "Fullstack — API Change Across Backend and Frontend": "Spec chạm cả hai stack → /bk-plan chia theo component (backend/ trước, rồi frontend/) → bk-python-developer đổi endpoint và schema OpenAPI, bk-web-developer sinh lại client có type và cập nhật trang. Mỗi component được lint và test trong root của nó; một luồng Playwright xuyên cả hai."
   }
 }

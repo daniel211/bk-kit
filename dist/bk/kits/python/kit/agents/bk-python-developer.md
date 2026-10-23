@@ -70,7 +70,6 @@ Protocol: `rules/agent-protocols/agent-memory.md` — memory dir `bk-python-deve
 - "Tests: uv run pytest --cov=app — integration tests need TEST_DATABASE_URL (docker compose up db)"
 - "Auth: get_current_user in app/core/security.py — JWT via IDSafe JWKS, aud=payments-api"
 - "Package manager: uv (uv.lock committed) — NOT poetry"
-- "Errors: DomainError hierarchy in app/core/errors.py — handler maps to error envelope"
 - "Migrations: alembic/versions/, naming YYYYMMDD_<slug>; indexes created CONCURRENTLY"
 - "Tenancy: every repository method takes merchant_id — filtered in BaseRepository"
 
@@ -162,39 +161,17 @@ Users need to list their transfers by date. Add a status field and a paginated l
 <agent_output>
 ## Implementation Result: transfer-status-list (Python / Django)
 
-### Files Created
-| # | File | Action | LOC |
-|---|------|--------|-----|
-| 1 | apps/transfers/migrations/0007_transfer_status.py | created | 22 |
-| 2 | apps/transfers/migrations/0008_backfill_transfer_status.py | created | 34 |
-| 3 | apps/transfers/migrations/0009_transfer_status_index.py | created | 21 |
-| 4 | apps/transfers/tests/test_transfer_list.py | created | 81 |
-
-### Files Modified
-| # | File | Action | Changes |
-|---|------|--------|---------|
-| 1 | apps/transfers/models.py | modified | `status = CharField(choices=TransferStatus.choices, null=True)`, `Meta.indexes` |
-| 2 | apps/transfers/views.py | modified | list action; `get_queryset()` filters `owner=request.user` + status |
-| 3 | apps/transfers/serializers.py | modified | `TransferListQuerySerializer` (status `ChoiceField`) |
-| 4 | apps/transfers/pagination.py | modified | `LimitOffsetPagination(max_limit=100)` |
+### Files
+- Created: `apps/transfers/migrations/0007_transfer_status.py`, `0008_backfill_transfer_status.py`, `0009_transfer_status_index.py`, `tests/test_transfer_list.py`
+- Modified: `models.py` (`status` choices, nullable; `Meta.indexes`), `views.py` (`get_queryset()` owner + status), `serializers.py` (status `ChoiceField`), `pagination.py` (`max_limit=100`)
 
 ### Key Decisions
-- 0008: `RunPython(backfill, reverse_code=RunPython.noop)`, `atomic = False`, batches of 5k by pk; uses `apps.get_model()`, not the imported model
-- 0009: `AddIndexConcurrently` with `atomic = False`; NOT NULL deferred to a later contract release
-- Status bound through the ORM filter; other users' transfers never in the queryset
+- 0008: `RunPython(backfill, reverse_code=RunPython.noop)`, `atomic = False`, 5k batches by pk via `apps.get_model()`
+- 0009: `AddIndexConcurrently`, `atomic = False`; NOT NULL deferred to a later release
 - Tests: own rows only, invalid status -> 400, limit 500 capped to 100, `django_assert_num_queries(2)`
 
 ### Build Verification
-```
-$ python manage.py check && python manage.py makemigrations --check --dry-run
-System check identified no issues (0 silenced). / No changes detected
-$ python manage.py migrate transfers 0006 && python manage.py migrate
-OK
-$ ruff check . && mypy .
-All checks passed! / Success: no issues found
-$ pytest --cov
-63 passed — coverage apps/transfers 93%
-```
+`manage.py check` + `makemigrations --check` clean; migrate back to 0006 and forward OK; ruff + mypy clean; pytest 63 passed, apps/transfers 93%
 
 <!-- metadata: {"schema_version":"1.0","agent":"bk-python-developer","feature":"transfer-status-list","platform":"python","status":"complete"} -->
 </agent_output>

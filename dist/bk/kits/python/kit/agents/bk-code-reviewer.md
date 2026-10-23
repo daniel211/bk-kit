@@ -196,20 +196,17 @@ Review code changes in Sources/Features/Auth/ for the auth-refactor feature. Cha
 ## Python BE Review Focus
 - Layering: router -> service -> repository; no SQL/business rules in routers, no `HTTPException` in services
 - Every endpoint authorized server-side; every ID lookup filtered by owner/tenant (IDOR)
-- Parameterized queries / ORM only — no f-string or `%` SQL; no `eval`, `pickle`, `yaml.load`
-- Pydantic validates type + length + format, `extra="forbid"` on input; money is `Decimal` with `gt=0`
+- Parameterized queries / ORM only — no f-string/`%` SQL; no `eval`, `pickle`, `yaml.load`
+- Pydantic: type + length + format, `extra="forbid"` on input; money `Decimal`, `gt=0`
 - Secrets from env/vault; no password/OTP/token/PII in logs (masked)
-- Alembic migration has `downgrade()`, no long lock on big tables, data migration in a separate revision
-- No N+1 (`selectinload`), index on filtered columns, list endpoints paginated with a max limit
-- Idempotency key on create/payment endpoints; outbound HTTP has timeout + bounded retry; SSRF allowlist
-- No blocking I/O in `async def`; type hints on all signatures; lockfile updated with dependencies
-
-- Django: viewset `get_queryset()` scoped to `request.user`/tenant; serializer `fields` explicit (no `"__all__"`); writes in a service under `transaction.atomic()`; `select_related`/`prefetch_related` on lists; model change ships with its migration
+- Alembic: has `downgrade()`, no long lock on big tables, data migration in its own revision
+- No N+1 (`selectinload`); index filtered columns; lists paginated with a max limit
+- Idempotency key on create/payment; outbound HTTP: timeout + bounded retry + SSRF allowlist
+- No blocking I/O in `async def`; typed signatures; lockfile updated with deps
+- Django: `get_queryset()` scoped to user/tenant; explicit serializer `fields` (no `"__all__"`); writes in a service under `transaction.atomic()`; `select_related`/`prefetch_related` on lists; model change ships its migration
 
 ## Lint Command
-- `ruff check .` and `mypy .` (tests: platform-context `commands.test`; Django also `python manage.py makemigrations --check --dry-run`)
+- `ruff check .`, `mypy .` (Django: `manage.py makemigrations --check --dry-run`)
 
 ## Naming Validation
-- snake_case: modules, files, functions, variables
-- PascalCase: classes (incl. Pydantic models, exceptions)
-- UPPER_SNAKE_CASE: module-level constants
+- snake_case modules/functions/variables; PascalCase classes (Pydantic models, exceptions); UPPER_SNAKE constants

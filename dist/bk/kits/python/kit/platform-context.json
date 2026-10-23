@@ -41,7 +41,6 @@
   "frameworks": {
     "fastapi": {
       "commands": {
-        "build": "python -m compileall -q app",
         "migrate": "alembic upgrade head",
         "migrationsCheck": "alembic check"
       },

@@ -519,30 +519,68 @@ function sanitizeFeatureName(name) {
 // (`npm ci`, `--frozen-lockfile`, `uv sync` honours uv.lock). requirements.txt has no
 // lock and no project env, so it installs into the worktree's own .venv — never into
 // whatever interpreter happens to be on PATH (the system / Homebrew site-packages).
-function detectDependencyInstaller(worktreePath) {
-  const lockFiles = [
-    { file: 'bun.lock',            cmd: 'bun install' },
-    { file: 'pnpm-lock.yaml',      cmd: 'pnpm install --frozen-lockfile' },
-    { file: 'yarn.lock',           cmd: 'yarn install --frozen-lockfile' },
-    { file: 'package-lock.json',   cmd: 'npm ci' },
-    { file: 'uv.lock',             cmd: 'uv sync' },
-    { file: 'poetry.lock',         cmd: 'poetry install' },
-    { file: 'requirements.txt',    cmd: 'python3 -m venv .venv && .venv/bin/pip install -r requirements.txt' },
-    { file: 'Cargo.toml',          cmd: 'cargo build' },
-    { file: 'go.mod',              cmd: 'go mod download' },
-    // Mobile lock files
-    { file: 'Podfile',             cmd: 'pod install' },
-    { file: 'build.gradle',        cmd: './gradlew build' },
-    { file: 'build.gradle.kts',    cmd: './gradlew build' },
-    { file: 'pubspec.yaml',        cmd: 'flutter pub get' },
-  ];
+const DEPENDENCY_INSTALLERS = [
+  { file: 'bun.lock',            cmd: 'bun install',                     platform: 'web' },
+  { file: 'pnpm-lock.yaml',      cmd: 'pnpm install --frozen-lockfile',  platform: 'web' },
+  { file: 'yarn.lock',           cmd: 'yarn install --frozen-lockfile',  platform: 'web' },
+  { file: 'package-lock.json',   cmd: 'npm ci',                          platform: 'web' },
+  { file: 'uv.lock',             cmd: 'uv sync',                         platform: 'python' },
+  { file: 'poetry.lock',         cmd: 'poetry install',                  platform: 'python' },
+  { file: 'requirements.txt',    cmd: 'python3 -m venv .venv && .venv/bin/pip install -r requirements.txt', platform: 'python' },
+  { file: 'Cargo.toml',          cmd: 'cargo build' },
+  { file: 'go.mod',              cmd: 'go mod download' },
+  // Mobile lock files
+  { file: 'Podfile',             cmd: 'pod install' },
+  { file: 'build.gradle',        cmd: './gradlew build' },
+  { file: 'build.gradle.kts',    cmd: './gradlew build' },
+  { file: 'pubspec.yaml',        cmd: 'flutter pub get' },
+];
 
-  for (const { file, cmd } of lockFiles) {
+/**
+ * @param {string} worktreePath - dir to look in
+ * @param {string} [platform] - only installers of that platform ('python' | 'web')
+ * @returns {string|null}
+ */
+function detectDependencyInstaller(worktreePath, platform) {
+  for (const { file, cmd, platform: p } of DEPENDENCY_INSTALLERS) {
+    if (platform && p !== platform) continue;
     if (fs.existsSync(path.join(worktreePath, file))) {
       return cmd;
     }
   }
   return null;
+}
+
+/**
+ * Installers to run in a new worktree, one per dir.
+ *
+ * A fullstack kit (`components` in .claude/platform-context.json) installs per component, in its
+ * `root` and with that component's platform's installers only — two components at `.` then get
+ * both `uv sync` and `npm ci`, which first-match-wins would never give. Any other project: the
+ * single first match at the worktree root.
+ *
+ * @param {string} worktreePath
+ * @param {string} [contextDir] - project dir holding .claude/ (defaults to the worktree)
+ * @returns {Array<{ component?: string, root: string, cmd: string }>}
+ */
+function detectDependencyInstallers(worktreePath, contextDir = worktreePath) {
+  let components = null;
+  try {
+    const ctx = JSON.parse(fs.readFileSync(path.join(contextDir, '.claude', 'platform-context.json'), 'utf8'));
+    if (Array.isArray(ctx.components) && ctx.components.length > 0) components = ctx.components;
+  } catch { /* not installed, or no components */ }
+
+  if (!components) {
+    const cmd = detectDependencyInstaller(worktreePath);
+    return cmd ? [{ root: '.', cmd }] : [];
+  }
+  const out = [];
+  for (const c of components) {
+    const root = typeof c.root === 'string' && c.root ? c.root : '.';
+    const cmd = detectDependencyInstaller(path.join(worktreePath, root), c.platform);
+    if (cmd) out.push({ component: c.id, root, cmd });
+  }
+  return out;
 }
 
 // COMMANDS
@@ -838,6 +876,8 @@ function cmdCreate() {
     project: isMonorepo ? projectName : null,
     envFilesCopied,
     envTemplatesCopied: envResult.copied,
+    // Step 6 runs these: `cd <worktreePath>/<root> && <cmd>`, one per entry.
+    dependencyInstallers: detectDependencyInstallers(worktreePath, fs.existsSync(path.join(worktreePath, '.claude')) ? worktreePath : sourceDir),
     warnings: warnings.length > 0 ? warnings : undefined
   });
 }
@@ -1238,6 +1278,8 @@ Dependency auto-detection (run in worktree after creation, first match wins):
   Podfile               → pod install
   build.gradle[.kts]    → ./gradlew build
   pubspec.yaml          → flutter pub get
+  fullstack kit         → per component, in its root, with that platform's
+                          installers only (create's dependencyInstallers)
 `);
 }
 
@@ -1276,5 +1318,5 @@ function main() {
 if (require.main === module) {
   main();
 } else {
-  module.exports = { detectDependencyInstaller };
+  module.exports = { detectDependencyInstaller, detectDependencyInstallers };
 }

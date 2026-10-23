@@ -129,6 +129,7 @@
     "Android — Compose Screen from API": "OpenAPI endpoint → /bk-generate → Kotlin data classes, Retrofit service, ViewModel with StateFlow, Compose UI. Follows Clean Architecture layers.",
     "Flutter — Widget + BLoC from Spec": "Feature spec → /bk-code → Dart models, BLoC/Cubit with states, Widget tree with BlocBuilder. Includes unit + widget tests.",
     "Python — FastAPI Endpoint from Spec": "Feature spec → /bk-code → Pydantic schemas, FastAPI router with dependency-injected service, SQLAlchemy repository + Alembic migration. pytest tests; ruff + mypy clean.",
-    "Web — React Page from Design": "Figma screen → /bk-spec --design → /bk-code → typed React components (Next.js or Vite), data fetching with loading/error states. Vitest/Jest unit tests + a Playwright flow."
+    "Web — React Page from Design": "Figma screen → /bk-spec --design → /bk-code → typed React components (Next.js or Vite), data fetching with loading/error states. Vitest/Jest unit tests + a Playwright flow.",
+    "Fullstack — API Change Across Backend and Frontend": "Spec touching both stacks → /bk-plan splits it per component (backend/ first, then frontend/) → bk-python-developer changes the endpoint and OpenAPI schema, bk-web-developer regenerates the typed client and updates the page. Each component linted and tested in its own root; one Playwright flow across both."
   }
 }

@@ -134,6 +134,7 @@ function defaultExamples() {
     { name: 'Flutter — Widget + BLoC from Spec', type: 'flutter', platform: 'flutter', description: 'Feature spec → /bk-code → Dart models, BLoC/Cubit with states, Widget tree with BlocBuilder. Includes unit + widget tests.' },
     { name: 'Python — FastAPI Endpoint from Spec', type: 'python', platform: 'python', description: 'Feature spec → /bk-code → Pydantic schemas, FastAPI router with dependency-injected service, SQLAlchemy repository + Alembic migration. pytest tests; ruff + mypy clean.' },
     { name: 'Web — React Page from Design', type: 'web', platform: 'web', description: 'Figma screen → /bk-spec --design → /bk-code → typed React components (Next.js or Vite), data fetching with loading/error states. Vitest/Jest unit tests + a Playwright flow.' },
+    { name: 'Fullstack — API Change Across Backend and Frontend', type: 'fullstack', platform: 'fullstack', description: 'Spec touching both stacks → /bk-plan splits it per component (backend/ first, then frontend/) → bk-python-developer changes the endpoint and OpenAPI schema, bk-web-developer regenerates the typed client and updates the page. Each component linted and tested in its own root; one Playwright flow across both.' },
   ];
 }
 
@@ -166,7 +167,7 @@ function applyReplacements(template, replacements) {
  * @param {{ agents: Array, skills: Array, rules: Array, examples?: Array }} catalog
  * @param {string} templateDir - Absolute path to templates/docs/ directory
  * @param {string} outDir - Absolute path to write output
- * @param {string} platform - Active platform (ios | android | flutter | python | web)
+ * @param {string} platform - Active platform (ios | android | flutter | python | web | fullstack)
  * @param {string} [lang='vi'] - Language code (en | vi)
  */
 export function buildDocs(catalog, templateDir, outDir, platform, lang = 'vi') {

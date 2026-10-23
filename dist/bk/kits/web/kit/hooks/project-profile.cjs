@@ -40,8 +40,8 @@ try {
       // Detect platform. Filesystem signals are authoritative; doc keywords are only a
       // fallback, and this order is the one core-rules.md and CLAUDE.md.tmpl already
       // document (pubspec.yaml -> flutter, xcodeproj -> ios, ios/+android/ -> monorepo,
-      // build.gradle -> android), then python and web, the kit-resolver order.
-      // platform: 'flutter'|'ios'|'android'|'monorepo'|'python'|'web'|'unknown'
+      // build.gradle -> android), then fullstack, python and web, the kit-resolver order.
+      // platform: 'flutter'|'ios'|'android'|'monorepo'|'fullstack'|'python'|'web'|'unknown'
       //
       // Keyword order alone misread EVERY Flutter repo as ios: a Flutter overview
       // legitimately names "iOS Keychain" and carries an `ios/` build-target row, and the
@@ -63,11 +63,11 @@ try {
         }
       };
       const XCODE_PROJECT = /\.xc(workspace|odeproj)$/;
-      // python / web: the same root markers as kit-resolver.mjs (bk init), tested AFTER the
-      // mobile ones — a mobile repo often carries a requirements.txt or a package.json for its
-      // tooling. web needs a package.json PLUS a TS / bundler config next to it.
-      const PYTHON_MARKER = /^(?:pyproject\.toml|requirements\.txt|manage\.py|setup\.py)$/;
-      const WEB_CONFIG = /^(?:tsconfig\.json|(?:next|vite)\.config\.[cm]?[jt]s)$/;
+      // python / web: the kit-resolver.mjs (bk init) markers, tested AFTER the mobile ones — a
+      // mobile repo often carries a requirements.txt or a package.json for its tooling. Root
+      // markers first, then one first-level subdir (a uv backend/ with nothing at the root).
+      const detector = require('./lib/project-detector.cjs');
+      const singleStack = detector.detectSingleStack(root);
 
       let platform = 'unknown';
       if (hasEntry('pubspec.yaml')) {
@@ -81,10 +81,11 @@ try {
         || hasEntry('build.gradle') || hasEntry('build.gradle.kts')
       ) {
         platform = 'android';
-      } else if (dirHasEntry('.', PYTHON_MARKER)) {
-        platform = 'python';
-      } else if (hasEntry('package.json') && dirHasEntry('.', WEB_CONFIG)) {
-        platform = 'web';
+      } else if (detector.hasFullstackMarkers(root)) {
+        // python AND web markers at the root or in a first-level subdir (backend/ + frontend/).
+        platform = 'fullstack';
+      } else if (singleStack) {
+        platform = singleStack.platform;
       } else if (/Flutter|Dart|pubspec/i.test(overviewContent)) {
         platform = 'flutter';
       } else if (/iOS|Swift|UIKit|SwiftUI|Xcode/i.test(overviewContent)) {

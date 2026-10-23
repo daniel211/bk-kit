@@ -21,16 +21,23 @@
  *   file (capped by MAX_PER_FILE_RUNS) and pays for it. The built-in per-platform
  *   defaults always batch.
  *
+ * Missing tool (Phase 4.1 item 4): exit 127, or stderr saying the shell / OS could not find the
+ * binary (MISSING_TOOL_RE), is NOT a lint failure — `ruff` absent from PATH in a uv project used
+ * to be reported as lint errors against the turn. runLintCommand flags it `missingTool`; the
+ * worker turns it into a once-per-session advisory instead of a finding.
+ *
  * Mock env overrides (tests — never shell out to a real dart/swiftlint):
  *   BK_LINT_MOCK_CMD_LOG=<path>  — append each command that would run, one per line
- *   BK_LINT_MOCK_EXIT=<n>        — pretend the command exited with this code
- *   BK_LINT_MOCK_OUTPUT=<text>   — pretend this was its combined output
+ *   BK_LINT_MOCK_CWD_LOG=<path>  — with the above: append each command's cwd, one per line
+ *   BK_LINT_MOCK_EXIT=<n>        — pretend the command exited with this code (127 = missing tool)
+ *   BK_LINT_MOCK_OUTPUT=<text>   — pretend this was its combined output (also read as stderr)
  *
  * Exports:
  *   DEFAULT_LINT_COMMANDS, PATH_TAKING_PLATFORMS, NATIVE_SUPERSET_PLATFORMS,
  *   NATIVE_LINT_BINARIES, MAX_PER_FILE_RUNS
  *   quotePath(p), usesSameBinaryAsNative(platform, cmd), buildBatchCommands(opts),
- *   runLintCommand(cmd, opts)
+ *   buildComponentBatches(opts) — one batch per component, own cwd + command,
+ *   baseLintCommand(platform, cmd), MISSING_TOOL_RE, runLintCommand(cmd, opts)
  */
 
 'use strict';
@@ -123,6 +130,22 @@ const NATIVE_LINT_BINARIES = {
   flutter: 'dart'
 };
 
+/**
+ * stderr of a command whose binary does not exist: POSIX sh, cmd.exe, node spawn, and the project
+ * runners the kit prefixes lint commands with — `uv run` ("Failed to spawn: `ruff`"), pnpm / yarn
+ * (`Command "eslint" not found`) and npx without the package installed. Found on AHub: the shell-level
+ * patterns alone missed `uv run --frozen ruff` with ruff absent, which exits 2, not 127.
+ */
+const MISSING_TOOL_RE = new RegExp([
+  'command not found',
+  'not recognized as an internal or external command',
+  'ENOENT',
+  'Failed to spawn: `[^`]+`',
+  'Command "[^"]+" not found',
+  'npx canceled due to missing packages',
+  'could not determine executable to run'
+].join('|'));
+
 /** Upper bound on runs when a custom command is declared per-file only. */
 const MAX_PER_FILE_RUNS = 20;
 
@@ -185,6 +208,60 @@ function buildBatchCommands(opts) {
 }
 
 /**
+ * A composite kit's batch (fullstack): group the files by owning component and build each
+ * component's commands with ITS platform and ITS `commands.lint` (the component platform's
+ * DEFAULT_LINT_COMMANDS when it has none), to run with cwd = the component root — eslint finds
+ * its flat config from the cwd, and `ruff check .` with the trailing `.` stripped lints only the
+ * batch either way. Paths stay absolute, as for a plain kit, so findings name the real files.
+ * Files no component owns are dropped (componentForFile → null).
+ *
+ * A single-stack kit is one component (component-resolver: `{ platform, root }` from its
+ * top-level `root`), so the same grouping gives it cwd = root; `fallbackLintCommand` (the
+ * build-time {{lint_command}}) stands in when its context carries no `commands.lint`.
+ *
+ * @param {{ projectRoot: string, files: string[], mode?: 'auto'|'per-file', fallbackLintCommand?: string }} opts
+ * @returns {Array<{ id: string, platform: string, root: string, cwd: string, files: string[],
+ *   lintCommand: string, commands: string[] }>}
+ */
+function buildComponentBatches(opts) {
+  const { projectRoot, files, mode, fallbackLintCommand } = opts || {};
+  const { componentForFile, componentCwd } = require('./component-resolver.cjs');
+  const groups = new Map();
+  for (const file of Array.isArray(files) ? files.filter(Boolean) : []) {
+    const component = componentForFile(file, projectRoot);
+    if (!component) continue;
+    if (!groups.has(component.id)) groups.set(component.id, { component, files: [] });
+    groups.get(component.id).files.push(file);
+  }
+  return [...groups.values()].map(({ component, files: list }) => {
+    const own = component.commands && typeof component.commands.lint === 'string' ? component.commands.lint : '';
+    const lintCommand = hasCustomCommand(own) ? own : (fallbackLintCommand || '');
+    return {
+      id: component.id,
+      platform: component.platform,
+      root: component.root,
+      cwd: componentCwd(component, projectRoot),
+      files: list,
+      lintCommand,
+      commands: buildBatchCommands({ platform: component.platform, files: list, lintCommand, mode })
+    };
+  });
+}
+
+/**
+ * The command as configured, without the batch — what a missing-tool advisory names
+ * (`ruff check .`, or the platform default's leading part when nothing is configured).
+ * @param {string} platform
+ * @param {string} [lintCommand]
+ * @returns {string}
+ */
+function baseLintCommand(platform, lintCommand) {
+  if (hasCustomCommand(lintCommand)) return lintCommand.trim();
+  const builder = DEFAULT_LINT_COMMANDS[platform];
+  return builder ? builder('').trim() : '';
+}
+
+/**
  * Does this project's configured lint command invoke the same binary the native
  * lint path would? A leading-token comparison, deliberately not a parser.
  *
@@ -213,7 +290,7 @@ function usesSameBinaryAsNative(platform, lintCommand) {
  *
  * @param {string} cmd
  * @param {{cwd?: string, timeoutMs?: number}} [opts]
- * @returns {{ ok: boolean, output: string, timedOut: boolean }}
+ * @returns {{ ok: boolean, output: string, timedOut: boolean, missingTool: boolean }}
  */
 function runLintCommand(cmd, opts = {}) {
   const cwd = opts.cwd || process.cwd();
@@ -222,8 +299,15 @@ function runLintCommand(cmd, opts = {}) {
   const cmdLog = process.env.BK_LINT_MOCK_CMD_LOG;
   if (cmdLog) {
     try { fs.appendFileSync(cmdLog, cmd + '\n', 'utf8'); } catch { /* fail-open */ }
+    if (process.env.BK_LINT_MOCK_CWD_LOG) {
+      try { fs.appendFileSync(process.env.BK_LINT_MOCK_CWD_LOG, cwd + '\n', 'utf8'); } catch { /* fail-open */ }
+    }
     const exit = parseInt(process.env.BK_LINT_MOCK_EXIT || '0', 10);
-    return { ok: exit === 0, output: process.env.BK_LINT_MOCK_OUTPUT || '', timedOut: false };
+    const output = process.env.BK_LINT_MOCK_OUTPUT || '';
+    return {
+      ok: exit === 0, output, timedOut: false,
+      missingTool: exit !== 0 && (exit === 127 || MISSING_TOOL_RE.test(output))
+    };
   }
 
   try {
@@ -233,11 +317,16 @@ function runLintCommand(cmd, opts = {}) {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd
     });
-    return { ok: true, output: '', timedOut: false };
+    return { ok: true, output: '', timedOut: false, missingTool: false };
   } catch (err) {
-    const output = String((err && err.stdout) || '') + String((err && err.stderr) || '');
+    const stderr = String((err && err.stderr) || '');
+    const output = String((err && err.stdout) || '') + stderr;
     const timedOut = Boolean(err && (err.signal === 'SIGTERM' || err.killed));
-    return { ok: false, output: output || (err && err.message) || '', timedOut };
+    // 127 = the shell found no such command; a spawn error (no shell) carries ENOENT in its code.
+    const missingTool = !timedOut && (
+      (err && err.status === 127) || (err && err.code === 'ENOENT') || MISSING_TOOL_RE.test(stderr)
+    );
+    return { ok: false, output: output || (err && err.message) || '', timedOut, missingTool };
   }
 }
 
@@ -247,8 +336,11 @@ module.exports = {
   NATIVE_SUPERSET_PLATFORMS,
   NATIVE_LINT_BINARIES,
   MAX_PER_FILE_RUNS,
+  MISSING_TOOL_RE,
   quotePath,
+  baseLintCommand,
   hasCustomCommand,
+  buildComponentBatches,
   usesSameBinaryAsNative,
   buildBatchCommands,
   runLintCommand

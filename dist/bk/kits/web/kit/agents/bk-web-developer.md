@@ -71,7 +71,6 @@ Protocol: `rules/agent-protocols/agent-memory.md` — memory dir `bk-web-develop
 - "Build: pnpm build (pnpm-lock.yaml) — NOT npm; typecheck via pnpm typecheck"
 - "Framework: Next.js 14 App Router — data fetched in Server Components, mutations via Server Actions"
 - "API client: src/shared/api/http-client.ts — request(path, schema), cookie auth + X-CSRF-Token header"
-- "Query keys: factory per feature in features/*/hooks/*-keys.ts"
 - "Design system: src/shared/components/ui/ (shadcn) — Button, Dialog, Input; Tailwind tokens in tailwind.config.ts"
 - "Tests: renderWithProviders in src/test/render.tsx; MSW handlers in src/test/msw-handlers.ts"
 
@@ -165,42 +164,19 @@ Implement orders table for the web app (Vite SPA, React Router). Requirements: (
 <agent_output>
 ## Implementation Result: orders-table (Web)
 
-### Files Created
-| # | File | Action | LOC |
-|---|------|--------|-----|
-| 1 | src/features/orders/api/orders-api.ts | created | 48 |
-| 2 | src/features/orders/hooks/order-keys.ts | created | 14 |
-| 3 | src/features/orders/hooks/use-orders.ts | created | 30 |
-| 4 | src/features/orders/hooks/use-cancel-order.ts | created | 44 |
-| 5 | src/features/orders/components/orders-table.tsx | created | 118 |
-| 6 | src/features/orders/components/orders-pagination.tsx | created | 46 |
-| 7 | src/features/orders/components/cancel-order-dialog.tsx | created | 58 |
-| 8 | src/features/orders/components/orders-table.test.tsx | created | 112 |
-
-### Files Modified
-| # | File | Action | Changes |
-|---|------|--------|---------|
-| 1 | src/app/routes.tsx | modified | Lazy-loaded /orders route |
-| 2 | src/test/msw-handlers.ts | modified | Added GET /orders + POST /orders/:id/cancel handlers |
+### Files
+- Created in `src/features/orders/`: `api/orders-api.ts`, `hooks/order-keys.ts`, `hooks/use-orders.ts`, `hooks/use-cancel-order.ts`, `components/orders-table.tsx`, `orders-pagination.tsx`, `cancel-order-dialog.tsx`, `orders-table.test.tsx`
+- Modified: `src/app/routes.tsx` (lazy /orders route), `src/test/msw-handlers.ts` (GET /orders, POST cancel)
 
 ### Key Decisions
-- Keys: `orderKeys.list({ page, status })`; filter + page read via `useSearchParams` — shareable URLs, back button works
-- `keepPreviousData` keeps rows visible while the next page loads; `aria-busy` on the table during fetch
-- Optimistic cancel: `onMutate` snapshots the page and sets `status: 'cancelled'`; `onError` restores; `onSettled` invalidates `orderKeys.lists()`
-- `<table>` with `<caption>`, `scope="col"` headers; dialog traps focus and returns it to the row button on close
-- Row `key` = `order.id`; ids interpolated with `encodeURIComponent`
+- Keys: `orderKeys.list({ page, status })`; filter + page via `useSearchParams` — shareable URLs, back button works
+- `keepPreviousData` keeps rows while the next page loads; `aria-busy` during fetch
+- Optimistic cancel: `onMutate` snapshots + sets `cancelled`; `onError` restores; `onSettled` invalidates `orderKeys.lists()`
+- `<table>` with `<caption>`, `scope="col"`; dialog traps focus and returns it to the row button
+- Row `key` = `order.id`; ids through `encodeURIComponent`
 
 ### Build Verification
-```
-$ npx tsc --noEmit
-✓ No errors
-$ npx eslint src/features/orders src/app/routes.tsx
-✓ 0 problems
-$ npx vitest related src/features/orders --run
-✓ 7 passed
-$ npm run build
-✓ built in 4.12s — orders chunk 18.4 kB gzip
-```
+tsc + eslint clean; `vitest related src/features/orders` 7 passed; build OK (orders chunk 18.4 kB gzip)
 
 <!-- metadata: {"schema_version":"1.0","agent":"bk-web-developer","feature":"orders-table","platform":"web","status":"complete"} -->
 </agent_output>

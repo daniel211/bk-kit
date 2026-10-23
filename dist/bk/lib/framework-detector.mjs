@@ -23,6 +23,7 @@
 
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { applyRunner, detectRunner, runnerDifference } from './runner-detector.mjs';
 
 /** Kits that have framework variants. Mobile kits are untouched by everything here. */
 export const FRAMEWORK_PLATFORMS = new Set(['python', 'web']);
@@ -249,34 +250,55 @@ export function resolveFrameworkOption(platform, kitCtx, explicit) {
 }
 
 /**
- * Detect (or take the forced id), apply and write back an installed platform-context.json.
- * A forced id still takes the detected test runner, and the detected overrides only when
- * detection agrees with it (a forced django on a project with no manage.py gets plain django).
- *
- * @param {{ ctxPath: string, platform: string, projectRoot: string, forced?: string|null }} p
- * @returns {{ framework: string, testRunner?: string, line: string }|null} null for mobile kits
- *   or an unreadable context (init's doctor run reports the latter)
+ * The framework choice for a dir: the forced id (still taking the detected test runner, and the
+ * detected overrides only when detection agrees — a forced django on a project with no manage.py
+ * gets plain django), else the detection.
  */
-export function applyFrameworkToInstalledContext({ ctxPath, platform, projectRoot, forced = null }) {
+export function chooseFramework(detected, forced) {
+  return forced
+    ? { framework: forced, testRunner: detected.testRunner, overrides: detected.framework === forced ? detected.overrides : undefined }
+    : detected;
+}
+
+/**
+ * Framework variant, then the project's runner (runner-detector), for one context detected at
+ * `dir`. Pure apart from reading `dir`. Shared by single kits and fullstack components so both
+ * apply the two steps in the same order, once.
+ *
+ * @returns {{ ctx: object, choice: object, detected: object, runner: string|null, line: string }}
+ */
+export function applyFrameworkAndRunner(ctx, platform, dir, forced = null) {
+  const detected = detectFramework(platform, dir);
+  const choice = chooseFramework(detected, forced);
+  const rule = detectRunner(platform, dir);
+  const out = applyRunner(applyFramework(ctx, choice), rule);
+  const line = describeFramework({ ...detected, framework: choice.framework }, { forced: Boolean(forced) })
+    + (rule ? `, runner: ${rule.runner}` : '');
+  return { ctx: out, choice, detected, runner: rule ? rule.runner : null, line };
+}
+
+/**
+ * Detect (or take the forced id), apply and write back an installed platform-context.json.
+ * `root` (relative to projectRoot, default '.') is where the markers sit: it is written as the
+ * top-level `root`, and framework + runner are detected there.
+ *
+ * @param {{ ctxPath: string, platform: string, projectRoot: string, root?: string, forced?: string|null }} p
+ * @returns {{ framework: string, testRunner?: string, runner: string|null, root: string, line: string }|null}
+ *   null for mobile kits or an unreadable context (init's doctor run reports the latter)
+ */
+export function applyFrameworkToInstalledContext({ ctxPath, platform, projectRoot, root = '.', forced = null }) {
   if (!FRAMEWORK_PLATFORMS.has(platform)) return null;
   let ctx;
   try { ctx = JSON.parse(readFileSync(ctxPath, 'utf8')); } catch { return null; }
 
-  const detected = detectFramework(platform, projectRoot);
-  const choice = forced
-    ? { framework: forced, testRunner: detected.testRunner, overrides: detected.framework === forced ? detected.overrides : undefined }
-    : detected;
-  writeFileSync(ctxPath, JSON.stringify(applyFramework(ctx, choice), null, 2) + '\n', 'utf8');
-  return {
-    framework: choice.framework,
-    testRunner: choice.testRunner,
-    line: describeFramework({ ...detected, framework: choice.framework }, { forced: Boolean(forced) }),
-  };
+  const r = applyFrameworkAndRunner(ctx, platform, join(projectRoot, root), forced);
+  writeFileSync(ctxPath, JSON.stringify({ ...r.ctx, root }, null, 2) + '\n', 'utf8');
+  return { framework: r.choice.framework, testRunner: r.choice.testRunner, runner: r.runner, root, line: r.line };
 }
 
 /**
  * What `bk doctor` reports: the recorded framework (missing = generic, as installed by 0.15.0)
- * against a fresh detection. A difference is information — the project may have moved on, or
+ * against a fresh detection, and the recorded package runner likewise. A difference is information — the project may have moved on, or
  * the user chose on purpose — so the caller warns, never fails.
  *
  * @param {object} ctx - parsed installed platform-context.json
@@ -295,5 +317,7 @@ export function compareRecordedFramework(ctx, platform, projectRoot) {
   if (recordedRunner && detected.testRunner && detected.testRunner !== recordedRunner) {
     differences.push(`testRunner: recorded ${recordedRunner}, detected ${detected.testRunner}`);
   }
+  const runner = runnerDifference(ctx, platform, projectRoot);
+  if (runner) differences.push(runner);
   return { recorded, recordedRunner, detected, differences };
 }

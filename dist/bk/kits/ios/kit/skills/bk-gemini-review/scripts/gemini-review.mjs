@@ -3,7 +3,7 @@
  * gemini-review.mjs — Automated code review runner powered by Gemini CLI.
  *
  * Usage:
- *   node gemini-review.mjs [--feature <name>] [--platform <ios|android|flutter|python|web>] [--model <model>] [--fast] [--files <f1,f2>]
+ *   node gemini-review.mjs [--feature <name>] [--platform <ios|android|flutter|python|web|fullstack>] [--model <model>] [--fast] [--files <f1,f2>]
  */
 
 import { execSync, spawn } from 'node:child_process';
@@ -91,8 +91,10 @@ function readJsonField(filePath, field) {
 }
 
 // Every kit the CLI ships (kit-resolver.mjs KIT_NAMES). The platform only picks
-// .claude/rules/<platform>-rules.md for the prompt, which each kit installs.
-const SUPPORTED_PLATFORMS = ['ios', 'android', 'flutter', 'python', 'web'];
+// .claude/rules/<platform>-rules.md for the prompt, which each kit installs; fullstack takes
+// both component checklists plus its own cross-stack rules (RULE_FILES below).
+const SUPPORTED_PLATFORMS = ['ios', 'android', 'flutter', 'python', 'web', 'fullstack'];
+const RULE_FILES = { fullstack: ['python', 'web', 'fullstack'] };
 let platformSource = 'the --platform flag';
 
 if (!platform) {
@@ -242,10 +244,11 @@ if (existsSync(archPath)) {
 }
 
 let platformRules = '';
-const pRulePath = join(PROJECT_ROOT, '.claude', 'rules', `${platform}-rules.md`);
-if (existsSync(pRulePath)) {
+for (const name of RULE_FILES[platform] || [platform]) {
+  const pRulePath = join(PROJECT_ROOT, '.claude', 'rules', `${name}-rules.md`);
+  if (!existsSync(pRulePath)) continue;
   try {
-    platformRules = readFileSync(pRulePath, 'utf8').slice(0, 4000);
+    platformRules += (platformRules ? '\n\n' : '') + readFileSync(pRulePath, 'utf8').slice(0, 4000);
   } catch (_) {}
 }
 

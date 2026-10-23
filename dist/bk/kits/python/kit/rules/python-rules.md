@@ -1,3 +1,15 @@
+---
+paths:
+  - "**/*.py"
+  - "**/*.pyi"
+  - "**/pyproject.toml"
+  - "**/requirements*.txt"
+  - "**/manage.py"
+  - "**/alembic/**"
+---
+
+<!-- Scoped to Python sources + project files: loads when one is Read, so the resident set stays small and the fullstack kit does not carry both stacks. See docs/kit-dev/add-rule.md. -->
+
 # Python Platform Rules
 
 ## Language & Conventions

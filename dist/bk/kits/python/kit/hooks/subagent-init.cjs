@@ -107,7 +107,13 @@ try {
       // still load every rule, so they keep the short generic block.
       const contextMode = agentContextMode(projectRoot, agentType);
       if (contextMode === 'omit' || contextMode === 'full') {
-        lines.push(...buildSubagentRuleDigest({ agentType, platform, fullContext: contextMode === 'full' }));
+        // A composite kit (fullstack) lists its installed components (root, framework) per agent;
+        // a single kit's one component carries its `root` (commands run there when not `.`).
+        let components = null;
+        try {
+          components = require('./lib/component-resolver.cjs').readComponents(projectRoot);
+        } catch { components = null; }
+        lines.push(...buildSubagentRuleDigest({ agentType, platform, fullContext: contextMode === 'full', components }));
         // Memory path as an ABSOLUTE string. Agents otherwise assemble `.claude/agent-memory/<agent>/`
         // from wherever they are working (bk/dev/<feature>/, a package dir, a git worktree) and the
         // guard blocks the write (~60x in the field). The main repo root is canonical in worktrees.

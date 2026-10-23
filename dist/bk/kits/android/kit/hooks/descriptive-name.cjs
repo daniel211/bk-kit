@@ -117,7 +117,20 @@ try {
       }
 
       const basename = path.basename(filePath);
-      const platform = (PLATFORM && !PLATFORM.startsWith('{{')) ? PLATFORM : 'unknown';
+      let platform = (PLATFORM && !PLATFORM.startsWith('{{')) ? PLATFORM : 'unknown';
+      let namingConvention = NAMING_CONVENTION;
+
+      // A composite kit (fullstack) has no naming rule of its own: the file's component decides
+      // (python rules for backend .py, web rules for frontend .ts/.tsx). No component → skip.
+      const resolver = require('./lib/component-resolver.cjs');
+      if (resolver.isComposite(platform)) {
+        const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');
+        const projectRoot = resolveProjectRoot(data);
+        const component = resolver.componentForFile(
+          path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath), projectRoot);
+        platform = component ? component.platform : 'unknown';
+        namingConvention = (component && component.fileNaming) || '';
+      }
       const rule = NAMING_RULES[platform];
 
       // No rule for this platform — skip silently
@@ -135,7 +148,7 @@ try {
 
       // A `check` rule accepts more than the platform context's single fileNaming value (web's
       // is "kebab-case" yet PascalCase components pass), so its own label names the convention.
-      const convention = rule.check ? rule.label : (NAMING_CONVENTION || rule.label);
+      const convention = rule.check ? rule.label : (namingConvention || rule.label);
       if (!matchesRule(rule, basename, filePath)) {
         // Warn only — never block (fail-open)
         process.stderr.write(

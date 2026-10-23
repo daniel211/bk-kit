@@ -129,14 +129,33 @@ try {
   }
 
   /**
+   * Scan the project root, then — in a composite kit (fullstack: backend/ + frontend/) — the root
+   * of every component of that platform, so a mutmut config in backend/pyproject.toml counts.
+   * `file` is reported relative to the project root. Fail-open: no components → root only.
+   */
+  function detectInComponents(detect, platform, projectRoot) {
+    const atRoot = detect(projectRoot);
+    if (atRoot.found) return atRoot;
+    try {
+      const { readComponents, componentCwd } = require('./lib/component-resolver.cjs');
+      for (const c of readComponents(projectRoot) || []) {
+        if (c.platform !== platform || c.root === '.') continue;
+        const hit = detect(componentCwd(c, projectRoot));
+        if (hit.found) return { ...hit, file: path.posix.join(c.root, hit.file) };
+      }
+    } catch { /* fail-open */ }
+    return atRoot;
+  }
+
+  /**
    * Run a full mutation readiness scan and write results.
    */
   function runScan(projectRoot) {
     const ios     = detectIOSMutation(projectRoot);
     const android = detectAndroidMutation(projectRoot);
     const flutter = detectFlutterMutation(projectRoot);
-    const python  = detectPythonMutation(projectRoot);
-    const web     = detectWebMutation(projectRoot);
+    const python  = detectInComponents(detectPythonMutation, 'python', projectRoot);
+    const web     = detectInComponents(detectWebMutation, 'web', projectRoot);
 
     const readiness = {
       timestamp: new Date().toISOString(),

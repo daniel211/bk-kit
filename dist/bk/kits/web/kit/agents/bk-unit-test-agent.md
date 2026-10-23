@@ -182,8 +182,6 @@ Write unit tests for Sources/Features/Transactions/Data/TransactionRepository.sw
 | # | Test File | Tests | Passed | Failed | Skipped |
 |---|-----------|-------|--------|--------|---------|
 | 1 | Tests/Features/Transactions/TransactionRepositoryTests.swift | 6 | 6 | 0 | 0 |
-| 2 | Tests/Features/Transactions/Fakes/FakeTransactionAPI.swift | — | — | — | — |
-| 3 | Tests/Features/Transactions/Fakes/InMemoryTransactionCache.swift | — | — | — | — |
 
 ### Test Cases
 | # | Test Name | Category | Description |
@@ -211,13 +209,7 @@ class FakeTransactionAPI: TransactionAPIProtocol {
         return try result.get()
     }
 }
-
-class InMemoryTransactionCache: TransactionCacheProtocol {
-    var stored: [Transaction] = []
-    func save(_ transactions: [Transaction]) { stored = transactions }
-    func load() -> [Transaction] { stored }
-    func clear() { stored = [] }
-}
+// + InMemoryTransactionCache (array-backed save/load/clear)
 ```
 
 ### Failed Tests
@@ -231,29 +223,14 @@ class InMemoryTransactionCache: TransactionCacheProtocol {
 
 # bk-unit-test-agent — Web Section
 
-## Vitest + Testing Library + MSW Patterns
-- `describe()` / `it()`; `renderWithProviders()` with a fresh `QueryClient` (`retry: false`) per test
-- `userEvent.setup()` for interaction; queries by role/label first (`getByRole`, `getByLabelText`)
-- Network mocked with MSW (`server.use(http.get(...))` per test), `onUnhandledRequest: 'error'`
-- `renderHook()` + wrapper for hooks; `vi.useFakeTimers()` + `userEvent.setup({ advanceTimers })`
-- Cover loading / empty / error-with-retry states and zod schema edge cases
+## Vitest / Jest + Testing Library + MSW
+- Runner from `commands.test` — Vitest (`vi.*`) or Jest (`jest.*`), never mixed
+- Fresh `QueryClient` (`retry: false`) per test; `userEvent.setup()`; query by role/label; MSW `onUnhandledRequest: 'error'`
+- Cover loading / empty / error-with-retry and zod edges
+- Next: test Server Actions/data functions directly (unauthorized, invalid, other user's id); Vite: `createMemoryRouter`
 
-
-## Runner + Framework
-- Runner from platform-context `commands.test`: Vitest (`vi.fn`, `vi.mock`) or Jest (`jest.fn`, `jest.mock`) — never mix APIs
-- Next: async Server Components are not RTL-renderable — test their data functions and Server Actions directly (unauthorized, invalid input, other user's id), cover pages with Playwright on `next build && next start`
-- Vite: route tests with `createMemoryRouter` + `RouterProvider`
-
-## Post-steps
-- Run `commands.test` with coverage (`npx vitest run --coverage` / `npx jest --coverage`)
-- Check `coverage/` (v8) — >80% on hooks, utils, schemas
-
-## E2E
-- Playwright for critical flows (auth, checkout, core CRUD) in `e2e/`; web has no device-test agent
-- Page objects + `getByRole` locators; auth via `storageState`; `page.route()` only for edge states
-- axe scan (`@axe-core/playwright`, wcag2a/aa) on each critical page
-- Run `npx playwright test`; on failure attach trace (`--trace on`)
+## E2E (no device-test agent on web)
+- Playwright critical flows in `e2e/`: page objects, `getByRole`, `storageState`, axe; `npx playwright test --trace on`
 
 ## Knowledge References
-- skills/bk-web/references/vitest-rtl-patterns.md
-- skills/bk-web/references/playwright-e2e-patterns.md
+- skills/bk-web/references/vitest-rtl-patterns.md, playwright-e2e-patterns.md

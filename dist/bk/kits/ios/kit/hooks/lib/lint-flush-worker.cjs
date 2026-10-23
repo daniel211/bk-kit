@@ -26,7 +26,11 @@ const fs = require('fs');
 const path = require('path');
 
 const { takeQueue } = require('./lint-queue.cjs');
-const { buildBatchCommands, runLintCommand } = require('./lint-batch-runner.cjs');
+const {
+  buildBatchCommands, buildComponentBatches, baseLintCommand, runLintCommand
+} = require('./lint-batch-runner.cjs');
+const { isComposite, readComponents } = require('./component-resolver.cjs');
+const { firstTime } = require('./advisory-once.cjs');
 const { takeNativeQueue, runNativeLintBatch } = require('./native-lint-deferred.cjs');
 const { appendFinding } = require('./lint-findings-store.cjs');
 const { resolveQueueFile } = require('./lint-queue.cjs');
@@ -70,32 +74,94 @@ function runBatch(cfg) {
   if (cfg.skipMissing) files = existingOnly(files);
   if (files.length === 0) return { files: 0, text: '' };
 
+  const mode = cfg.mode === 'per-file' ? 'per-file' : 'auto';
+  const missing = [];
+
+  // Every kit with a readable context lints per component: own command, cwd = component root.
+  // A composite kit (fullstack) has several; a single kit one, rooted at its `root` (a uv
+  // backend/ → cwd backend/). No context → the build-time command at the project root.
+  const composite = isComposite(cfg.platform);
+  if (composite || readComponents(cfg.projectRoot)) {
+    const batches = buildComponentBatches({
+      projectRoot: cfg.projectRoot, files, mode, fallbackLintCommand: composite ? '' : cfg.lintCommand
+    });
+    let total = 0;
+    let text = '';
+    for (const b of batches) {
+      total += b.files.length;
+      const label = composite ? `${cfg.platform} ${b.id} (${b.platform})` : cfg.platform;
+      text += runCommands(cfg, b.commands, b.cwd, b.files, label,
+        { missing, command: baseLintCommand(b.platform, b.lintCommand), root: b.root });
+    }
+    reportMissingTools(cfg, missing);
+    if (text) text += '[LINT] Continuing — fix lint issues before committing.\n';
+    return { files: total, text };
+  }
+
   const commands = buildBatchCommands({
     platform: cfg.platform,
     files,
     lintCommand: cfg.lintCommand,
-    mode: cfg.mode === 'per-file' ? 'per-file' : 'auto'
+    mode
   });
   if (commands.length === 0) return { files: files.length, text: '' };
 
+  let text = runCommands(cfg, commands, cfg.projectRoot, files, cfg.platform,
+    { missing, command: baseLintCommand(cfg.platform, cfg.lintCommand), root: '.' });
+  reportMissingTools(cfg, missing);
+  if (text) text += '[LINT] Continuing — fix lint issues before committing.\n';
+  return { files: files.length, text };
+}
+
+/**
+ * Run one batch's commands in `cwd`; the `[LINT] <label> lint warnings…` block when any failed,
+ * '' when all passed. A command whose binary is missing (runLintCommand `missingTool`) is not a
+ * failure: it goes to `ctx.missing` for the advisory and adds no finding.
+ */
+function runCommands(cfg, commands, cwd, files, label, ctx) {
   let failures = 0;
   let combined = '';
   for (const cmd of commands) {
-    const result = runLintCommand(cmd, { cwd: cfg.projectRoot, timeoutMs: cfg.timeoutMs });
+    const result = runLintCommand(cmd, { cwd, timeoutMs: cfg.timeoutMs });
     if (result.ok) continue;
+    if (result.missingTool) {
+      ctx.missing.push({ command: ctx.command, root: ctx.root });
+      continue;
+    }
     failures += 1;
     if (result.timedOut) combined += `[LINT] timed out after ${cfg.timeoutMs}ms\n`;
     else if (result.output) combined += result.output;
   }
-  if (failures === 0) return { files: files.length, text: '' };
+  if (failures === 0) return '';
 
   const names = files.map((f) => path.basename(f));
   const shown = names.slice(0, MAX_NAMES_SHOWN).join(', ');
   const extra = names.length > MAX_NAMES_SHOWN ? `, +${names.length - MAX_NAMES_SHOWN} more` : '';
-  let text = `[LINT] ${cfg.platform} lint warnings for ${files.length} file(s): ${shown}${extra}\n`;
+  let text = `[LINT] ${label} lint warnings for ${files.length} file(s): ${shown}${extra}\n`;
   if (combined) text += combined.slice(0, MAX_OUTPUT_CHARS) + '\n';
-  text += '[LINT] Continuing — fix lint issues before committing.\n';
-  return { files: files.length, text };
+  return text;
+}
+
+/**
+ * One advisory per (command, root) per session (advisory-once) for a lint tool that is not
+ * installed — recorded as a `lint-advisory` record, so lint-findings-inject delivers it, but it
+ * is never a finding and raises no signal: a missing ruff is setup, not a lint failure.
+ */
+function reportMissingTools(cfg, missing) {
+  const seen = new Set();
+  for (const m of missing) {
+    const where = !m.root || m.root === '.' ? './' : `${m.root}/`;
+    const key = `lint-tool-missing|${m.command}|${where}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    if (!firstTime(key, { sessionId: cfg.sessionId || null, feature: 'lint' })) continue;
+    appendFinding(cfg.projectRoot, {
+      kind: 'lint-advisory',
+      session_id: cfg.sessionId || null,
+      files: 0,
+      text: `[LINT] lint tool not found: \`${m.command}\` in ${where} — set commands.lint in .claude/platform-context.json`
+    });
+  }
 }
 
 /**
