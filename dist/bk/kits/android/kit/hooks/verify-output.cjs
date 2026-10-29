@@ -34,7 +34,8 @@ try {
   // Agents that must not modify project code but DO need Bash to drive an external
   // review harness. Bash is bounded by an allowlist rather than forbidden outright.
   const CODE_IMMUTABLE_AGENTS = new Set([
-    'bk-gemini-reviewer'
+    'bk-gemini-reviewer',
+    'bk-codex-reviewer'
   ]);
 
   // The harness itself, plus read-only inspection an agent may reasonably reach for
@@ -43,11 +44,19 @@ try {
     /(?:^|[/\s;&|])agy(?:\s|$)/,                  // Antigravity CLI — the current harness
     /(?:^|[/\s;&|])gemini(?:\s|$)/,               // retired Gemini CLI, still tolerated
     /gemini-review\.mjs(?:\s|$)/,                 // the runner script
+    /(?:^|[/\s;&|])codex(?:\s|$)/,                // OpenAI Codex CLI — bk-codex-reviewer's harness
+    /codex-review\.mjs(?:\s|$)/,                  // its runner script
     // Availability probes. `where` is the Windows spelling the runner uses; omitting it
     // flagged every probe on Windows as a violation.
     /^\s*(?:which|command\s+-v|where|type)\s/,
     /^\s*git\s+(?:diff|status|log|show|ls-files|rev-parse|branch)\b/,
     /^\s*(?:ls|cat|head|tail|wc|find|grep|rg|pwd|echo)\b/
+  ];
+
+  // Flags that lift a harness CLI's sandbox. A command carrying one is a violation even when
+  // the allowlist above would otherwise match it (e.g. `codex exec --full-auto`).
+  const HARNESS_BASH_DENYLIST = [
+    /--dangerously-bypass-approvals-and-sandbox\b/, /--full-auto\b/, /--dangerously-skip-permissions\b/
   ];
 
   /** Tools that modify an existing file in place. Read-only agents may use none of them. */
@@ -68,7 +77,8 @@ try {
     for (const use of toolUses) {
       if (use.name !== 'Bash') continue;
       const cmd = typeof use.input.command === 'string' ? use.input.command : '';
-      if (!HARNESS_BASH_ALLOWLIST.some(pat => pat.test(cmd))) found.push(clip(cmd));
+      if (!HARNESS_BASH_ALLOWLIST.some(pat => pat.test(cmd))
+        || HARNESS_BASH_DENYLIST.some(pat => pat.test(cmd))) found.push(clip(cmd));
     }
     return found;
   }

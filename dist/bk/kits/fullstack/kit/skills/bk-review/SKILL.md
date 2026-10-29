@@ -1,8 +1,8 @@
 ---
 name: bk-review
-description: "Review local/uncommitted changes via bk-gemini-reviewer or bk-code-reviewer (+ security auditor). Triggers: review, code review, check my code, audit, inspect."
+description: "Review local/uncommitted changes via bk-gemini-reviewer (default), bk-codex-reviewer or bk-code-reviewer (+ security auditor). Triggers: review, code review, check my code, audit, inspect."
 user-invocable: true
-argument-hint: "[feature or files to review]"
+argument-hint: "[feature or files to review] [--engine gemini|codex|claude|dual|all]"
 ---
 
 # Review: $ARGUMENTS
@@ -69,8 +69,14 @@ BOTH in parallel for multi-model consensus, writing to **distinct** report paths
 (`code-review-gemini-{feature}.md` vs `code-review-{feature}.md`) — never point both at one file
 or the slower agent silently overwrites the other.
 
-**Tool boundaries differ per engine**: `bk-gemini-reviewer` needs `Bash` to invoke the review
-harness (`agy`); `bk-code-reviewer` and `bk-security-auditor` get no Bash at all. Copy the exact
+`--engine codex` dispatches `bk-codex-reviewer` (OpenAI Codex CLI; probe `command -v codex`),
+falling back to `bk-code-reviewer` when `codex` is missing. `--engine all` dispatches gemini +
+codex + claude in parallel, each to its own report (`code-review-codex-{feature}.md` for Codex);
+skip an engine whose CLI is missing and say so. Codex is never the default.
+
+**Tool boundaries differ per engine**: `bk-gemini-reviewer` / `bk-codex-reviewer` need `Bash` to
+invoke their review harness (`agy` / `codex`); `bk-code-reviewer` and `bk-security-auditor` get no
+Bash at all. Copy the exact
 TOOL RESTRICTION line for the engine you are dispatching — never the other one's.
 
 Dispatch all review agents in ONE message (background). Copy-paste prompts for all three agents:
@@ -93,6 +99,7 @@ If critical/major findings: suggest `/bk-debug` or resuming `/bk-code` fix loop.
 
 - `bk/dev/shared/reports/code-review-{feature}.md` + `.json` (bk-code-reviewer)
 - `bk/dev/shared/reports/code-review-gemini-{feature}.md` + `.json` (bk-gemini-reviewer)
+- `bk/dev/shared/reports/code-review-codex-{feature}.md` + `.json` (bk-codex-reviewer)
 - `bk/dev/shared/reports/security-{feature}.md` + `.json` (optional)
 
 A `verdict: "error"` report means the review harness failed (CLI not authenticated,
@@ -106,6 +113,8 @@ pass or a fail; fix the tooling and re-run.
 - `bk-code-reviewer` / `bk-security-auditor` are strictly read-only: also NO Bash
 - `bk-gemini-reviewer` MAY use Bash, solely to invoke the Gemini review harness
   (`gemini` CLI / `gemini-review.mjs`) — never to modify project files
+- `bk-codex-reviewer` likewise, solely for `codex` / `codex-review.mjs` (read-only sandbox;
+  never `--dangerously-bypass-approvals-and-sandbox` or `--full-auto`)
 - Single-message batching: dispatch ALL review agents in ONE message
 - Agents write reports only (Write tool) — no code modifications
 

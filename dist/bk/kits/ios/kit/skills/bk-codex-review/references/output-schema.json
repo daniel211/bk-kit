@@ -1,0 +1,52 @@
+{
+  "title": "CodexCodeReviewResult",
+  "description": "Strict variant of bk-gemini-review's output-schema.json for `codex exec --output-schema`: every property is listed in `required` and every object sets additionalProperties false. The model never emits verdict \"error\" — the runner writes that (with an `error` object) itself when the harness fails.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["verdict", "summary", "findings"],
+  "properties": {
+    "verdict": {
+      "type": "string",
+      "enum": ["approve", "request_changes"]
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["critical", "major", "minor", "info"],
+      "properties": {
+        "critical": { "type": "integer" },
+        "major": { "type": "integer" },
+        "minor": { "type": "integer" },
+        "info": { "type": "integer" }
+      }
+    },
+    "findings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["severity", "file", "line", "rule", "message", "suggestion"],
+        "properties": {
+          "severity": { "type": "string", "enum": ["critical", "major", "minor", "info"] },
+          "file": { "type": "string" },
+          "line": { "type": "integer" },
+          "rule": {
+            "type": "string",
+            "enum": [
+              "clean-arch",
+              "security",
+              "concurrency",
+              "error-handling",
+              "memory-leak",
+              "file-size",
+              "naming",
+              "platform-idiom"
+            ]
+          },
+          "message": { "type": "string" },
+          "suggestion": { "type": "string" }
+        }
+      }
+    }
+  }
+}

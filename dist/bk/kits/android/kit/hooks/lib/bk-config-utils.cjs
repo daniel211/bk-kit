@@ -443,6 +443,7 @@ function getOutputPath(agentType, feature, platform) {
     // Distinct from code-reviewer so `/bk-review --engine dual` can run both in
     // parallel without one clobbering the other's report.
     'gemini-reviewer': `code-review-gemini-${feature}.md`,
+    'codex-reviewer': `code-review-codex-${feature}.md`,
     'security-auditor': `security-${feature}.md`,
     'performance-analyzer': `performance-${feature}.md`,
     'unit-test-agent': `unit-test-${pfx}-${feature}.md`,

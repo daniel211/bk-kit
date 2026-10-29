@@ -74,6 +74,7 @@ const AGENT_ROLES = {
   'bk-debugger': 'implement',
   'bk-code-reviewer': 'review',
   'bk-gemini-reviewer': 'review',
+  'bk-codex-reviewer': 'review',
   'bk-security-auditor': 'review',
   'bk-performance-analyzer': 'review',
   'bk-test-architect': 'review',

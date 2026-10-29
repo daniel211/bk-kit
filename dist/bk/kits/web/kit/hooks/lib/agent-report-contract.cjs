@@ -105,6 +105,9 @@ const CONTRACTS = {
   'gemini-reviewer': ({ f, F }) => [
     { dir: 'reports', show: `code-review-gemini-${F}[-batchN].md`, re: new RegExp(`^code-review-gemini-${f}${BATCH}\\.md$`), why: 'agents/bk-gemini-reviewer.md' }
   ],
+  'codex-reviewer': ({ f, F }) => [
+    { dir: 'reports', show: `code-review-codex-${F}[-batchN].md`, re: new RegExp(`^code-review-codex-${f}${BATCH}\\.md$`), why: 'agents/bk-codex-reviewer.md' }
+  ],
   'security-auditor': ({ f, F }) => [
     { dir: 'reports', show: `security-${F}[-batchN].md`, re: new RegExp(`^security-${f}${BATCH}\\.md$`), why: 'agents/bk-security-auditor.md' },
     { dir: 'planResearch', show: 'review-security-batch-N.md', re: /^review-security-batch-\d+\.md$/, why: 'bk-code batch-execution.md' }

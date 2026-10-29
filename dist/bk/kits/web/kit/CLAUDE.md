@@ -1,6 +1,6 @@
 # beer-kit v2 — Dev Toolkit (web)
 
-> 19 agents | 38 skills | 59 hooks | 2 MCP servers
+> 20 agents | 39 skills | 59 hooks | 2 MCP servers
 
 ## Principles
 
@@ -49,7 +49,7 @@ Context: `.claude/platform-context.json` (fullstack: `components[]`). Platform s
 |----------|-------|--------|
 | Planning (bk-planner, bk-brainstormer) | opus | high |
 | Development (bk-{platform}-developer) | opus | high |
-| Review (bk-gemini-reviewer, bk-code-reviewer, bk-security-auditor, bk-performance-analyzer, bk-code-simplifier) | sonnet | high/medium |
+| Review (bk-gemini-reviewer, bk-codex-reviewer, bk-code-reviewer, bk-security-auditor, bk-performance-analyzer, bk-code-simplifier) | sonnet | high/medium |
 | Support (bk-docs-writer, bk-researcher, bk-unit-test-agent, bk-device-test-agent — mobile kits only) | haiku | medium/low |
 | Operations (bk-git-manager, bk-project-manager) | haiku | low |
 
@@ -118,13 +118,14 @@ Full routing: `rules/core-rules.md §2`. Approval gates: `rules/approval-rules.m
 | /bk-debug | bk-debugger + bk-{platform}-developer |
 | /bk-plan | bk-planner |
 | /bk-test | bk-test-architect + bk-unit-test-agent |
-| /bk-review | bk-gemini-reviewer (default) / bk-code-reviewer |
+| /bk-review | bk-gemini-reviewer (default) / bk-codex-reviewer / bk-code-reviewer |
 | /bk-gemini-review | bk-gemini-reviewer |
+| /bk-codex-review | bk-codex-reviewer |
 | /bk-commit | bk-git-manager |
 
 ## Skills
 
-38 skills. Workflow: `bk-code`, `bk-debug`, `bk-refactor`, `bk-plan`, `bk-test`, `bk-review`, `bk-commit`, `bk-docs`, `bk-analyze`. Knowledge skills loaded by agents on demand.
+39 skills. Workflow: `bk-code`, `bk-debug`, `bk-refactor`, `bk-plan`, `bk-test`, `bk-review`, `bk-commit`, `bk-docs`, `bk-analyze`. Knowledge skills loaded by agents on demand.
 
 ## Hooks
 

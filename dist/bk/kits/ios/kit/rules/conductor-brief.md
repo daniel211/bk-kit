@@ -67,6 +67,7 @@ Task(subagent_type: "{agent}", model: "{model}", prompt: "
 | bk-{platform}-developer | Source files + {plan-dir}/research/impl-sub-task-{NN}.md |
 | bk-code-reviewer | bk/dev/shared/reports/code-review-{feature}.md |
 | bk-gemini-reviewer | bk/dev/shared/reports/code-review-gemini-{feature}.md |
+| bk-codex-reviewer | bk/dev/shared/reports/code-review-codex-{feature}.md |
 | bk-debugger | bk/dev/shared/reports/debug-analysis-{feature}.json |
 
 ---

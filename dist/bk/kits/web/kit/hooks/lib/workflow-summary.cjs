@@ -113,7 +113,8 @@ function countFixLoops(entries) {
 
 /** Agents whose output is a verdict on code someone else wrote. */
 const REVIEWER_AGENTS = new Set([
-  'bk-code-reviewer', 'bk-security-auditor', 'bk-performance-analyzer', 'bk-gemini-reviewer'
+  'bk-code-reviewer', 'bk-security-auditor', 'bk-performance-analyzer', 'bk-gemini-reviewer',
+  'bk-codex-reviewer'
 ]);
 
 /** Agents that change code or tests — the ones a fix is dispatched to. */
@@ -145,7 +146,7 @@ const FIX_PHASES = new Set(['review', 'testing', '']);
  * Review -> fix cycles, read from the order agents finished in. One cycle = an implementer
  * (bk-*-developer, bk-unit-test-agent, bk-debugger) whose nearest preceding non-advisory agent
  * is a reviewer (bk-code-reviewer, bk-security-auditor, bk-performance-analyzer,
- * bk-gemini-reviewer), with both in the same (skill, feature) — `entries` is already scoped.
+ * bk-gemini-reviewer, bk-codex-reviewer), with both in the same (skill, feature) — `entries` is already scoped.
  * One review answered by several implementers (fix, then re-test) is ONE cycle.
  *
  * Deliberately conservative — it undercounts rather than invent loops:

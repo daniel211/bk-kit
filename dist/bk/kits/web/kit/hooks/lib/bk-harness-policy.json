@@ -43,6 +43,7 @@
         "bk-problem-solving": 2,
         "bk-debugger": 4,
         "bk-gemini-reviewer": 10,
+        "bk-codex-reviewer": 10,
         "bk-unit-test-agent": 6,
         "design-spec-writer": 16,
         "design-agy-extractor": 12,

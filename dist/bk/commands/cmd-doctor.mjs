@@ -365,6 +365,17 @@ export async function runDoctor(targetDir, platform, { pkgAgentsDir } = {}) {
     return 'warn';
   });
 
+  // 7b. Optional tool check: OpenAI Codex CLI, which backs bk-codex-reviewer
+  //     (/bk-review --engine codex|all). Gemini stays the default engine, so a missing
+  //     binary is only a warning.
+  check('codex CLI available (code review, optional)', () => {
+    if (hasCommand('codex')) return true;
+    console.log('    Optional: OpenAI Codex CLI ("codex") not found, so bk-codex-reviewer cannot run.');
+    console.log('    Install it with "npm i -g @openai/codex", then run "codex login".');
+    console.log('    Only needed for "/bk-review --engine codex" or "--engine all".');
+    return 'warn';
+  });
+
   // 8. Figma access, which backs the design extraction trio (design-validator,
   //    design-spec-writer, design-asset-exporter). Both engines read Figma over its REST
   //    API, so the only requirement is a token — there is no MCP server to check. Design

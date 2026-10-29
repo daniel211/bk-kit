@@ -11,8 +11,8 @@ TypeScript/React với Next.js hoặc Vite — `bk init` tự nhận framework).
 <!-- auto:release-stats -->
 | | |
 |---|---|
-| **26** agents | planner, developer theo nền tảng, 3 reviewer, debugger, security auditor, test architect, git manager... |
-| **43** skills | `/bk-plan`, `/bk-code`, `/bk-debug`, `/bk-test`, `/bk-team`, `/bk-autopilot`... |
+| **27** agents | planner, developer theo nền tảng, 3 reviewer, debugger, security auditor, test architect, git manager... |
+| **44** skills | `/bk-plan`, `/bk-code`, `/bk-debug`, `/bk-test`, `/bk-team`, `/bk-autopilot`... |
 | **65** hooks | chặn đọc file nhạy cảm, quét secret, giới hạn context, ép phân vai, đo chi phí... |
 | **33** rules | chuẩn code từng nền tảng, giao thức điều phối, cổng phê duyệt |
 | **6** kit | iOS · Android · Flutter · Python (backend) · Web (frontend) · Fullstack (Python + web), trong **một** package `@beerkit/bk` và **một** lệnh `bk` |
@@ -130,7 +130,7 @@ bk doctor                  # kiểm tra cài đặt
 Mở dự án trong Claude Code rồi chạy `/bk-bootstrap`.
 
 Cài một phiên bản cụ thể: truyền tag vào lệnh tải, ví dụ
-<!-- auto:release-version -->`gh release download v0.16.0 --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz'`<!-- /auto:release-version -->.
+<!-- auto:release-version -->`gh release download v0.17.0 --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz'`<!-- /auto:release-version -->.
 
 ### Cập nhật
 
