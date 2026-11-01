@@ -77,6 +77,7 @@ gets them restored). To move the workflow, change `current_phase` and nothing of
 ```
 node .claude/cli/bk-health/index.cjs --set-phase <phase> [--inc quality_fix_count] [--field reviewer_agent_id=<id>]
 node .claude/cli/bk-health/index.cjs --batch next          # batch boundary: batch N+1 + counts reset
+node .claude/cli/bk-health/index.cjs --set-phase coding --batch next   # same, and enter the next batch's coding
 node .claude/cli/bk-health/index.cjs --set-phase coding --batch 1   # first batch, explicit (batch null)
 ```
 
@@ -110,7 +111,7 @@ applies the recurrence override env; in a session started with it, Edit instead.
 | Code-Step-3b, tests already ran as plan sub-tasks | `review` | `testing_evidence` (`--field testing_evidence=<report>`) |
 | Code-Step-3c, before review dispatch | `review` | `reviewer_agent_id` |
 | Code-Step-3c, critical findings → re-implement | `coding` | `quality_fix_count += 1` (`--inc quality_fix_count`) |
-| Code-Step-3d, batch complete → next batch | *(unchanged)* | `batch += 1`, `phase_recurrence_count: {}` (`--batch next`) |
+| Code-Step-3d, batch complete → next batch | *(unchanged)* | `batch += 1`, `phase_recurrence_count: {}`, batch N → `completed_batches` (`--batch next`, BEFORE the next `--set-phase coding`) |
 | Code-Step-4, before bk-git-manager | `commit` | — |
 | Fix loop / build retry limit exceeded | `escalated` | reason + options presented to user |
 

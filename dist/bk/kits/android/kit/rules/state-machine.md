@@ -288,7 +288,7 @@ Prefer the CLI to move the phase. It applies the same validation and bookkeeping
 
 ```bash
 node .claude/cli/bk-health/index.cjs --set-phase <phase>   # e.g. testing; add --inc quality_fix_count on a fix loop
-node .claude/cli/bk-health/index.cjs --batch next           # batch completed: batch N+1 + counts reset
+node .claude/cli/bk-health/index.cjs --batch next           # batch completed: batch N+1 + counts reset — BEFORE the next coding
 # First batch: `--set-phase coding` auto-seeds batch=1 when batch is unset (or `--set-phase coding --batch 1`).
 ```
 
@@ -317,7 +317,7 @@ with it.
 ### Batch loops are not fix loops
 
 `/bk-code` re-enters `coding → testing → review` once per execution batch. On **successful
-batch completion**, run `bk-health --batch next`, or write `batch: N+1` together with `phase_recurrence_count: {}` in one write,
+batch completion**, run `bk-health --batch next` before the next batch's `--set-phase coding` (or both in one call), or write `batch: N+1` together with `phase_recurrence_count: {}` in one write,
 leaving `current_phase` unchanged (a non-transition write, so the guard lets it through, and
 stamps `recurrence_reset_ts` so the history window restarts too). Without that reset a 4-batch
 plan is blocked at batch 3 as if it were stuck. Never reset the counter to get out of a fix

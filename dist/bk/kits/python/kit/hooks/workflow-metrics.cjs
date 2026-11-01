@@ -47,6 +47,25 @@ try {
         process.exit(0);
       }
 
+      // Only kit agents belong to a bk workflow.
+      //
+      // SubagentStop fires for EVERY subagent in the session, including Claude Code's own
+      // built-ins and agents other plugins ship. Without this filter they were traced against
+      // whichever bk workflow happened to be open, counted into its total_agents, and — being
+      // completions in a terminal phase — could emit a workflow summary of their own. Field
+      // review 2026-11-01: a `statusline-setup` run wrote its own summary row for
+      // `bk-code:cancel-session-backend` reading total_agents 1 / 3758 ms, and
+      // design-agy-extractor, design-spec-writer and design-asset-exporter all landed in
+      // cost-ledger.jsonl under bk workflows. Those one-agent rows drag every average in
+      // insights.md down.
+      //
+      // See lib/kit-agent-names.cjs for the rule and its escape hatch.
+      const { isKitAgent } = require('./lib/kit-agent-names.cjs');
+      if (!isKitAgent(agentType)) {
+        timer.end({ status: 'foreign_agent', agent: agentType, exit: 0 });
+        process.exit(0);
+      }
+
       // The agent's status, classified from what it actually said.
       //
       // This read `data.status`, which SubagentStop does not carry: the captured payload shape

@@ -15,6 +15,7 @@ const { buildNativeLintPanel, renderNativeLintPanel } = require('./native-lint.c
 const { buildCiReadinessPanel, renderCiReadinessPanel } = require('./ci-readiness.cjs');
 const { resolveCliProjectRoot } = require('./project-root.cjs');
 const { requireHookLib } = require('./kit-hook-lib.cjs');
+const { readJsonlFiltered } = require('./metrics-jsonl.cjs');
 
 // ─── ANSI helpers ──────────────────────────────────────────────────────────
 const isTTY = process.stdout.isTTY;
@@ -28,17 +29,6 @@ function yellow(s) { return `${YELLOW}${s}${RESET}`; }
 function green(s)  { return `${GREEN}${s}${RESET}`; }
 
 // ─── File helpers ──────────────────────────────────────────────────────────
-
-function readJsonlFiltered(filePath, windowMs) {
-  if (!filePath || !fs.existsSync(filePath)) return [];
-  try {
-    const cutoff = windowMs ? Date.now() - windowMs : 0;
-    const raw = fs.readFileSync(filePath, 'utf8');
-    return raw.split('\n').filter(Boolean).map(l => {
-      try { return JSON.parse(l); } catch { return null; }
-    }).filter(e => e && (windowMs ? e.ts >= cutoff : true));
-  } catch { return []; }
-}
 
 function readJson(filePath) {
   if (!filePath || !fs.existsSync(filePath)) return null;

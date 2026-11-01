@@ -693,7 +693,18 @@ try {
       const modelName = data.model?.display_name || 'Claude';
 
       // --- Directory ---
+      // `rawDir` is the session's working directory: it is what the status line should
+      // DISPLAY, and whose git branch the user cares about. It is NOT the project root —
+      // a session cwd'd into a subdirectory reports that subdirectory here.
+      //
+      // Field review 2026-11-01: kit version, the subagent breakdown and the payload-shape
+      // diagnostic were all resolved against `rawDir`, so a session working below the root
+      // read them from a tree that has none of them (blank kit version, no agent costs) and
+      // wrote a second metrics directory beside the real one. X-Game-Pro grew a stray
+      // `.claude/.bk-metrics/` holding exactly the files those two writers produce.
+      // Anything kit-owned resolves against `projectRoot` instead.
       const rawDir = data.workspace?.current_dir || data.cwd || resolveProjectRoot();
+      const projectRoot = resolveProjectRoot();
       const homeDir = os.homedir();
       const displayDir = rawDir.startsWith(homeDir) ? rawDir.replace(homeDir, '~') : rawDir;
 
@@ -800,7 +811,7 @@ try {
       if (data.fast_mode) line1 += ` ${_yellow('fast')}`;
       if (contextBar) line1 += `  ${contextBar}`;
       line1 += `  🕐 ${timeStr}`;
-      const kitVersion = readKitVersion(rawDir);
+      const kitVersion = readKitVersion(projectRoot);
       if (kitVersion) line1 += `  🍺 bk ${kitVersion}`;
       const rateLimitPart = renderRateLimits(data.rate_limits);
       if (rateLimitPart) line1 += `  ${rateLimitPart}`;
@@ -811,7 +822,7 @@ try {
       line2Parts.push(`📂 ${projectName}`);
       line2Parts.push(`⚙️  ${fsmState}`);
       // Try subagent live breakdown first; fall back to background_tasks count
-      const subagentBreakdown = renderSubagentBreakdown(rawDir);
+      const subagentBreakdown = renderSubagentBreakdown(projectRoot);
       if (subagentBreakdown) {
         line2Parts.push(subagentBreakdown);
       } else if (runningCount > 0) {
@@ -850,7 +861,7 @@ try {
           );
         };
         fs.writeFileSync(
-          path.join(rawDir, '.bk-metrics', 'statusline-payload-keys.json'),
+          path.join(projectRoot, '.bk-metrics', 'statusline-payload-keys.json'),
           JSON.stringify({ observedAt: new Date().toISOString(), shape: shapeOf(data || {}, 3) }, null, 2) + '\n',
         );
       } catch { /* diagnostics are best-effort — never break the statusline */ }

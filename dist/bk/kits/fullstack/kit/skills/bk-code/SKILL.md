@@ -106,9 +106,10 @@ git-manager haiku. Full dispatch table with triggers and inputs:
 
 **3d. Batch Complete** — all sub-tasks implement ✓ + test ✓ + review ✓ → tick `## Tasks` `[x]`,
 TaskUpdate(completed), update `.plan-state.json`. **FSM:** `node .claude/cli/bk-health/index.cjs --batch next`
-(= `batch: N+1` + `phase_recurrence_count: {}` in one write, `current_phase` unchanged). A multi-batch plan re-enters
-`coding` once per batch; without this reset the recurrence ladder blocks batch 3 as if it were a
-fix loop. Reset on batch *progress* only, never to escape a fix loop.
+(= `batch: N+1` + `phase_recurrence_count: {}` in one write, `current_phase` unchanged) BEFORE the next
+`--set-phase coding` (or one call: `--set-phase coding --batch next`). A multi-batch plan re-enters
+`coding` once per batch; without this reset the recurrence ladder blocks it as a fix loop.
+Reset on batch *progress* only, never to escape a fix loop.
 
 ### Code-Step-4: Finalize
 Load: `references/finalize.md`

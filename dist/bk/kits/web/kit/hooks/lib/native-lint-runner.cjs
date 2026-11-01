@@ -26,6 +26,21 @@
 const fs   = require('fs');
 const path = require('path');
 const cp   = require('child_process');
+const { resolveProjectRoot } = require('./resolve-project-root.cjs');
+
+/**
+ * The project root every path in this module resolves against.
+ *
+ * Field review 2026-11-01: each site here read `process.env.BK_PROJECT_ROOT || process.cwd()`,
+ * so a hook invoked with the session cwd'd below the root wrote
+ * `<subdir>/.bk-metrics/native-tools-cache.json` and looked for `.swiftlint.yml` / `gradlew`
+ * in a directory that has neither — tool detection then cached "not found" against the wrong
+ * tree. resolveProjectRoot() still honours BK_PROJECT_ROOT first (so test overrides are
+ * unchanged) and only falls back to process.cwd() after walking up for a project marker.
+ */
+function projectRoot() {
+  return resolveProjectRoot();
+}
 
 const CACHE_FILE     = '.bk-metrics/native-tools-cache.json';
 const CACHE_TTL_MS   = 5 * 60 * 1000; // 5 minutes
@@ -65,7 +80,7 @@ function withTimeout(promise, ms, onTimeout) {
  * Get the absolute path to the cache file.
  */
 function getCachePath() {
-  const root = process.env.BK_PROJECT_ROOT || process.cwd();
+  const root = projectRoot();
   return path.join(root, CACHE_FILE);
 }
 
@@ -170,7 +185,7 @@ function detectSwiftlint() {
 function detectDetekt() {
   try {
     // Check for local gradlew with detekt task. We look for a gradlew in cwd or project root.
-    const root = process.env.BK_PROJECT_ROOT || process.cwd();
+    const root = projectRoot();
     const gradlew = path.join(root, 'gradlew');
     if (!fs.existsSync(gradlew)) {
       return { available: false, reason: 'gradlew not found — detekt unavailable' };
@@ -289,7 +304,7 @@ function readDetektXmlReport() {
   if (mockPath && fs.existsSync(mockPath)) {
     try { return fs.readFileSync(mockPath, 'utf8'); } catch { return null; }
   }
-  const root = process.env.BK_PROJECT_ROOT || process.cwd();
+  const root = projectRoot();
   // Common detekt output paths (root project, app module, multi-module convention)
   const candidates = [
     path.join(root, 'build', 'reports', 'detekt', 'detekt.xml'),
@@ -344,7 +359,7 @@ function buildCommand(platform, targetPath, opts = {}) {
       const configPath = (policy.ios && policy.ios.config_path) || '.swiftlint.yml';
       const args = ['lint', '--quiet', '--reporter', 'json'];
       // Add config if it exists
-      const root = process.env.BK_PROJECT_ROOT || process.cwd();
+      const root = projectRoot();
       if (fs.existsSync(path.join(root, configPath))) {
         args.push('--config', configPath);
       }
@@ -353,7 +368,7 @@ function buildCommand(platform, targetPath, opts = {}) {
       return { cmd: 'swiftlint', args };
     }
     case 'android': {
-      const root = process.env.BK_PROJECT_ROOT || process.cwd();
+      const root = projectRoot();
       const gradlew = path.join(root, 'gradlew');
       // detekt's --input is a comma-separated list, not a repeatable flag.
       return { cmd: gradlew, args: ['detekt', '--format', 'xml', '--input', targets.join(',')] };

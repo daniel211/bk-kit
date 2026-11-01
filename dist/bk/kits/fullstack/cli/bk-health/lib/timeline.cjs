@@ -3,9 +3,9 @@
  * timeline.cjs — Flatten and render timeline of events from JSONL sources.
  */
 
-const fs = require('fs');
 const path = require('path');
 const { resolveCliProjectRoot } = require('./project-root.cjs');
+const { normalizeTs, readJsonlFiltered } = require('./metrics-jsonl.cjs');
 
 const isTTY = process.stdout.isTTY;
 const YELLOW = isTTY ? '\x1b[33m' : '';
@@ -13,17 +13,6 @@ const RED    = isTTY ? '\x1b[31m' : '';
 const GREEN  = isTTY ? '\x1b[32m' : '';
 const DIM    = isTTY ? '\x1b[2m'  : '';
 const RESET  = isTTY ? '\x1b[0m'  : '';
-
-function readJsonlFiltered(filePath, windowMs) {
-  if (!filePath || !fs.existsSync(filePath)) return [];
-  try {
-    const cutoff = windowMs ? Date.now() - windowMs : 0;
-    const raw = fs.readFileSync(filePath, 'utf8');
-    return raw.split('\n').filter(Boolean).map(l => {
-      try { return JSON.parse(l); } catch { return null; }
-    }).filter(e => e && (windowMs ? e.ts >= cutoff : true));
-  } catch { return []; }
-}
 
 /**
  * Collect and sort all events from multiple JSONL sources.
@@ -84,7 +73,7 @@ function getTimelineEvents(opts = {}) {
   }
 
   // Sort by timestamp
-  events.sort((a, b) => (a.ts || 0) - (b.ts || 0));
+  events.sort((a, b) => (normalizeTs(a.ts) || 0) - (normalizeTs(b.ts) || 0));
   return events;
 }
 

@@ -142,11 +142,19 @@ try {
       // the row and never let it read as exact.
       const fallbackPriced = pricingSource(model).source === 'fallback';
 
+      // A subagent that is not one of the kit's own still spent the user's money, so the row
+      // stays and budget-guard keeps seeing it — only its attribution to `workflowId` is
+      // wrong. Tagging it lets insights.md and cost-by-model separate kit work from the
+      // built-ins and other plugins' agents. See lib/kit-agent-names.cjs.
+      const { isKitAgent } = require('./lib/kit-agent-names.cjs');
+      const foreignAgent = !isKitAgent(agentName);
+
       // Build ledger entry (no prompt content — numbers/metadata only)
       const entry = {
         type: 'subagent',
         workflowId,
         agent: agentName,
+        ...(foreignAgent ? { foreignAgent: true } : {}),
         stableId: identity.id,
         model,
         effort,

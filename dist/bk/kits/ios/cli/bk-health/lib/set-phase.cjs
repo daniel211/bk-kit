@@ -36,6 +36,26 @@ const OVERRIDE_NOTE =
   'Edit current_phase instead (fsm-guard honours it there).';
 
 /**
+ * review → coding refused by the recurrence ladder, with no `--batch` in the call: the shape of
+ * a batch boundary taken in the wrong order. X-Game-Pro (2026-10-28, meeting-point-picker):
+ * after batch 4's re-review approved, the conductor ran `--set-phase coding` and only THEN
+ * `--batch next`; coding was entry 3 of batch 4's count, so the CLI blocked it (red signal
+ * phase_recurrence_blocked), printed the ladder's fix-loop advice and OVERRIDE_NOTE's "Edit
+ * current_phase instead" — and the conductor hand-edited the state file. The reset it needed
+ * was one flag away, so that comes first; the fix-loop text stays below it for a real loop.
+ */
+const BATCH_BOUNDARY_NOTE =
+  'If the current batch is COMPLETE (re-review approved) this is a batch boundary, not a fix loop: ' +
+  'run `bk-health --set-phase coding --batch next` (or `--batch next`, THEN `--set-phase coding`) — ' +
+  'the batch advance resets the recurrence counts before the transition is judged. ' +
+  'Never reset to escape a fix loop; if the batch is not complete, read on.';
+
+/** @returns {boolean} the refused transition looks like a batch boundary taken without --batch */
+function isBatchBoundaryShape(decision, batchArg) {
+  return batchArg === null && decision.from === 'review' && decision.to === 'coding';
+}
+
+/**
  * Parse the `--batch` value against the batch on disk.
  * @param {string|number} raw - "next" or an integer
  * @param {object} state
@@ -58,6 +78,23 @@ function resolveBatch(raw, state) {
       'The batch-boundary write is batch N+1 at a COMPLETED batch.' };
   }
   return { ok: true, batch: target };
+}
+
+/**
+ * `completed_batches` with the batch on disk appended, or null when there is no numeric batch
+ * to close (a first `--batch 1` from a null batch completes nothing). Existing entries are kept
+ * as written — older states hold strings like "batch-1" — and the new one is skipped when an
+ * entry already names the same batch number.
+ * @param {object} state
+ * @returns {Array|null}
+ */
+function completedBatchesAfter(state) {
+  const current = Number(state.batch);
+  if (state.batch === null || state.batch === undefined || state.batch === '' || !Number.isInteger(current)) return null;
+  const list = Array.isArray(state.completed_batches) ? [...state.completed_batches] : [];
+  const numberOf = (entry) => Number(String(entry).replace(/^batch[-_ ]?/i, ''));
+  if (!list.some((entry) => numberOf(entry) === current)) list.push(current);
+  return list;
 }
 
 /** True when state.batch is unset/non-numeric and total_batches is a positive integer. */
@@ -133,9 +170,11 @@ function describe(decision, fields, before, seeded) {
   if (seeded) {
     parts.push('batch seeded to 1 (total_batches ' + before.total_batches + ')');
   } else if (fields.batch !== undefined) {
-    parts.push(`batch ${before.batch === undefined ? 'none' : before.batch} → ${fields.batch}, recurrence counts reset`);
+    const closed = fields.completed_batches ? `, batch ${before.batch} recorded in completed_batches` : '';
+    parts.push(`batch ${before.batch === undefined ? 'none' : before.batch} → ${fields.batch}, recurrence counts reset${closed}`);
   }
-  const extras = Object.keys(fields).filter((k) => !['current_phase', 'batch', 'phase_recurrence_count'].includes(k));
+  const extras = Object.keys(fields)
+    .filter((k) => !['current_phase', 'batch', 'phase_recurrence_count', 'completed_batches'].includes(k));
   if (extras.length > 0) parts.push(extras.map((k) => `${k}=${JSON.stringify(fields[k])}`).join(' '));
   return `[bk-health] ${parts.join('; ') || 'nothing to change'}`;
 }
@@ -196,6 +235,13 @@ function setPhase(opts = {}) {
       if (!b.ok) { early = b.message; return null; }
       fields.batch = b.batch;
       fields.phase_recurrence_count = {};
+      // The batch being left is complete — that is what the boundary write asserts. Record it:
+      // subagent-iteration-cap's progress signature reads `completed_batches.length`, and until
+      // the 2026-10-30 field review nothing in the kit wrote the field, so that part of the
+      // signature was 0 in every repo (X-Game-Pro meeting-point-picker: `1c0b82c|0|5` after
+      // four finished batches). Deduped, so a repeated boundary write cannot inflate it.
+      const done = completedBatchesAfter(fresh);
+      if (done) fields.completed_batches = done;
     } else if (phase === 'coding' && needsBatchSeed(fresh)) {
       // The conductor never seeded `batch` (X-Game-Pro 0.13.4: batch stayed null for 3 batches, so
       // agent-trace rows carried batch=None and same-batch fix loops went uncounted). Seed the
@@ -256,9 +302,12 @@ function setPhase(opts = {}) {
         target: cfg.workflowStatePath(root)
       });
     } catch { /* telemetry never changes the verdict */ }
-    const message = decision.verdict === 'halt' || decision.verdict === 'block'
+    let message = decision.verdict === 'halt' || decision.verdict === 'block'
       ? decision.recurrence.message + '\n' + OVERRIDE_NOTE
       : decision.message;
+    if (decision.verdict === 'block' && isBatchBoundaryShape(decision, batchArg)) {
+      message = BATCH_BOUNDARY_NOTE + '\n' + message;
+    }
     return { success: false, exitCode: 2, verdict: decision.verdict, message: message.trimEnd() };
   }
 

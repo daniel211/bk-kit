@@ -165,10 +165,27 @@ try {
    *    per-sub-task dispatch template carries — implement, parallel implement and the
    *    debug-driven fix. Singular only: `Sub-task files:` is the plural list a reviewer or
    *    test agent gets for a whole batch, and it identifies no single unit.
-   * 2. Otherwise the description, when it mentions exactly one `sub-task NN` ("Implement
+   * 2. Otherwise the prompt's FIRST `Task:` line, when it names exactly one `sub-task NN`
+   *    ("Task: Implement sub-task 15 (AppCoordinator route + hand-off) of plan …"). Conductors
+   *    do not always copy the template: in X-Game-Pro (2026-10-28, meeting-point-picker
+   *    batch 5) the dispatches for sub-tasks 15, 16 and 17 carried no `Sub-task file:` line and
+   *    descriptions like "[opus] Coordinator route wiring", so all three shared the batch-level
+   *    signature and a fix for 17 was denied as "iteration 4" — the user had to be asked, and
+   *    the conductor routed the fix to bk-unit-test-agent to get around the cap. Only the Task
+   *    line's FIRST sentence is read (see `firstSentence`): the field lines go on to list the
+   *    specs and impl reports to read, which name other sub-tasks. A first sentence naming
+   *    none, or several, falls through to the next rule rather than deciding "no unit".
+   * 3. Otherwise exactly one distinct plan sub-task FILE path, `sub-task-NN-<slug>.md` (the
+   *    same dispatches said "Read the full spec bk/dev/…/sub-task-15-coordinator-route-wiring.md").
+   *    Only the full file name counts: dependency notes name sub-tasks by number ("depends on
+   *    13", "see sub-task-05"), not by spec path, and two different paths mean no single unit.
+   *    This is the loosest rule, and it is still safe in the direction that matters: an id read
+   *    off a referenced-but-not-worked-on spec is the SAME id on every identical retry, so a
+   *    looping dispatch keeps one signature and still climbs to the cap.
+   * 4. Otherwise the description, when it mentions exactly one `sub-task NN` ("Implement
    *    sub-task 11: envelope receiver"). The description is one line the conductor writes
-   *    about this dispatch; the prompt body is not scanned, because it routinely lists other
-   *    sub-tasks ("Dependency note: 03, 04 done", "see sub-task-05 for the model").
+   *    about this dispatch; the rest of the prompt body is not scanned for bare mentions,
+   *    because it routinely lists other sub-tasks ("Dependency note: 03, 04 done").
    *
    * Two different ids from either source mean the dispatch spans several units — none is
    * returned. Ids are normalised to their integer value so `07` and `7` agree.
@@ -176,6 +193,19 @@ try {
    * @param {object} toolInput
    * @returns {string|null}
    */
+  /**
+   * The first sentence of a `Task:` line: up to the first period followed by whitespace, or a
+   * period ending the line. A period inside a path (`bk/dev/x.md`) is followed by a letter and
+   * does not end it. The field lines are paragraphs — "Task: Implement sub-task 15 (…) of plan
+   * bk/dev/meeting-point-picker. Read the full spec …/sub-task-15-….md (…) Also read impl reports
+   * research/impl-sub-task-06.md and impl-sub-task-13.md …" — and only the first sentence says
+   * which unit THIS dispatch is; the rest lists what to read.
+   */
+  function firstSentence(text) {
+    const end = text.search(/\.(?:\s|$)/);
+    return end === -1 ? text : text.slice(0, end);
+  }
+
   function extractSubTaskId(toolInput) {
     if (!toolInput) return null;
     const single = (ids) => {
@@ -192,6 +222,18 @@ try {
         .map((m) => m[1]);
       if (ids.length > 0) return single(ids);
     }
+
+    // `(?<![\w-])`: a sub-task inside a longer name is not a mention — `impl-sub-task-06.md` is a
+    // report the dispatch reads, not the unit it works on.
+    const taskLine = prompt.match(/^[ \t]*task[ \t]*:([^\n]*)/im);
+    if (taskLine) {
+      const ids = [...firstSentence(taskLine[1]).matchAll(/(?<![\w-])sub-?task[ \t_-]*#?(\d+)\b/gi)].map((m) => m[1]);
+      const id = ids.length > 0 ? single(ids) : null;
+      if (id) return id;
+    }
+
+    const specPaths = [...prompt.matchAll(/(?<![\w-])sub-task-(\d+)-[a-z0-9][a-z0-9_-]*\.md\b/gi)].map((m) => m[1]);
+    if (specPaths.length > 0) return single(specPaths);
 
     const description = typeof toolInput.description === 'string' ? toolInput.description : '';
     const mentions = [...description.matchAll(/\bsub-?task[ \t_-]*#?(\d+)\b/gi)].map((m) => m[1]);

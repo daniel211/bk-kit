@@ -24,6 +24,8 @@ const fs = require('fs');
 
 const TAIL_BYTES = 256 * 1024;
 const HANDBACK_TOOL = 'SubagentHandback';
+/** Diagnosis reasons that mean "the transcript is not fully on disk yet" — worth a re-read. */
+const FLUSH_RACE_REASONS = new Set(['transcript_unreadable', 'transcript_empty', 'only_tool_use_in_last_turn']);
 
 /** Last ~256KB of a file as text, or "" when unreadable. A cut first line fails to parse and is skipped. */
 function readTail(file) {
@@ -80,6 +82,14 @@ function sleepMs(ms) {
  * `retries` x `retryDelayMs` (default 2 x 100ms) — paid only by runs that would otherwise be
  * filed as silent.
  *
+ * The same race has a second shape: the file is there, but its LAST line is not. Field review
+ * 2026-10-30: 24 of 26 `no_output` rows since 2026-10-16 (X-Game-Pro 17/19, fusionworkomni 7/7)
+ * were `only_tool_use_in_last_turn`, and in every one the agent's SubagentHandback line sits in
+ * the transcript starting exactly at the recorded `diagnostics.transcript_bytes` — the hook read
+ * the file one line short. An agent cannot END on an unanswered tool call (the harness runs the
+ * tool and the agent takes another turn), so a last turn that is only a tool_use at stop time is
+ * a transcript still being written, and is retried like an empty one.
+ *
  * @returns {{ message: string, source: 'payload'|'handback'|'transcript_text'|'none',
  *             reason: string, diagnostics: object|null }}
  */
@@ -101,7 +111,7 @@ function resolveFinalMessageDetailed(hookData, opts) {
       if (diag.reason === 'transcript_final_text') {
         return { message: diag.lastTurnText, source: 'transcript_text', reason: 'transcript_final_text', diagnostics: null };
       }
-      if (diag.reason !== 'transcript_unreadable' && diag.reason !== 'transcript_empty') break;
+      if (!FLUSH_RACE_REASONS.has(diag.reason)) break;
       if (attempt < retries) sleepMs(delay);
     }
     return { message: '', source: 'none', reason: diag.reason, diagnostics: diag.diagnostics };
@@ -112,8 +122,13 @@ function resolveFinalMessageDetailed(hookData, opts) {
 
 /** @returns {{ message: string, source: 'payload'|'handback'|'transcript_text'|'none' }} */
 function resolveFinalMessageWithSource(hookData) {
-  // No retries: callers that only want the text (agent-signal-detector) must not pay the wait.
-  const { message, source } = resolveFinalMessageDetailed(hookData, { retries: 0 });
+  // Same retries as the detailed path. This used to pass `retries: 0` so that callers that only
+  // want the text (agent-signal-detector) never paid the wait — but the wait is only ever paid by
+  // a run whose message is otherwise empty, and for those "no wait" meant "no message": the
+  // detector skipped every flush-race agent as no_output (24 of 26 in the 2026-10-30 field
+  // review), so a real `Status: blocked` handed back in that window was never routed. A
+  // payload-text or already-flushed handback still returns on the first read.
+  const { message, source } = resolveFinalMessageDetailed(hookData);
   return { message, source };
 }
 

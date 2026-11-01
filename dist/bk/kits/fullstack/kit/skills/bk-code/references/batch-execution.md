@@ -57,6 +57,8 @@ Dispatch `bk-{platform}-developer` for each sub-task in the batch, respecting de
 Keep exactly one `Sub-task file:` line per dispatch (and `sub-task {NN}` in the description):
 the dispatch cap budgets each sub-task separately by reading it, so sequential sub-tasks in
 one batch are not mistaken for retries. Without it they share one budget and the 4th is blocked.
+(Fallbacks, in order: the first sentence of the `Task:` line naming one `sub-task NN`, then exactly one
+`sub-task-NN-{slug}.md` path in the prompt — the template line is still the reliable one.)
 
 **Sequential sub-tasks** (sub-task has `depends:` on another sub-task in same batch):
 ```
@@ -403,7 +405,11 @@ A batch is complete when ALL of these are true:
    is what stops a 4-batch plan from tripping the phase-recurrence block on batch 3. Reset only
    on a batch that actually completed; never to escape a fix loop — a reset without the batch
    increment does not clear the window. Never touch `phase_history` or `recurrence_reset_ts`:
-   `fsm-guard` refuses writes that change them.
+   `fsm-guard` refuses writes that change them. It also appends batch N to `completed_batches`
+   (the dispatch cap's progress signature reads it).
+   **Order:** this write comes BEFORE the next batch's `--set-phase coding` — or combine them,
+   `--set-phase coding --batch next`, which applies the reset first. Running `--set-phase coding`
+   first is judged against the finished batch's counts and is blocked as a fix loop.
 7. **Log**: `"✓ Batch {N} ({name}) complete — {sub-task count} sub-tasks, {file count} files changed"`
 
 ### Proceed to Next Batch
