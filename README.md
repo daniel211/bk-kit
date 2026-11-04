@@ -130,7 +130,7 @@ bk doctor                  # kiểm tra cài đặt
 Mở dự án trong Claude Code rồi chạy `/bk-bootstrap`.
 
 Cài một phiên bản cụ thể: truyền tag vào lệnh tải, ví dụ
-<!-- auto:release-version -->`gh release download v0.17.1 --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz'`<!-- /auto:release-version -->.
+<!-- auto:release-version -->`gh release download v0.18.0 --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz'`<!-- /auto:release-version -->.
 
 ### Cập nhật
 
@@ -150,6 +150,7 @@ bk update                  # trong thư mục dự án
 | `bk docs` | Quản lý tài liệu dự án sinh bởi kit |
 | `bk metrics` | Xem số liệu quy trình và chi phí |
 | `bk models` | Xem và đổi model/effort của từng agent: `list`, `set`, `preset`, `reset` |
+| `bk telemetry` | Đóng gói số liệu hoạt động đã ẩn danh thành một file để bạn tự chọn chia sẻ |
 
 ---
 
@@ -239,11 +240,49 @@ File `.claude/.bk.json` (theo dự án) hoặc `~/.claude/.bk.json` (toàn cục
 
 ---
 
+## Chia sẻ số liệu để cải thiện kit (không bắt buộc)
+
+Kit không tự gửi gì ra ngoài: số liệu hoạt động nằm trên máy bạn, trong `.bk-metrics/` và
+`.claude/hooks/.logs/`. Nếu muốn giúp cải thiện kit, bạn có thể tạo một file tổng hợp rồi gửi cho
+người bảo trì. **Không chia sẻ cũng không ảnh hưởng gì đến việc dùng kit.**
+
+```bash
+cd ~/MyProject
+bk telemetry
+```
+
+Lệnh in đường dẫn file `bk-telemetry-<ngày>-<giờ>.tgz` khi xong. Đó là file duy nhất cần gửi. Lệnh
+không gửi gì, việc chuyển file do bạn tự quyết định.
+
+| Có trong file | Không có trong file |
+|---|---|
+| Thời lượng, số token, chi phí | Source code, đường dẫn file |
+| Trạng thái và lỗi của hook | Prompt, lệnh đã chạy, nội dung tool call |
+| Loại vi phạm, tín hiệu workflow, phase | Nội dung plan, báo cáo, handoff |
+| Phiên bản và nền tảng của kit | `settings.json`, secret |
+
+- **Được băm:** tên feature, tên custom agent và tên MCP tool được băm HMAC-SHA256 với salt ngẫu
+  nhiên chỉ dùng cho file đó và không lưu lại, nên người nhận không dò ngược được từ một danh sách
+  tên, và hai lần xuất không nối được với nhau.
+- **Vẫn đọc được:** mốc thời gian, session ID, tên agent và skill của kit, tên model, tên tool có
+  sẵn của Claude Code. Người nhận biết bạn làm việc lúc nào và tốn bao nhiêu, nhưng không biết bạn
+  làm gì.
+- **Tự kiểm tra trước khi gửi:** xem danh sách file bằng `tar tzf <file>`, giải nén ra để đọc nếu
+  muốn. Tất cả là JSON dạng văn bản.
+- **Nếu lệnh dừng với `Export stopped`:** bước quét cuối đã thấy giá trị trông giống đường dẫn hoặc
+  code, nên không có file nào được tạo. Hãy báo tên file và field trong thông báo; thông báo không
+  in giá trị.
+
+**Giữ file ngoài git.** Khi file nằm trong repo và chưa bị ignore, `bk telemetry` hỏi có thêm
+`bk-telemetry-*.tgz` vào `.gitignore` không. Dùng `--gitignore` để thêm luôn, `--no-gitignore` để
+không đụng vào `.gitignore`, hoặc `--out <đường-dẫn>` để ghi ra chỗ khác. Khi không chạy trong
+terminal tương tác, lệnh chỉ in gợi ý và không sửa gì.
+
+---
+
 ## Giấy phép
 
 MIT
-
----
 
 <!-- auto:agy-guide -->
 
