@@ -1,0 +1,111 @@
+{
+  "type": "object",
+  "required": [
+    "source",
+    "detection",
+    "screens"
+  ],
+  "properties": {
+    "source": {
+      "type": "object",
+      "required": [
+        "figma_url",
+        "file_key"
+      ],
+      "properties": {
+        "figma_url": {
+          "type": "string"
+        },
+        "file_key": {
+          "type": "string"
+        },
+        "file_name": {
+          "type": "string"
+        },
+        "page_name": {
+          "type": "string"
+        },
+        "section_node_id": {
+          "type": "string"
+        },
+        "section_name": {
+          "type": "string"
+        }
+      }
+    },
+    "detection": {
+      "type": "object",
+      "required": [
+        "mode",
+        "frame_count"
+      ],
+      "properties": {
+        "mode": {
+          "type": "string",
+          "enum": [
+            "FRAME",
+            "PAGE",
+            "SECTION"
+          ]
+        },
+        "total_children": {
+          "type": "integer"
+        },
+        "frame_count": {
+          "type": "integer"
+        }
+      }
+    },
+    "screens": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "nodeId",
+          "slug",
+          "name"
+        ],
+        "properties": {
+          "nodeId": {
+            "type": "string",
+            "pattern": "^I?\\d+:\\d+(;\\d+:\\d+)*$"
+          },
+          "slug": {
+            "type": "string",
+            "pattern": "^\\\\d{2}-[a-zA-Z0-9-]+$"
+          },
+          "name": {
+            "type": "string"
+          },
+          "width": {
+            "type": "number"
+          },
+          "height": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "code",
+          "message"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "message": {
+            "type": "string"
+          },
+          "duplicates": {
+            "type": "array"
+          }
+        }
+      }
+    }
+  }
+}

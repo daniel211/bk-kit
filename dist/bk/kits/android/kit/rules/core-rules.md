@@ -13,16 +13,17 @@
 | macos-only | `.xcworkspace`/`.xcodeproj` with macOS target only | bk-ios-developer |
 | apple-multiplatform | `.xcworkspace`/`.xcodeproj` with iOS + macOS targets | bk-ios-developer |
 | android-only | `build.gradle`, no `ios/` | bk-android-developer |
-| monorepo | Both `ios/` + `android/` (no pubspec.yaml) | bk-ios-developer (ios kit; composite mobile kit is future work) |
+| mobile_native | ios + android markers at root or a first-level subdir (no pubspec.yaml) | bk-ios-developer + bk-android-developer |
 | fullstack | python + web markers at root or a first-level subdir | bk-python-developer + bk-web-developer |
 | python | `pyproject.toml` / `requirements.txt` / `manage.py` / `setup.py` | bk-python-developer |
 | web | `package.json` + `tsconfig.json` / `next.config.*` / `vite.config.*` | bk-web-developer |
 
 Platform context: `.claude/platform-context.json`. Conventions: `.claude/rules/{platform}-rules.md`.
 
-Fullstack: one sub-task per component (`components[]`: root, platform), dispatched to that component's
-dev agent; backend + frontend sub-tasks run in parallel when their `Files:` don't overlap; an API contract
-change = backend sub-task first, frontend after it (see `fullstack-rules.md`).
+Composite kits (fullstack, mobile_native): one sub-task per component (`components[]`: root, platform), dispatched
+to that component's dev agent; sub-tasks of different components run in parallel when their `Files:` don't
+overlap. fullstack: an API contract change = backend sub-task first, frontend after it (`fullstack-rules.md`).
+mobile_native: an ios + an android sub-task per feature; a backend contract change in the repo goes first (`mobile-native-rules.md`).
 
 ## 2. COMMAND ROUTING
 
@@ -42,7 +43,7 @@ FSM commands follow state-machine.md. Hook-guarded commands enforce I/O via hook
 
 ## 3. PLATFORM STANDARDS
 
-See the shared rule this kit ships in `.claude/rules/`: `mobile-shared-rules.md` (ios/android/flutter),
+See the shared rule this kit ships in `.claude/rules/`: `mobile-shared-rules.md` (ios/android/flutter/mobile_native),
 `backend-shared-rules.md` (python), `web-shared-rules.md` (web) or both (fullstack) — architecture, API, security, UI/UX or
 observability, testing, CI/CD, git.
 
@@ -63,4 +64,4 @@ observability, testing, CI/CD, git.
 - Approval gates: `.claude/rules/approval-rules.md`
 - Dispatch labeling: `.claude/rules/dispatch-labeling.md`
 - Agent protocols: `.claude/rules/agent-protocols/`
-- Platform rules: `.claude/rules/{platform}-rules.md` (fullstack: python + web + fullstack)
+- Platform rules: `.claude/rules/{platform}-rules.md` (fullstack: python + web + fullstack; mobile_native: ios + android + mobile-native)

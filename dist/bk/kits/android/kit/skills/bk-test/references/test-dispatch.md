@@ -17,7 +17,7 @@ Read strategy output before dispatching test agents.
 
 ### Step 3: Write and Run Tests
 
-Dispatch test agents background (sonnet), all in ONE message:
+Dispatch test agents background (sonnet), all in ONE message. In a composite kit `{platform}` = `<kit>-<component>` (e.g. `mobile_native-ios`), one report per component.
 
 ```
 # Always — unit tests:
@@ -25,13 +25,13 @@ Task(subagent_type: "bk-unit-test-agent", model: "sonnet", run_in_background: tr
   Feature: {feature_name}
   Platform: {platform}
   Test strategy: bk/dev/shared/reports/test-strategy-{feature}.json
-  Output: bk/dev/shared/reports/unit-test-{platform}-{feature}.json
+  Output: bk/dev/shared/reports/unit-test-{platform}-{feature}.md
 ")
 
 # Optional, mobile kits only — when feature has UI components or user requests device tests:
 Task(subagent_type: "bk-device-test-agent", model: "sonnet", run_in_background: true, prompt: "
   Feature: {feature_name}
   Platform: {platform}
-  Output: bk/dev/shared/reports/device-test-{platform}-{feature}.json
+  Output: bk/dev/shared/reports/device-test-{platform}-{feature}.md
 ")
 ```

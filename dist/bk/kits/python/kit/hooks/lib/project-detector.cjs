@@ -1,8 +1,9 @@
 /**
  * project-detector.cjs - Project and platform detection
  *
- * Adds: detectPlatform() for ios|android|flutter|fullstack|python|web|unknown
+ * Adds: detectPlatform() for ios|android|flutter|mobile_native|fullstack|python|web|unknown
  *       hasFullstackMarkers(root) — python + web markers at the root or a first-level subdir
+ *       detectMobileComponents(root) — ios + android roots of the mobile_native composite, or null
  *       detectSingleStack(root)   — python / web kit and its root ('.' or one first-level subdir)
  *       (detectMobilePlatform() is the historical name of the same function)
  */
@@ -127,10 +128,81 @@ function hasFullstackMarkers(root) {
  */
 const CONVENTIONAL_DIRS = {
   python: ['backend', 'api', 'server'],
-  web: ['frontend', 'web', 'client', 'app']
+  web: ['frontend', 'web', 'client', 'app'],
+  ios: ['ios', 'iOS', 'apple'],
+  android: ['android', 'Android']
 };
 
-const MARKER_TESTS = { python: hasPythonMarker, web: hasWebMarker };
+/** ios marker in a listing: an Xcode project/workspace or a Swift package (kit-resolver.mjs). */
+function hasIosMarker(entries) {
+  return entries.some(e => e.endsWith('.xcodeproj') || e.endsWith('.xcworkspace') || e === 'Package.swift');
+}
+
+/** android marker in a listing: a Gradle build or settings script (kit-resolver.mjs). */
+function hasAndroidMarker(entries) {
+  return entries.some(e => e === 'build.gradle' || e === 'build.gradle.kts' || e.startsWith('settings.gradle'));
+}
+
+const MARKER_TESTS = { python: hasPythonMarker, web: hasWebMarker, ios: hasIosMarker, android: hasAndroidMarker };
+
+/**
+ * A React Native (or Expo) repo: the root package.json lists `react-native` in `dependencies` or
+ * `devDependencies`. Its ios/ + android/ are RN host projects, so it is never `mobile_native`.
+ * Missing or unparsable package.json → false. MUST agree with kit-resolver.mjs
+ * isReactNativeProject (bk init) and bk-harness-ci — a test runs all three on the same fixtures.
+ * @param {string} root
+ * @returns {boolean}
+ */
+function isReactNativeProject(root) {
+  let pkg;
+  try { pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8')); } catch { return false; }
+  if (!pkg || typeof pkg !== 'object') return false;
+  return ['dependencies', 'devDependencies'].some((key) => {
+    const deps = pkg[key];
+    return !!deps && typeof deps === 'object' && Object.prototype.hasOwnProperty.call(deps, 'react-native');
+  });
+}
+
+/**
+ * The `mobile_native` composite: ios AND android markers, each at the root or in a first-level subdir
+ * (SKIPPED_SUBDIRS and dot-dirs skipped) — the kit-resolver.mjs rule, so `bk init` and the hooks
+ * agree. Root per platform: a conventional name (ios: ios/iOS/apple; android: android/Android),
+ * else `.`, else the first subdir alphabetically (X-Game-Pro: MeetupLiveTracking/ + android/).
+ * Flutter guard: a root with a pubspec.yaml is Flutter (its ios/ + android/ are host projects) →
+ * null; a subdir holding a pubspec.yaml never counts. React Native guard: `react-native` in the
+ * root package.json → null (isReactNativeProject). Fail-open: unreadable → null.
+ * @param {string} root
+ * @returns {{ios: string, android: string}|null}
+ */
+function detectMobileComponents(root) {
+  let top;
+  try { top = fs.readdirSync(root, { withFileTypes: true }); } catch { return null; }
+  const names = top.map(e => e.name);
+  if (names.includes('pubspec.yaml')) return null;
+  if (isReactNativeProject(root)) return null;
+  const subdirs = top
+    .filter(e => e.isDirectory() && !e.name.startsWith('.') && !SKIPPED_SUBDIRS.has(e.name))
+    .map(e => e.name)
+    .sort();
+  const listings = new Map();
+  for (const name of subdirs) {
+    try {
+      const entries = fs.readdirSync(path.join(root, name));
+      if (!entries.includes('pubspec.yaml')) listings.set(name, entries);
+    } catch { /* skip unreadable */ }
+  }
+  const pick = (platform) => {
+    const test = MARKER_TESTS[platform];
+    const hits = subdirs.filter(d => listings.has(d) && test(listings.get(d)));
+    const conventional = CONVENTIONAL_DIRS[platform].find(d => hits.includes(d));
+    if (conventional) return conventional;
+    if (test(names)) return '.';
+    return hits.length > 0 ? hits[0] : null;
+  };
+  const ios = pick('ios');
+  const android = pick('android');
+  return ios !== null && android !== null ? { ios, android } : null;
+}
 
 /**
  * The single-stack kit (python, then web) and its root — run AFTER the fullstack check, so at
@@ -173,6 +245,7 @@ function detectSingleStack(root) {
  * requirements.txt or a package.json for its tooling; a backend or web root rarely carries an
  * .xcodeproj or a pubspec.yaml):
  *   1. flutter  — pubspec.yaml exists
+ *   1b. mobile_native  — ios AND android markers, each at the root or a first-level subdir
  *   2. ios      — *.xcworkspace or *.xcodeproj found, no android/build.gradle
  *   3. android  — android/build.gradle or build.gradle with android plugin
  *   4. fullstack — python AND web markers, each at the root or in a first-level subdir
@@ -181,7 +254,7 @@ function detectSingleStack(root) {
  *   7. python, then web — the same markers in a first-level subdir only (`backend/` with uv)
  *   8. unknown  — none of the above
  *
- * @returns {'ios'|'android'|'flutter'|'fullstack'|'python'|'web'|'unknown'}
+ * @returns {'ios'|'android'|'flutter'|'mobile_native'|'fullstack'|'python'|'web'|'unknown'}
  */
 function detectPlatform() {
   const cwd = resolveProjectRoot();
@@ -190,6 +263,9 @@ function detectPlatform() {
   if (fs.existsSync(path.join(cwd, 'pubspec.yaml'))) {
     return 'flutter';
   }
+
+  // mobile_native composite: native iOS AND Android projects (root or first-level subdirs)
+  if (detectMobileComponents(cwd)) return 'mobile_native';
 
   // iOS: check for Xcode workspace or project
   const hasXcworkspace = _findGlob(cwd, '.xcworkspace');
@@ -221,8 +297,8 @@ function detectPlatform() {
 
 /**
  * Historical name: callers (session-init, statusline) use it as "the platform", so it now also
- * answers fullstack / python / web.
- * @returns {'ios'|'android'|'flutter'|'fullstack'|'python'|'web'|'unknown'}
+ * answers mobile_native / fullstack / python / web.
+ * @returns {'ios'|'android'|'flutter'|'mobile_native'|'fullstack'|'python'|'web'|'unknown'}
  */
 const detectMobilePlatform = detectPlatform;
 
@@ -282,6 +358,8 @@ module.exports = {
   detectPlatform,
   detectMobilePlatform,
   hasFullstackMarkers,
+  detectMobileComponents,
+  isReactNativeProject,
   detectSingleStack,
   SKIPPED_SUBDIRS,
   CONVENTIONAL_DIRS,

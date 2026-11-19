@@ -18,11 +18,11 @@
     "rules/android-rules.md"
   ],
   "skills": [
-    "bk-cook",
+    "bk-code",
     "bk-test",
-    "bk-fix",
-    "bk-code-review",
-    "android"
+    "bk-debug",
+    "bk-code-review-workflow",
+    "bk-android"
   ],
   "dirs": {
     "source": "app/src/main/java/",

@@ -69,9 +69,11 @@ const LINTABLE_EXTENSIONS = {
  * Is this a file the platform linter can read?
  * Keeps .md/.json/.yaml edits out of the batch — they only produce noise.
  *
- * A composite platform (`fullstack`) has no linter of its own: the file is lintable when it
- * belongs to one of the project's components (lib/component-resolver.cjs — root prefix AND an
- * extension that component's platform lints), which needs `projectRoot`.
+ * A composite platform (`fullstack`, `mobile_native`) has no linter of its own: the file is lintable
+ * when it belongs to one of the project's components (lib/component-resolver.cjs — root prefix
+ * AND an extension that component's platform owns) and that component's linter reads its
+ * extension (an ios `.m`/`.h` belongs to the ios component but swiftlint does not read it).
+ * Needs `projectRoot`.
  * @param {string} platform
  * @param {string} filePath
  * @param {string} [projectRoot] — required for a composite platform; ignored otherwise
@@ -81,7 +83,9 @@ function isLintable(platform, filePath, projectRoot) {
   if (!filePath || typeof filePath !== 'string') return false;
   const resolver = require('./component-resolver.cjs');
   if (resolver.isComposite(platform)) {
-    return Boolean(projectRoot) && resolver.componentForFile(filePath, projectRoot) !== null;
+    const component = projectRoot ? resolver.componentForFile(filePath, projectRoot) : null;
+    return Boolean(component)
+      && (LINTABLE_EXTENSIONS[component.platform] || []).includes(path.extname(filePath).toLowerCase());
   }
   const exts = LINTABLE_EXTENSIONS[platform];
   if (!exts) return false;

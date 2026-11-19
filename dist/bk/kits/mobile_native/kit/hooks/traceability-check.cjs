@@ -1,0 +1,189 @@
+#!/usr/bin/env node
+// traceability-check.cjs - Warn if traceability coverage is low before commit
+// Trigger: PreToolUse (matcher: Task) — fires when dispatching agents
+// Purpose: Read traceability-matrix.md, warn if coverage < 80% before bk-git-manager
+// Non-blocking (exit 0). Fail-open always.
+
+'use strict';
+
+// Outer crash wrapper
+try {
+  const { createHookTimer } = require('./lib/hook-logger.cjs');
+  const fs = require('fs');
+  const path = require('path');
+  const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');
+  const { getDispatchTarget } = require('./lib/hook-event-accessor.cjs');
+
+  // Advisory context is subject to the shared injection budget (cap + dedupe). Optional:
+  // if the lib is absent the text goes out unchanged.
+  let injectionBudget = null;
+  try { injectionBudget = require('./lib/injection-budget.cjs'); } catch { /* optional */ }
+
+  /** @returns {string|null} the text to inject, or null when the budget says stay quiet. */
+  function budgetedContext(text, data) {
+    if (!injectionBudget) return text;
+    try {
+      return injectionBudget.prepareInjection('traceability-check', text, {
+        sessionId: injectionBudget.sessionIdFrom(data)
+      });
+    } catch {
+      return text;
+    }
+  }
+
+  /**
+   * Find a feature whose sub-task files declare a non-empty `reqs:` frontmatter field.
+   * That is the signal that the plan intended to be traceable, so a missing matrix is
+   * a real gap rather than a feature that was never traced.
+   * @returns {{feature: string, count: number}|null}
+   */
+  function findFeatureDeclaringReqs(devDir, dirs) {
+    for (const dir of dirs) {
+      const featureDir = path.join(devDir, dir.name);
+      let files;
+      try {
+        files = fs.readdirSync(featureDir).filter(f => /^sub-task-\d+.*\.md$/.test(f));
+      } catch { continue; }
+
+      let count = 0;
+      for (const f of files) {
+        try {
+          const head = fs.readFileSync(path.join(featureDir, f), 'utf8').slice(0, 2000);
+          // Non-empty reqs: [...] in the YAML frontmatter
+          if (/^reqs:\s*\[\s*[^\]\s]/m.test(head)) count++;
+        } catch { /* unreadable sub-task — ignore */ }
+      }
+      if (count > 0) return { feature: dir.name, count };
+    }
+    return null;
+  }
+
+  async function main() {
+    const timer = createHookTimer('traceability-check');
+    try {
+      const { isHookEnabled } = require('./lib/bk-config-utils.cjs');
+
+      if (!isHookEnabled('traceability-check')) {
+        timer.end({ status: 'skipped', exit: 0 });
+        process.exit(0);
+      }
+
+      let input = '';
+      for await (const chunk of process.stdin) input += chunk;
+      const data = JSON.parse(input || '{}');
+      // RC-2: getDispatchTarget returns subagent_type for Task events, tool name otherwise.
+      const dispatchTarget = (getDispatchTarget(data) || '').toLowerCase();
+
+      // Only fire when dispatching bk-git-manager (or any *-git-manager variant)
+      if (!dispatchTarget.includes('git-manager')) {
+        timer.end({ status: 'skip_non_git', exit: 0 });
+        process.exit(0);
+      }
+
+      // Find latest feature directory in bk/dev/
+      const devDir = path.join(resolveProjectRoot(), 'bk', 'dev');
+      if (!fs.existsSync(devDir)) {
+        timer.end({ status: 'no_specs_dir', exit: 0 });
+        process.exit(0);
+      }
+
+      const dirs = fs.readdirSync(devDir, { withFileTypes: true })
+        .filter(e => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'shared' && e.name !== 'archive')
+        .sort((a, b) => a.name < b.name ? 1 : -1);
+
+      let matrixContent = null;
+      let matrixFeature = null;
+
+      for (const dir of dirs) {
+        const matrixPath = path.join(devDir, dir.name, 'traceability-matrix.md');
+        if (fs.existsSync(matrixPath)) {
+          matrixContent = fs.readFileSync(matrixPath, 'utf8');
+          matrixFeature = dir.name;
+          break;
+        }
+      }
+
+      // No matrix file. Silence here is what turned this gate into a no-op: a feature
+      // whose sub-tasks declare `reqs:` is supposed to get a matrix at finalize, and a
+      // missing one reads exactly like a clean pass. Say something when — and only when —
+      // the plan actually claims traceability. Still exit 0; this hook never blocks.
+      if (!matrixContent) {
+        const tracedFeature = findFeatureDeclaringReqs(devDir, dirs);
+        if (!tracedFeature) {
+          timer.end({ status: 'no_matrix_untraced', exit: 0 });
+          process.exit(0);
+        }
+
+        const notice =
+          `[TRACEABILITY-WARNING] ${tracedFeature.count} sub-task(s) of "${tracedFeature.feature}" declare reqs: ` +
+          `but bk/dev/${tracedFeature.feature}/traceability-matrix.md is missing — coverage unverified. ` +
+          `Generate it before commit, or say in the commit that this ships untraced.`;
+
+        const noticeText = budgetedContext(notice, data);
+        if (noticeText) process.stdout.write(JSON.stringify({ additionalContext: noticeText }) + '\n');
+        timer.end({ status: 'no_matrix_traced', feature: tracedFeature.feature, exit: 0 });
+        process.exit(0);
+      }
+
+      // Parse coverage percentage from matrix (e.g. "Coverage: 75%" or "Coverage = 75%")
+      const coverageMatch = matrixContent.match(/[Cc]overage[:\s=]+(\d+(?:\.\d+)?)\s*%/);
+      if (!coverageMatch) {
+        timer.end({ status: 'no_coverage_line', exit: 0 });
+        process.exit(0);
+      }
+
+      const coverage = parseFloat(coverageMatch[1]);
+
+      if (coverage >= 80) {
+        timer.end({ status: 'ok', coverage, exit: 0 });
+        process.exit(0);
+      }
+
+      // Find uncovered trace IDs (rows with ❌)
+      const uncoveredLines = matrixContent.split('\n')
+        .filter(l => l.includes('❌'))
+        .map(l => {
+          // Trace IDs are not all REQ-: /bk-spec emits UC-NNN and NFR-CAT-NNN,
+          // enterprise extraction emits REQ-NNN and TC-NNN. See rules/traceability.md.
+          const match = l.match(/\b(?:UC|NFR|REQ|TC)-[\w-]+/);
+          return match ? match[0] : null;
+        })
+        .filter(Boolean);
+
+      // Twelve IDs are enough to act on; the matrix itself holds the full list.
+      const shownIds = uncoveredLines.slice(0, 12);
+      const idList = shownIds.join(', ') +
+        (uncoveredLines.length > shownIds.length ? ` (+${uncoveredLines.length - shownIds.length} more)` : '');
+
+      const warning =
+        `[TRACEABILITY-WARNING] Coverage ${coverage.toFixed(0)}% (threshold 80%) — feature ${matrixFeature}. ` +
+        `Uncovered: ${idList || 'see traceability-matrix.md'}. ` +
+        `Implement them or update traceability-matrix.md before commit.`;
+
+      const warningText = budgetedContext(warning, data);
+      if (warningText) process.stdout.write(JSON.stringify({ additionalContext: warningText }) + '\n');
+
+      timer.end({ status: 'warned', coverage, uncovered: uncoveredLines.length, exit: 0 });
+      process.exit(0);
+    } catch (err) {
+      timer.end({ status: 'error', error: err.message, exit: 0 });
+      process.exit(0); // Fail-open
+    }
+  }
+  main();
+} catch (e) {
+  // A DispatchExit is this hook's own process.exit() unwinding under bk-dispatch, not a
+  // crash. Logging it here is how a clean run got filed as `status: "crash"`.
+  if (e && e.bkDispatchExit) throw e;
+
+  try {
+    const fs = require('fs');
+    const p = require('path');
+    const logDir = p.join(__dirname, '.logs');
+    if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+    try { const {appendJsonl: _ra} = require('./lib/jsonl-rotator.cjs'); _ra(p.join(logDir, 'hook-log.jsonl'), JSON.stringify({ ts: new Date().toISOString(), hook: 'traceability-check', status: 'crash', error: e.message }) + '\n'); }
+    catch(_e2) { fs.appendFileSync(p.join(logDir, 'hook-log.jsonl'),
+      JSON.stringify({ ts: new Date().toISOString(), hook: 'traceability-check', status: 'crash', error: e.message }) + '\n'); }
+  } catch (_) {}
+  process.exit(0); // Fail-open
+}

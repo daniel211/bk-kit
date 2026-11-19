@@ -12,10 +12,10 @@ import { execSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 
-// Every kit the CLI ships (kit-resolver.mjs KIT_NAMES). fullstack takes both component
-// checklists plus its own cross-stack rules.
-export const SUPPORTED_PLATFORMS = ['ios', 'android', 'flutter', 'python', 'web', 'fullstack'];
-const RULE_FILES = { fullstack: ['python', 'web', 'fullstack'] };
+// Every kit the CLI ships (kit-resolver.mjs KIT_NAMES). fullstack (and mobile_native) take both component
+// checklists plus their own cross-stack rules.
+export const SUPPORTED_PLATFORMS = ['ios', 'android', 'flutter', 'mobile_native', 'python', 'web', 'fullstack'];
+const RULE_FILES = { fullstack: ['python', 'web', 'fullstack'], mobile_native: ['ios', 'android', 'mobile-native'] };
 const MAX_TOTAL_CHARS = 150000;   // source payload cap (~40k tokens)
 const MAX_DIFF_CHARS = 50000;
 

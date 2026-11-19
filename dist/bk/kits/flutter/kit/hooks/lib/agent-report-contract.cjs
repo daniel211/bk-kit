@@ -67,6 +67,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const { isComposite, defaultComponents, readComponents } = require('./component-resolver.cjs');
 
 /**
  * mtime and the transcript timestamp come from the same machine clock, but some filesystems
@@ -154,6 +155,51 @@ const CONTRACTS = {
 };
 
 /**
+ * The `{platform}` part of a test-agent report name (unit-test-{platform}-{feature}.md) as
+ * `{ p: regex source, P: shown form }`.
+ *
+ * Single kit: the platform itself (`unit-test-ios-login.md`), as always.
+ *
+ * Composite kit (mobile_native, fullstack): `<kit>-<component id>` — `unit-test-mobile_native-ios-
+ * login.md` — because one feature can produce a report per component and a kit-only name would
+ * let one clobber the other. The agent sees every component, so the names it may also write are
+ * accepted as well, never raising a false "missing" for a report that exists:
+ *   - the bare component id or its platform (`unit-test-ios-…`, `unit-test-backend-…`,
+ *     `unit-test-python-…`) — what the agent body's `{platform}` reads as when it picks one stack;
+ *   - `<kit>-<component platform>` (`fullstack-python`) — the same slip, kit-prefixed;
+ *   - the kit id alone (`unit-test-mobile_native-…`) — what this contract expected before
+ *     composite names existed, so reports already written under it still count.
+ * Anything else (`unit-test-flutter-…` in mobile_native) stays rejected.
+ *
+ * Components come from the installed platform-context.json (component-resolver) UNIONED with the
+ * shipped list. readComponents drops `present: false` components; they are accepted anyway: a
+ * report named for an absent component is still a report the agent wrote, and rejecting it would
+ * only bring back the false rejection this module exists to prevent.
+ *
+ * Unknown platform: any `[a-z_]+` (ids may hold `_`), optionally `-<component>`.
+ */
+function platformPart(platform, root) {
+  if (!platform) return { p: '[a-z_]+(?:-[a-z_]+)?', P: '{platform}' };
+  let installed = null;
+  try { installed = root ? readComponents(root) : null; } catch { installed = null; }
+  // A composite id never names one of its own components; a single kit's context is the one
+  // implicit component named after the platform (readComponents).
+  const composite = isComposite(platform) || (Array.isArray(installed) && installed.length > 0
+    && !installed.some((c) => c.id === platform || c.platform === platform));
+  if (!composite) return { p: esc(platform), P: platform };
+
+  const comps = [...defaultComponents(platform), ...(installed || [])];
+  const ids = [...new Set(comps.map((c) => c.id))];
+  if (ids.length === 0) return { p: esc(platform), P: platform };
+  const names = [...new Set([...ids, ...comps.map((c) => c.platform)])].map(esc).join('|');
+  const kit = esc(platform);
+  return {
+    p: `(?:${kit}-(?:${names})|${kit}|${names})`,
+    P: `${platform}-{${ids.join('|')}}`
+  };
+}
+
+/**
  * Report files under bk/dev/shared/reports/** are the ones rules/agent-protocols/output-gate.md
  * governs (its `paths:` front matter), so only they are held to its `## ` header, metadata
  * footer and required-section checks. A plan.md or a research note has its own format.
@@ -181,12 +227,7 @@ function candidatesFor(agentType, ctx) {
     devResearch: feature ? path.join(ctx.root, 'bk', 'dev', 'research') : null
   };
 
-  const specs = build({
-    f: esc(feature || ''),
-    F: feature || '',
-    p: ctx.platform ? esc(ctx.platform) : '[a-z]+',
-    P: ctx.platform || '{platform}'
-  });
+  const specs = build({ f: esc(feature || ''), F: feature || '', ...platformPart(ctx.platform, ctx.root) });
 
   return specs
     .filter((s) => dirs[s.dir])
@@ -290,4 +331,4 @@ function resolveReport(agentType, ctx, startMs, written) {
   return { status: 'found', path: best.path, gated: isGatedReport(best.path, ctx.reportsDir), via: 'contract' };
 }
 
-module.exports = { resolveReport, candidatesFor, MTIME_TOLERANCE_MS };
+module.exports = { resolveReport, candidatesFor, platformPart, MTIME_TOLERANCE_MS };

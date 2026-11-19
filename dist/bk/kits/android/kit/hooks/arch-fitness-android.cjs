@@ -25,6 +25,7 @@ const libDir = path.join(__dirname, 'lib');
 const { loadHarnessPolicy, trackViolation } = require(path.join(libDir, 'harness-policy-loader.cjs'));
 const { runRules, formatViolations } = require(path.join(libDir, 'arch-rule-runner.cjs'));
 const { ANDROID_RULES } = require(path.join(libDir, 'arch-rules-android.cjs'));
+const { fileBelongsToPlatform } = require(path.join(libDir, 'component-resolver.cjs'));
 
 const HOOK_NAME = 'arch-fitness-android';
 const SUPPORTED_EXTENSIONS = ['.kt', '.java'];
@@ -78,6 +79,14 @@ async function main() {
   const policy = loadHarnessPolicy();
   const platformConfig = policy.arch_fitness && policy.arch_fitness.android;
   if (!platformConfig || !platformConfig.enabled) process.exit(0);
+
+  // mobile_native composite: only files of the android component (root prefix + extension); a single kit
+  // keeps the extension gate above (component-resolver.fileBelongsToPlatform is fail-open).
+  {
+    const root = policy.__projectRoot;
+    const abs = path.isAbsolute(filePath) || !root ? filePath : path.join(root, filePath);
+    if (!fileBelongsToPlatform(abs, root, 'android')) process.exit(0);
+  }
 
   // Check exclude paths
   const excludePaths = platformConfig.exclude_paths || [];

@@ -48,6 +48,7 @@ const RULE_DECISIONS = {
   'web-shared-rules': 'digest', // layering/server state/XSS-CSP/UI states for code agents (web kit)
   'platform-rules': 'digest', // {platform}-rules.md: essentials + pointer
   'fullstack-rules': 'digest', // component ownership + BE-first API contract; code agents split work by it (fullstack kit)
+  'mobile-native-rules': 'digest', // component ownership + shared backend contract + parity; code agents split work by it (mobile_native kit)
   'team-rules': 'digest', // Output:/Files: contract and [SIGNAL: x] markers; rest is conductor/bk-team lead
   'user-interaction-protocol': 'digest', // §5 confidence in output metadata; rest is AskUserQuestion policy
   'approval-rules': 'conductor', // gates + thresholds; each reviewer carries its own severity line
@@ -182,8 +183,31 @@ function agentContextMode(projectRoot, agentType) {
  */
 const COMPONENT_ESSENTIALS = {
   python: 'type hints, router → service → repository, Pydantic v2 at the boundary, authz + owner filter, parameterized SQL',
-  web: 'TS strict, components → hooks → services, TanStack Query, zod at the API boundary, no innerHTML/localStorage tokens'
+  web: 'TS strict, components → hooks → services, TanStack Query, zod at the API boundary, no innerHTML/localStorage tokens',
+  ios: 'Swift, SwiftUI, async/await + @MainActor, MVVM; xcodebuild/simulator',
+  android: 'Kotlin, Compose, Coroutines/StateFlow, MVVM; gradlew/emulator'
 };
+
+/**
+ * The composite rule in one line, for agents that see every component (`- <platform>: …`).
+ * fullstack: the backend's OpenAPI is the contract and the frontend regenerates from it.
+ * mobile_native: the backend contract is shared by both clients, which keep behaviour parity.
+ */
+const COMPOSITE_RULE_LINES = {
+  fullstack: 'one component per sub-task, cwd = its root; BE OpenAPI is the contract, FE regenerates',
+  mobile_native: 'one component per sub-task, cwd = its root; both clients follow one backend contract, keep parity (errors, validation, events)'
+};
+
+/**
+ * The rule file of a platform id: rule files are kebab-case, so an id's `_` is a `-`
+ * (`mobile_native` → `mobile-native-rules.md`).
+ */
+function platformRuleName(platform) {
+  return `${String(platform).replace(/_/g, '-')}-rules`;
+}
+
+/** Agents whose report name carries `{platform}` (unit-test-{platform}-{feature}.md). */
+const TEST_REPORT_AGENTS = new Set(['bk-unit-test-agent', 'bk-device-test-agent']);
 
 /** `backend/ — python (django)`: where a component lives and what it is. */
 function componentLabel(c) {
@@ -193,7 +217,7 @@ function componentLabel(c) {
 }
 
 /**
- * The platform lines of a composite kit (fullstack). A platform developer
+ * The platform lines of a composite kit (fullstack, mobile_native). A platform developer
  * (bk-<platform>-developer) sees only its own component(s), with the same shared + essentials
  * lines a single-stack kit gives it. Every other agent sees each component in one short line plus
  * one line of the composite rule (ownership + contract). Components come from the installed
@@ -212,14 +236,27 @@ function compositeLines({ agentType, platform, components, rulesRel }) {
     if (essentials) lines.push(`- ${componentLabel(c)}: ${essentials} (\`${rulesRel}/${c.platform}-rules.md\`; stay in this root; commands: its \`components[]\`).`);
   }
   if (mine.length > 0) return lines;
+  // A shared rule file both components use (mobile-shared-rules for ios + android) is named once.
+  const named = new Set();
   for (const c of all) {
     const shared = sharedRuleDigestFor(c.platform);
     const essentials = COMPONENT_ESSENTIALS[c.platform];
     if (!essentials) continue;
-    const refs = [`${c.platform}-rules`, ...(shared ? [shared.rule] : [])].map((r) => `\`${rulesRel}/${r}.md\``).join(', ');
+    const ruleNames = [`${c.platform}-rules`, ...(shared && !named.has(shared.rule) ? [shared.rule] : [])];
+    if (shared) named.add(shared.rule);
+    const refs = ruleNames.map((r) => `\`${rulesRel}/${r}.md\``).join(', ');
     lines.push(`- ${componentLabel(c)}: ${essentials} (${refs}).`);
   }
-  lines.push(`- ${platform}: one component per sub-task, cwd = its root; BE OpenAPI is the contract, FE regenerates (\`${rulesRel}/${platform}-rules.md\`).`);
+  const rule = COMPOSITE_RULE_LINES[platform] || 'one component per sub-task, cwd = its root';
+  lines.push(`- ${platform}: ${rule} (\`${rulesRel}/${platformRuleName(platform)}.md\`).`);
+  // The test agents' report name (`unit-test-{platform}-{feature}.md` in their body) is per
+  // component here: one feature can yield an ios AND an android report, and a kit-only name lets
+  // one clobber the other. Said in the digest, not the agent body, so single kits pay 0 bytes
+  // (agent-report-contract.cjs still accepts the bare-component name an agent may write).
+  if (TEST_REPORT_AGENTS.has(agentType)) {
+    const ids = (all.length ? all : defaultComponents(platform)).map((c) => c.id).join('|');
+    lines.push(`- Report \`{platform}\` = \`${platform}-<${ids}>\`, one per component.`);
+  }
   return lines;
 }
 
@@ -272,7 +309,7 @@ function buildSubagentRuleDigest({ agentType, platform, fullContext = false, com
       // A single kit rooted below the project (`root: "backend"`) runs its commands there.
       const root = Array.isArray(components) && components[0] && components[0].root;
       const where = root && root !== '.' ? `, run in \`${root}/\`` : '';
-      if (essentials) lines.push(`- ${platform}: ${essentials} (\`${rulesRel}/${platform}-rules.md\`; commands in \`.claude/platform-context.json\`${where}).`);
+      if (essentials) lines.push(`- ${platform}: ${essentials} (\`${rulesRel}/${platformRuleName(platform)}.md\`; commands in \`.claude/platform-context.json\`${where}).`);
     }
     // traceability (the agent side; the rule itself is scoped to requirement files)
     lines.push(`- Requirement IDs (UC-/NFR-/REQ-/TC-) are copied verbatim into \`reqs:\`, \`// @trace\` and \`requirements_satisfied\` — never renumbered (\`${rulesRel}/traceability.md\`).`);

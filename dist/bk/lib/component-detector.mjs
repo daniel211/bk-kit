@@ -1,9 +1,12 @@
 /**
  * component-detector.mjs — roots and framework variants of a composite kit's components.
  *
- * The fullstack kit ships `.claude/platform-context.json` with `components: [{ id, platform,
- * root: '.', framework: 'generic', frameworks, commands, ... }]` (contract:
- * docs/kit-dev/plan-be-web-platforms.md § Phase 4, Runtime). `bk init` sets each component's
+ * A composite kit (fullstack = python + web, mobile_native = ios + android) ships
+ * `.claude/platform-context.json` with `components: [{ id, platform, root: '.', commands, ... }]`
+ * (python / web components also `framework: 'generic', frameworks`; contracts:
+ * docs/kit-dev/plan-be-web-platforms.md § Phase 4, docs/kit-dev/plan-mobile-composite.md). An
+ * ios / android component has no framework variant: only its `root` and `present` are set.
+ * `bk init` sets each component's
  * `root` — the root or the first-level subdir carrying that platform's markers (the same marker
  * sets kit-resolver uses) — and then its framework variant, detected at that root with the
  * python / web detector, and its package runner (runner-detector). A component with no markers
@@ -23,7 +26,7 @@ import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { CONVENTIONAL_DIRS, pickMarkerDir, platformMarkerDirs } from './kit-resolver.mjs';
 import {
-  applyFrameworkAndRunner, compareRecordedFramework, detectFramework, knownFrameworks,
+  FRAMEWORK_PLATFORMS, applyFrameworkAndRunner, compareRecordedFramework, detectFramework, knownFrameworks,
 } from './framework-detector.mjs';
 
 export { CONVENTIONAL_DIRS };
@@ -71,7 +74,9 @@ export function detectComponentRoot(projectRoot, platform) {
 export function detectComponents(projectRoot, componentsFromKit) {
   return (componentsFromKit || []).map((c) => {
     const r = detectComponentRoot(projectRoot, c.platform);
-    const detected = r.found ? detectFramework(c.platform, join(projectRoot, r.root)) : null;
+    const detected = r.found && FRAMEWORK_PLATFORMS.has(c.platform)
+      ? detectFramework(c.platform, join(projectRoot, r.root))
+      : null;
     return { id: c.id, platform: c.platform, ...r, detected };
   });
 }
@@ -88,6 +93,9 @@ export function detectComponents(projectRoot, componentsFromKit) {
 export function resolveComponentFrameworkOption(kitCtx, explicit) {
   if (explicit === undefined || explicit === null) return null;
   const components = (kitCtx && kitCtx.components) || [];
+  if (!components.some((c) => FRAMEWORK_PLATFORMS.has(c.platform))) {
+    throw new Error(`--framework applies to python and web components only (the ${kitCtx.platform} kit has none)`);
+  }
   const platforms = components.map((c) => c.platform);
   const example = platforms.map((p) => `${p}=<id>`).join(',');
   const forced = {};
@@ -113,6 +121,38 @@ export function resolveComponentFrameworkOption(kitCtx, explicit) {
 }
 
 /**
+ * One component with its detection applied: `root` + `present`, then (python / web) its framework
+ * variant and runner. The step init and the kit switch (kit-switch.mjs) share.
+ *
+ * @param {object} component - the component as it stands (shipped, or the user's)
+ * @param {{ id: string, platform: string, root: string, found: boolean, marker: string|null,
+ *   candidates: string[] }} d - detectComponents() entry
+ * @param {string} projectRoot
+ * @param {string|null} [forcedId] - forced framework id
+ * @returns {{ component: object, line: string, note: string|null }}
+ */
+export function applyComponentDetection(component, d, projectRoot, forcedId = null) {
+  if (!d.found) {
+    return {
+      component: { ...component, present: false },
+      line: `${d.id}: not present — no ${d.platform} markers at the root or in a first-level subdir;`
+        + ' hooks skip it until /bk-bootstrap finds them',
+      note: null,
+    };
+  }
+  const note = d.candidates.length > 1
+    ? `${d.id}: ${d.platform} markers in several dirs (${d.candidates.map(displayRoot).join(', ')}) — using ${displayRoot(d.root)};`
+      + ' edit components[].root in .claude/platform-context.json to change it'
+    : null;
+  const placed = { ...component, root: d.root, present: true };
+  if (!FRAMEWORK_PLATFORMS.has(component.platform)) {
+    return { component: placed, line: `${d.id}: ${displayRoot(d.root)} — ${d.platform} (${d.marker})`, note };
+  }
+  const r = applyFrameworkAndRunner(placed, component.platform, join(projectRoot, d.root), forcedId);
+  return { component: r.ctx, line: `${d.id}: ${displayRoot(d.root)} — ${r.line}`, note };
+}
+
+/**
  * Detect, apply and write back the components of an installed composite platform-context.json.
  * A component with markers gets `root`, `present: true`, then its framework variant and runner
  * (applyFrameworkAndRunner — the same steps the single-platform kits take). A component with no
@@ -132,20 +172,11 @@ export function applyComponentsToInstalledContext({ ctxPath, projectRoot, forced
   const lines = [];
   const notes = [];
   const components = ctx.components.map((component, i) => {
-    const d = detections[i];
-    if (!d.found) {
-      lines.push(`${d.id}: not present — no ${d.platform} markers at the root or in a first-level subdir;`
-        + ' hooks skip it until /bk-bootstrap finds them');
-      return { ...component, present: false };
-    }
     const forcedId = (forced && forced[component.platform]) || null;
-    const r = applyFrameworkAndRunner({ ...component, root: d.root, present: true }, component.platform, join(projectRoot, d.root), forcedId);
-    lines.push(`${d.id}: ${displayRoot(d.root)} — ${r.line}`);
-    if (d.candidates.length > 1) {
-      notes.push(`${d.id}: ${d.platform} markers in several dirs (${d.candidates.map(displayRoot).join(', ')}) — using ${displayRoot(d.root)};`
-        + ' edit components[].root in .claude/platform-context.json to change it');
-    }
-    return r.ctx;
+    const r = applyComponentDetection(component, detections[i], projectRoot, forcedId);
+    lines.push(r.line);
+    if (r.note) notes.push(r.note);
+    return r.component;
   });
   writeFileSync(ctxPath, JSON.stringify({ ...ctx, components }, null, 2) + '\n', 'utf8');
   return { lines, notes };

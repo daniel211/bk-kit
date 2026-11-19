@@ -6,7 +6,7 @@
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { basename, dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline';
 import { hashFile } from '../lib/hash-tracker.mjs';
 import { buildPackageInventory, kitLayout, packageRootFrom, sourceFor } from '../lib/package-layout.mjs';
@@ -15,6 +15,8 @@ import {
   installFileForMode, inventoryForMode, readSubagentContextMode, reconcileModeOnly,
 } from '../lib/subagent-context-mode.mjs';
 import { readModelOverrides, unknownOverrideAgents } from '../lib/agent-model-override.mjs';
+import { switchInstalledContext } from '../lib/kit-switch.mjs';
+import { PLATFORM_CONTEXT, readTextOrNull, reapplyInstalledContext } from '../lib/installed-context-detection.mjs';
 import {
   gitPrefix, trackedSessionState, untrackCommand, writeGitignoreEntries,
 } from '../lib/session-state-gitignore.mjs';
@@ -100,15 +102,40 @@ async function promptConflict(filePath, strategy = 'prompt') {
  *
  * @param {{ claudeDir: string, kitDir: string, packageRoot: string,
  *           packageFiles: Record<string,string>, installedFiles: Record<string,string>,
- *           mode?: 'lean'|'full', models?: object, conflict?: 'prompt'|'keep'|'take' }} opts
+ *           mode?: 'lean'|'full', models?: object, conflict?: 'prompt'|'keep'|'take',
+ *           skip?: Set<string>, projectRoot?: string }} opts — skip: paths this run handles itself
+ *           (the kit switch's converted platform-context.json); left untouched and unrecorded here.
+ *           projectRoot: where detection runs (default: the dir holding claudeDir)
+ *
+ * platform-context.json is the one kit file init rewrites after copying it (the project's roots,
+ * framework, runner). Whenever this installs the template over it — new, safe_update, or a
+ * conflict resolved with take — the previous file's values are re-applied on top
+ * (lib/installed-context-detection.mjs) and the hash recorded is that of the file as written.
  * @returns {Promise<{ updated: number, added: number, skipped: number, conflicts: number }>}
  */
 export async function syncKitFiles({
   claudeDir, kitDir, packageRoot, packageFiles, installedFiles, mode = 'lean', models, conflict = 'prompt',
+  skip = new Set(), projectRoot = dirname(claudeDir),
 }) {
   const sourceOf = (relPath) => sourceFor(relPath, { kitDir, packageRoot });
   const kitFiles = inventoryForMode(packageFiles, sourceOf, mode, models);
-  const install = (relPath, targetPath) => installFileForMode(relPath, sourceOf(relPath), targetPath, mode, models);
+  const copy = (relPath, targetPath) => installFileForMode(relPath, sourceOf(relPath), targetPath, mode, models);
+  // Installs one file; returns the hash to record and, for platform-context.json, the one-line
+  // summary of what was re-applied (null otherwise).
+  const install = (relPath, targetPath, kitHash) => {
+    if (relPath !== PLATFORM_CONTEXT) {
+      copy(relPath, targetPath);
+      return { hash: kitHash, kept: null };
+    }
+    const previousText = readTextOrNull(targetPath);
+    copy(relPath, targetPath);
+    const r = reapplyInstalledContext({ ctxPath: targetPath, projectRoot, previousText });
+    const kept = r.mode === 'carried' ? `kept ${r.summary}`
+      : r.mode === 'detected' ? `${previousText === null ? 'detected' : 'previous file unreadable — detected afresh'}: ${r.summary}`
+        : null;
+    return { hash: hashFile(targetPath), kept };
+  };
+  const keptLine = (kept) => { if (kept) console.log(`      ↳ ${PLATFORM_CONTEXT}: ${kept} (re-applied over the new template)`); };
 
   // Classify all files
   const allPaths = new Set([...Object.keys(kitFiles), ...Object.keys(installedFiles)]);
@@ -119,6 +146,7 @@ export async function syncKitFiles({
   let skipAll = false;
 
   for (const relPath of allPaths) {
+    if (skip.has(relPath)) continue;
     const kitHash = kitFiles[relPath];
     const installHash = installedFiles[relPath];
     const targetPath = join(claudeDir, relPath);
@@ -137,20 +165,26 @@ export async function syncKitFiles({
 
       case 'new': {
         if (existsSync(sourceOf(relPath))) {
-          install(relPath, targetPath);
-          installedFiles[relPath] = kitHash;
+          const r = install(relPath, targetPath, kitHash);
+          installedFiles[relPath] = r.hash;
           added++;
           console.log(`  + ${relPath} (new)`);
+          keptLine(r.kept);
         }
         break;
       }
 
       case 'safe_update': {
         if (existsSync(sourceOf(relPath))) {
-          install(relPath, targetPath);
-          installedFiles[relPath] = kitHash;
+          const r = install(relPath, targetPath, kitHash);
+          installedFiles[relPath] = r.hash;
+          // platform-context.json is recorded as written, never at the template's hash, so it reads
+          // as safe_update on every run; re-applied over an unchanged template it comes out
+          // byte-identical, which is not an update.
+          if (r.hash === installHash) break;
           updated++;
           console.log(`  ↑ ${relPath} (updated)`);
+          keptLine(r.kept);
         }
         break;
       }
@@ -182,10 +216,11 @@ export async function syncKitFiles({
         }
         if (choice === 'take') {
           if (existsSync(sourceOf(relPath))) {
-            install(relPath, targetPath);
-            installedFiles[relPath] = kitHash;
+            const r = install(relPath, targetPath, kitHash);
+            installedFiles[relPath] = r.hash;
             updated++;
             console.log(`  ↑ ${relPath} (took package version)`);
+            keptLine(r.kept);
           }
         } else {
           skipped++;
@@ -255,6 +290,15 @@ export function registerUpdate(program) {
       }
       const kitManifest = JSON.parse(readFileSync(kitManifestPath, 'utf8'));
 
+      // A switch to a composite kit that contains the installed one (ios → mobile_native, python →
+      // fullstack) converts the user-owned platform-context.json instead of leaving it in the
+      // single-kit shape; composite → anything else is refused before a single file is written.
+      const kitSwitch = switchInstalledContext({ claudeDir, kitDir, projectRoot: targetDir });
+      if (kitSwitch.status === 'refused') {
+        console.error(`Error: ${kitSwitch.message}`);
+        process.exit(1);
+      }
+
       // `init` installs two trees into .claude/: the kit itself, and the developer CLIs
       // from the package's cli/ directory. kit-manifest.json only inventories the first,
       // so every cli/ path recorded in .bk-version.json used to look like a file the
@@ -269,6 +313,12 @@ export function registerUpdate(program) {
       const { overrides: models, warnings: modelWarnings } = readModelOverrides(targetDir, [kitDir]);
 
       console.log(`Updating ${platform} kit in ${claudeDir}...\n`);
+      if (kitSwitch.status === 'converted') {
+        console.log(`  ↻ platform-context.json converted ${kitSwitch.from} → ${kitSwitch.to} (backup: .claude/${basename(kitSwitch.backupPath)}):`);
+        for (const line of kitSwitch.lines) console.log(`      ${line}`);
+        for (const note of kitSwitch.notes) console.log(`  ⚠ ${note}`);
+        console.log('');
+      }
       if (mode === 'full') console.log('  Subagent context: full (.bk.json subagents.fullContext) — kit agents install without omitClaudeMd\n');
       for (const w of modelWarnings) console.log(`  ⚠ ${w}`);
       if (Object.keys(models).length > 0) {
@@ -277,11 +327,20 @@ export function registerUpdate(program) {
         if (unknown.length > 0) console.log(`  ⚠ .bk.json models names no installed kit agent: ${unknown.join(', ')}\n`);
       }
 
+      const converted = kitSwitch.status === 'converted';
       const { updated, added, skipped, conflicts } = await syncKitFiles({
         claudeDir, kitDir, packageRoot, packageFiles, installedFiles, mode, models, conflict: opts.conflict,
+        skip: converted ? new Set(['platform-context.json']) : new Set(),
       });
+      // The converted file is the user's from here on: recorded at the package's hash, so the next
+      // update sees "unchanged" until the kit's template changes, then a conflict (keep / take) —
+      // never a silent safe_update over the conversion.
+      if (converted && packageFiles['platform-context.json']) {
+        installedFiles['platform-context.json'] = packageFiles['platform-context.json'];
+      }
 
-      // Update .bk-version.json
+      // Update .bk-version.json — including the kit, so a deliberate --kit switch sticks.
+      versionData.platform = platform;
       versionData.version = kitManifest.version;
       versionData.files = installedFiles;
       writeFileSync(versionPath, JSON.stringify(versionData, null, 2) + '\n', 'utf8');
@@ -303,7 +362,7 @@ export function registerUpdate(program) {
  * Bring an existing project's .gitignore up to the never-commit list, and say so when state
  * is already tracked.
  *
- * `update` otherwise never touches a file the user owns, so this is deliberate: appending
+ * `update` otherwise never touches a project file outside .claude/, so this is deliberate: appending
  * missing ignore lines is additive and idempotent — no user rule is changed or removed, and a
  * broader rule the user already has counts as covering (see missingIgnoreEntries). Without it
  * the fix would reach new installs only; every project initialised before init wrote the

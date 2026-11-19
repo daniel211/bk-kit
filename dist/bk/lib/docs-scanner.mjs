@@ -82,14 +82,21 @@ function safeReaddir(dirPath) {
   }
 }
 
-/** Every kit the CLI ships (kit-resolver.mjs KIT_NAMES). */
-const PLATFORMS = 'ios|android|flutter|python|web|fullstack';
-/** `bk-code-reviewer.python.md` → python */
+/** Every kit the CLI ships (kit-resolver.mjs KIT_NAMES). Ids may hold `_` (mobile_native). */
+const PLATFORM_IDS = ['ios', 'android', 'flutter', 'mobile_native', 'python', 'web', 'fullstack'];
+const PLATFORMS = PLATFORM_IDS.join('|');
+/** `bk-code-reviewer.python.md` → python; section files are keyed by the platform id (`.mobile_native.md`) */
 const PLATFORM_SECTION_RE = new RegExp(`\\.(${PLATFORMS})$`);
 /** `bk-web-developer.md` → web */
 const PLATFORM_AGENT_RE = new RegExp(`bk-(${PLATFORMS})-`);
-/** `bk-python/`, `bk-flutter-sdk/`, `bk-fullstack/` → python, flutter, fullstack; the boundary keeps a future `bk-webhooks` base */
-const PLATFORM_SKILL_RE = new RegExp(`^bk-(${PLATFORMS})(?=-|$)`);
+/**
+ * Skill dirs are kebab-case, so an id's `_` is a `-` there: `bk-mobile-native/` → mobile_native.
+ * Longest form first, so `bk-mobile-native` is never read as a shorter id plus a suffix.
+ */
+const SKILL_FORM_TO_PLATFORM = new Map(PLATFORM_IDS.map((id) => [id.replace(/_/g, '-'), id]));
+const SKILL_FORMS = [...SKILL_FORM_TO_PLATFORM.keys()].sort((a, b) => b.length - a.length).join('|');
+/** `bk-python/`, `bk-flutter-sdk/`, `bk-fullstack/`, `bk-mobile-native/` → python, flutter, fullstack, mobile_native; the boundary keeps a future `bk-webhooks` base */
+const PLATFORM_SKILL_RE = new RegExp(`^bk-(${SKILL_FORMS})(?=-|$)`);
 
 /**
  * Scan agents from either dev structure (src/agents/_base/, _platforms/, _platform-sections/)
@@ -176,7 +183,7 @@ function scanSkills(skillsDir) {
       if (!existsSync(skillMdPath)) continue;
       const platformMatch = skillDir.match(PLATFORM_SKILL_RE);
       const type = platformMatch ? 'platform' : 'base';
-      results.push(parseSkillFile(skillMdPath, skillDir, type, platformMatch?.[1]));
+      results.push(parseSkillFile(skillMdPath, skillDir, type, platformMatch && SKILL_FORM_TO_PLATFORM.get(platformMatch[1])));
     }
   }
 

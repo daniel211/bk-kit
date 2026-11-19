@@ -157,9 +157,10 @@
 
   // ─── Platform selector sync ───────────────────────────────────
   // Every kit the CLI ships; a card whose data-type is one of these is platform-specific.
-  var PLATFORMS = ['ios', 'android', 'flutter', 'python', 'web', 'fullstack'];
-  // A composite kit ships its components' agents and skills too: fullstack shows python + web cards.
-  var COMPONENTS = { fullstack: ['python', 'web'] };
+  var PLATFORMS = ['ios', 'android', 'flutter', 'mobile_native', 'python', 'web', 'fullstack'];
+  // A composite kit ships its components' agents and skills too: fullstack shows python + web
+  // cards, mobile_native shows ios + android ones.
+  var COMPONENTS = { fullstack: ['python', 'web'], mobile_native: ['ios', 'android'] };
 
   function initPlatformSelector() {
     var select = document.querySelector('.platform-select');
@@ -180,7 +181,7 @@
   function applyPlatform(platform) {
     // Update platform badge if present
     document.querySelectorAll('.platform-badge').forEach(function (badge) {
-      var icons = { ios: '🍎', android: '🤖', flutter: '💙', python: '🐍', web: '🌐', fullstack: '🧩' };
+      var icons = { ios: '🍎', android: '🤖', flutter: '💙', mobile_native: '📱', python: '🐍', web: '🌐', fullstack: '🧩' };
       badge.textContent = (icons[platform] || '') + ' ' + platform;
     });
 

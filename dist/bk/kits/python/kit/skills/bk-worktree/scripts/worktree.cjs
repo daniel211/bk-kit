@@ -530,15 +530,15 @@ const DEPENDENCY_INSTALLERS = [
   { file: 'Cargo.toml',          cmd: 'cargo build' },
   { file: 'go.mod',              cmd: 'go mod download' },
   // Mobile lock files
-  { file: 'Podfile',             cmd: 'pod install' },
-  { file: 'build.gradle',        cmd: './gradlew build' },
-  { file: 'build.gradle.kts',    cmd: './gradlew build' },
-  { file: 'pubspec.yaml',        cmd: 'flutter pub get' },
+  { file: 'Podfile',             cmd: 'pod install',                     platform: 'ios' },
+  { file: 'build.gradle',        cmd: './gradlew build',                 platform: 'android' },
+  { file: 'build.gradle.kts',    cmd: './gradlew build',                 platform: 'android' },
+  { file: 'pubspec.yaml',        cmd: 'flutter pub get',                 platform: 'flutter' },
 ];
 
 /**
  * @param {string} worktreePath - dir to look in
- * @param {string} [platform] - only installers of that platform ('python' | 'web')
+ * @param {string} [platform] - only installers of that platform ('python' | 'web' | 'ios' | 'android')
  * @returns {string|null}
  */
 function detectDependencyInstaller(worktreePath, platform) {
@@ -554,10 +554,12 @@ function detectDependencyInstaller(worktreePath, platform) {
 /**
  * Installers to run in a new worktree, one per dir.
  *
- * A fullstack kit (`components` in .claude/platform-context.json) installs per component, in its
- * `root` and with that component's platform's installers only — two components at `.` then get
- * both `uv sync` and `npm ci`, which first-match-wins would never give. Any other project: the
- * single first match at the worktree root.
+ * A composite kit (`components` in .claude/platform-context.json: fullstack, mobile_native) installs per
+ * present component, in its `root` and with that component's platform's installers only — two
+ * components at `.` then get both `uv sync` and `npm ci`, which first-match-wins would never give;
+ * mobile_native gets `pod install` in the ios root and `./gradlew build` in the android root. A
+ * `present: false` component is skipped. Any other project: the single first match at the
+ * worktree root.
  *
  * @param {string} worktreePath
  * @param {string} [contextDir] - project dir holding .claude/ (defaults to the worktree)
@@ -576,6 +578,7 @@ function detectDependencyInstallers(worktreePath, contextDir = worktreePath) {
   }
   const out = [];
   for (const c of components) {
+    if (!c || c.present === false) continue;
     const root = typeof c.root === 'string' && c.root ? c.root : '.';
     const cmd = detectDependencyInstaller(path.join(worktreePath, root), c.platform);
     if (cmd) out.push({ component: c.id, root, cmd });
@@ -1278,7 +1281,7 @@ Dependency auto-detection (run in worktree after creation, first match wins):
   Podfile               → pod install
   build.gradle[.kts]    → ./gradlew build
   pubspec.yaml          → flutter pub get
-  fullstack kit         → per component, in its root, with that platform's
+  fullstack/mobile_native kit → per component, in its root, with that platform's
                           installers only (create's dependencyInstallers)
 `);
 }

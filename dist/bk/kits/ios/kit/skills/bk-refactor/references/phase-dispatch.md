@@ -44,7 +44,7 @@ to `.workflow-state.json`.
 Task(subagent_type: "bk-unit-test-agent", model: "sonnet", run_in_background: true, prompt: "
   Run existing tests — verify no regressions introduced by refactor
   Impl report: bk/dev/shared/reports/impl-{feature}-refactor.md
-  Output: bk/dev/shared/reports/unit-test-{platform}-{feature}.json
+  Output: bk/dev/shared/reports/unit-test-{platform}-{feature}.md  # composite kit: {platform} = <kit>-<component>
   IMPORTANT: Do NOT write new tests — only run existing suite
 ")
 ```

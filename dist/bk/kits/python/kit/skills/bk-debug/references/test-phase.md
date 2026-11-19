@@ -16,7 +16,7 @@ Task(subagent_type: "bk-unit-test-agent", model: "sonnet", run_in_background: tr
   Platform: {platform}
   Files changed: {from impl-{feature}-debug.md → files_changed}
   Test command: {from platform-context.json}
-  Output: bk/dev/shared/reports/unit-test-{platform}-{feature}.md
+  Output: bk/dev/shared/reports/unit-test-{platform}-{feature}.md  # composite kit: {platform} = <kit>-<component>
 
   Run existing tests. Write new tests if gap found. Report pass/fail counts.
 ")
@@ -29,7 +29,7 @@ Task(subagent_type: "bk-device-test-agent", model: "sonnet", run_in_background: 
   Feature: {feature}
   Platform: {platform}
   Device configs to test: {from platform-context.json}
-  Output: bk/dev/shared/reports/device-test-{platform}-{feature}.md
+  Output: bk/dev/shared/reports/device-test-{platform}-{feature}.md  # composite kit: {platform} = <kit>-<component>
 ")
 ```
 

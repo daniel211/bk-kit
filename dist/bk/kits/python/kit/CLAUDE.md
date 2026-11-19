@@ -36,12 +36,12 @@ You are a **conductor** — you orchestrate, you do not implement.
 | `pubspec.yaml` | flutter | bk-flutter-developer |
 | `.xcworkspace`/`.xcodeproj` | ios | bk-ios-developer |
 | `build.gradle` (no `ios/`) | android | bk-android-developer |
-| Both `ios/` + `android/` | ios kit (composite mobile kit: future) | bk-ios-developer |
+| ios + android markers (root or 1st-level subdir), no `pubspec.yaml` | mobile_native | bk-ios-developer + bk-android-developer |
 | python + web markers (root or 1st-level subdir) | fullstack | bk-python-developer + bk-web-developer |
 | `pyproject.toml` / `requirements.txt` / `manage.py` / `setup.py` | python | bk-python-developer |
 | `package.json` + `tsconfig.json` / `next.config.*` / `vite.config.*` | web | bk-web-developer |
 
-Context: `.claude/platform-context.json` (fullstack: `components[]`). Platform skills auto-loaded by dev agents.
+Context: `.claude/platform-context.json` (fullstack, mobile_native: `components[]`, one sub-task per component). Platform skills auto-loaded by dev agents.
 
 ## Model Routing
 

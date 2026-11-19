@@ -25,7 +25,7 @@
  *   resolveNativeQueueFile(projectRoot, sessionId)
  *   enqueueNative(projectRoot, sessionId, platform, absFile)
  *   takeNativeQueue(projectRoot, sessionId)
- *   runNativeLintBatch({ projectRoot, platform, files, policy, timeoutMs })
+ *   runNativeLintBatch({ projectRoot, platform, files, policy, timeoutMs, cwd? })
  */
 
 'use strict';
@@ -187,14 +187,15 @@ function groupByFile(findings) {
  * red-signals.jsonl and the statusline counts them, so one signal covering nine
  * files would under-count by eight against every existing threshold.
  *
- * @param {{ projectRoot: string, platform: string, files: string[], policy?: object, timeoutMs?: number }} opts
+ * @param {{ projectRoot: string, platform: string, files: string[], policy?: object, timeoutMs?: number,
+ *           cwd?: string }} opts — cwd: the component root the tool runs in (mobile_native composite)
  * @returns {Promise<{ ran: boolean, files: number, findings: number, filesWithFindings: number,
  *                     red: number, yellow: number, truncated: boolean, timedOut: boolean,
  *                     durationMs: number, reported: object[] }>}
  *          `reported` is up to MAX_REPORTED_FINDINGS findings, for the caller to print.
  */
 async function runNativeLintBatch(opts = {}) {
-  const { projectRoot, platform, policy = {}, timeoutMs } = opts;
+  const { projectRoot, platform, policy = {}, timeoutMs, cwd } = opts;
   const queued = Array.isArray(opts.files) ? opts.files.filter(Boolean) : [];
   const empty = {
     ran: false, files: 0, findings: 0, filesWithFindings: 0,
@@ -209,7 +210,7 @@ async function runNativeLintBatch(opts = {}) {
 
   let result;
   try {
-    result = await runTool(platform, batch, { timeoutMs, policy });
+    result = await runTool(platform, batch, cwd ? { timeoutMs, policy, cwd } : { timeoutMs, policy });
   } catch {
     return { ...empty, files: batch.length, truncated: overflowed };
   }

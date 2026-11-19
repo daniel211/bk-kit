@@ -1,0 +1,10 @@
+{
+  "_comment": "Budget for hook additionalContext injection. Read by hooks/lib/injection-budget.cjs (defaults are compiled in — this file only overrides them). Env overrides: BK_INJECTION_BUDGET_DISABLED=1, BK_INJECTION_MAX_BLOCK_BYTES, BK_INJECTION_MAX_TURN_BYTES, BK_INJECTION_DEDUPE_TURNS, BK_INJECTION_TURN_WINDOW_MS, BK_INJECTION_CONFIG (path to this file), BK_INJECTION_STATE_DIR.",
+  "enabled": true,
+  "perBlockMaxBytes": 1536,
+  "perTurnMaxBytes": 4096,
+  "dedupeTurns": 10,
+  "turnWindowMs": 60000,
+  "stateTtlMs": 1800000,
+  "maxEntries": 64
+}

@@ -49,7 +49,7 @@ try {
 
       // Only queue files this platform's linter can actually read. Queueing a
       // .md or .json edit would just hand `dart analyze` noise. A composite kit
-      // (fullstack) asks which component owns the file, hence the project root.
+      // (fullstack, mobile_native) asks which component owns the file, hence the project root.
       if (!isLintable(platform, absFile, projectRoot)) {
         timer.end({ status: 'ok', exit: 0 });
         process.exit(0);

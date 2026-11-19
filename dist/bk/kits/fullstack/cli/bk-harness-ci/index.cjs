@@ -87,6 +87,25 @@ function tryLoadPolicy(projectRoot) {
 // ─── Project detection ────────────────────────────────────────────────────────
 
 /**
+ * A React Native (or Expo) repo: `react-native` in the root package.json's `dependencies` or
+ * `devDependencies`. Its ios/ + android/ are RN host projects: never `mobile_native`, and (as before
+ * that composite existed) only root ios / android markers count. Missing or unparsable
+ * package.json → false. MUST agree with kit-resolver.mjs and project-detector.cjs
+ * isReactNativeProject — a test runs all three on the same fixtures.
+ * @param {string} projectRoot
+ * @returns {boolean}
+ */
+function isReactNativeProject(projectRoot) {
+  let pkg;
+  try { pkg = JSON.parse(fs.readFileSync(path.join(projectRoot, 'package.json'), 'utf8')); } catch { return false; }
+  if (!pkg || typeof pkg !== 'object') return false;
+  return ['dependencies', 'devDependencies'].some((key) => {
+    const deps = pkg[key];
+    return !!deps && typeof deps === 'object' && Object.prototype.hasOwnProperty.call(deps, 'react-native');
+  });
+}
+
+/**
  * Every platform whose root markers sit in `projectRoot` (a list: a mixed root reports all of
  * them, unlike bk init's single pick). Markers follow kit-resolver.mjs for python / web.
  *
@@ -95,29 +114,36 @@ function tryLoadPolicy(projectRoot) {
  * arch-fitness platform was reported "not detected".
  *
  * @param {string} projectRoot
- * @returns {Array<'ios'|'android'|'flutter'|'python'|'web'|'fullstack'>}
+ * @returns {Array<'ios'|'android'|'flutter'|'mobile_native'|'python'|'web'|'fullstack'>}
  */
 function detectPlatforms(projectRoot) {
   let entries = [];
   try { entries = fs.readdirSync(projectRoot); } catch { return []; }
   const has = (name) => entries.includes(name);
+  const isIos = (list) => list.includes('Podfile') || list.includes('Package.swift')
+    || list.some(e => /\.xc(?:odeproj|workspace)$/.test(e));
+  const isAndroid = (list) => list.includes('build.gradle') || list.includes('build.gradle.kts') || list.includes('gradlew');
 
   const platforms = [];
-  if (has('Podfile') || has('Package.swift') || entries.some(e => /\.xc(?:odeproj|workspace)$/.test(e))) {
-    platforms.push('ios');
-  }
-  if (has('build.gradle') || has('build.gradle.kts') || has('gradlew')) {
-    platforms.push('android');
-  }
-  if (has('pubspec.yaml')) {
-    platforms.push('flutter');
-  }
-  // python / web also count from a first-level subdir (backend/ + frontend/), as the fullstack
-  // kit's components do; both present -> fullstack too.
+  // python / web (and, for the mobile_native composite, ios / android) also count from a first-level
+  // subdir (backend/ + frontend/, MeetupLiveTracking/ + android/), as composite components do.
   const dirs = [entries].concat(entries
     .filter(e => !e.startsWith('.') && !['node_modules', '.venv', 'venv'].includes(e))
     .filter(e => { try { return fs.statSync(path.join(projectRoot, e)).isDirectory(); } catch { return false; } })
     .map(e => { try { return fs.readdirSync(path.join(projectRoot, e)); } catch { return []; } }));
+  // Flutter guard: a Flutter root's ios/ + android/ (or a subdir holding a pubspec.yaml) are
+  // host projects, never mobile_native components.
+  // React Native guard: its ios/ + android/ are host projects too (isReactNativeProject).
+  const reactNative = isReactNativeProject(projectRoot);
+  const nativeDirs = has('pubspec.yaml') || reactNative ? [entries] : dirs.filter(list => !list.includes('pubspec.yaml'));
+  const ios = isIos(entries) || nativeDirs.some(isIos);
+  const android = isAndroid(entries) || nativeDirs.some(isAndroid);
+  if (ios) platforms.push('ios');
+  if (android) platforms.push('android');
+  if (has('pubspec.yaml')) {
+    platforms.push('flutter');
+  }
+  if (ios && android && !has('pubspec.yaml') && !reactNative) platforms.push('mobile_native');
   const isPython = (list) => ['pyproject.toml', 'requirements.txt', 'manage.py', 'setup.py'].some(n => list.includes(n));
   const isWeb = (list) => list.includes('package.json')
     && list.some(e => /^(?:tsconfig\.json|(?:next|vite)\.config\.[cm]?[jt]s)$/.test(e));
@@ -368,7 +394,12 @@ async function main() {
   process.exit(exitCode);
 }
 
-main().catch(err => {
-  process.stderr.write(`[bk-harness-ci] Fatal error: ${err.message}\n`);
-  process.exit(3);
-});
+// Detection is exported for the cross-copy agreement test; running the file is the CLI.
+module.exports = { detectPlatforms, isReactNativeProject };
+
+if (require.main === module) {
+  main().catch(err => {
+    process.stderr.write(`[bk-harness-ci] Fatal error: ${err.message}\n`);
+    process.exit(3);
+  });
+}

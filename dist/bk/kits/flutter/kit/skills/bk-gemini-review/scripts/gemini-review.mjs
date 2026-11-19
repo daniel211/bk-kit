@@ -3,7 +3,7 @@
  * gemini-review.mjs — Automated code review runner powered by Gemini CLI.
  *
  * Usage:
- *   node gemini-review.mjs [--feature <name>] [--platform <ios|android|flutter|python|web|fullstack>] [--model <model>] [--fast] [--files <f1,f2>]
+ *   node gemini-review.mjs [--feature <name>] [--platform <ios|android|flutter|mobile_native|python|web|fullstack>] [--model <model>] [--fast] [--files <f1,f2>]
  */
 
 import { execSync, spawn } from 'node:child_process';
@@ -91,10 +91,10 @@ function readJsonField(filePath, field) {
 }
 
 // Every kit the CLI ships (kit-resolver.mjs KIT_NAMES). The platform only picks
-// .claude/rules/<platform>-rules.md for the prompt, which each kit installs; fullstack takes
-// both component checklists plus its own cross-stack rules (RULE_FILES below).
-const SUPPORTED_PLATFORMS = ['ios', 'android', 'flutter', 'python', 'web', 'fullstack'];
-const RULE_FILES = { fullstack: ['python', 'web', 'fullstack'] };
+// .claude/rules/<platform>-rules.md for the prompt, which each kit installs; a composite (fullstack, mobile_native) takes
+// its component checklists plus its own cross-stack rules (RULE_FILES below).
+const SUPPORTED_PLATFORMS = ['ios', 'android', 'flutter', 'mobile_native', 'python', 'web', 'fullstack'];
+const RULE_FILES = { fullstack: ['python', 'web', 'fullstack'], mobile_native: ['ios', 'android', 'mobile-native'] };
 let platformSource = 'the --platform flag';
 
 if (!platform) {

@@ -168,6 +168,13 @@ export function describeDenial(stderr) {
   return { kind, tool, granted: Boolean(tool) && KIT_GRANTED_TOOLS.includes(tool) };
 }
 
+/** First `designEngine` among a composite context's components, or undefined. */
+function componentDesignEngine(platformContext) {
+  const components = platformContext && Array.isArray(platformContext.components) ? platformContext.components : [];
+  const hit = components.find((c) => c && c.present !== false && c.designEngine);
+  return hit ? hit.designEngine : undefined;
+}
+
 /**
  * Resolve the engine for a design run, in priority order:
  *   explicit flag → BK_DESIGN_ENGINE env → platform-context designEngine → default.
@@ -187,6 +194,9 @@ export function resolveEngine({ flag, env = process.env, platformContext = {} } 
     [flag, 'the --engine flag'],
     [env.BK_DESIGN_ENGINE, 'BK_DESIGN_ENGINE'],
     [platformContext.designEngine, 'platform-context.json'],
+    // A composite kit (mobile_native, fullstack) has no top-level designEngine: its UI components carry
+    // one each. The first one set decides (they ship equal; a user edit to one still applies).
+    [componentDesignEngine(platformContext), 'platform-context.json components'],
     [DEFAULT_DESIGN_ENGINE, 'the built-in default']
   ];
   for (const [value, source] of candidates) {

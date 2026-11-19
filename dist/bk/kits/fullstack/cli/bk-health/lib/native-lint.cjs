@@ -46,6 +46,14 @@ const PLATFORM_CONFIG = {
   flutter: { file: 'native-lint-flutter.jsonl', tool: 'dart'      }
 };
 
+/**
+ * Rows a composite kit shows: its components with a native-lint sensor (mobile_native = ios + android, no
+ * flutter row). Every other kit — and an unrecorded one — shows all three rows, as before.
+ */
+const KIT_NATIVE_PLATFORMS = {
+  mobile_native: ['ios', 'android']
+};
+
 /** Kit platforms without a native-lint sensor, and what lints them instead (per-turn batch). */
 const NO_NATIVE_LINT = {
   python:    'ruff',
@@ -161,7 +169,7 @@ function buildNativeLintPanel(metricsDir, platform) {
   const toolCache = readToolCache(metricsDir);
 
   const platforms = {};
-  for (const platform of ['ios', 'android', 'flutter']) {
+  for (const platform of KIT_NATIVE_PLATFORMS[kit] || ['ios', 'android', 'flutter']) {
     platforms[platform] = buildPlatformData(platform, metricsDir, toolCache);
   }
 

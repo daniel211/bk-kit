@@ -107,7 +107,7 @@ try {
       // still load every rule, so they keep the short generic block.
       const contextMode = agentContextMode(projectRoot, agentType);
       if (contextMode === 'omit' || contextMode === 'full') {
-        // A composite kit (fullstack) lists its installed components (root, framework) per agent;
+        // A composite kit (fullstack, mobile_native) lists its installed components (root, framework) per agent;
         // a single kit's one component carries its `root` (commands run there when not `.`).
         let components = null;
         try {

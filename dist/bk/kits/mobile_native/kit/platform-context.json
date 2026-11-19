@@ -1,0 +1,155 @@
+{
+  "platform": "mobile_native",
+  "components": [
+    {
+      "id": "ios",
+      "root": ".",
+      "platform": "ios",
+      "language": "swift",
+      "languageVersion": "5.9+",
+      "fileNaming": "PascalCase",
+      "fileExtension": ".swift",
+      "designEngine": "auto",
+      "commands": {
+        "build": "xcodebuild -scheme App -sdk iphonesimulator build",
+        "buildNote": "Prefer Xcode MCP 'build' tool when available; xcodebuild is fallback",
+        "test": "xcodebuild test -scheme App -destination 'platform=iOS Simulator,name=iPhone 16'",
+        "testNote": "Prefer Xcode MCP 'test' tool when available; xcodebuild is fallback",
+        "lint": "swiftlint lint --strict",
+        "format": "swiftformat .",
+        "clean": "xcodebuild clean",
+        "codegen": null
+      },
+      "rules": [
+        "rules/mobile-shared-rules.md",
+        "rules/ios-rules.md"
+      ],
+      "skills": [
+        "bk-code",
+        "bk-test",
+        "bk-debug",
+        "bk-code-review-workflow",
+        "bk-ios"
+      ],
+      "dirs": {
+        "source": "Sources/",
+        "test": "Tests/",
+        "uiTest": "UITests/",
+        "resources": "Resources/"
+      },
+      "conventions": {
+        "architecture": "MVVM + Clean Architecture",
+        "async": "async/await, structured concurrency",
+        "di": "Swinject",
+        "stateManagement": "@Observable / @State",
+        "uiFramework": "SwiftUI",
+        "testFramework": "XCTest",
+        "mockFramework": "manual / protocol-based"
+      }
+    },
+    {
+      "id": "android",
+      "root": ".",
+      "platform": "android",
+      "language": "kotlin",
+      "languageVersion": "1.9+",
+      "fileNaming": "PascalCase",
+      "fileExtension": ".kt",
+      "designEngine": "auto",
+      "commands": {
+        "build": "./gradlew assembleDebug",
+        "test": "./gradlew test",
+        "lint": "./gradlew ktlintCheck detekt",
+        "format": "./gradlew ktlintFormat",
+        "clean": "./gradlew clean",
+        "codegen": null
+      },
+      "rules": [
+        "rules/mobile-shared-rules.md",
+        "rules/android-rules.md"
+      ],
+      "skills": [
+        "bk-code",
+        "bk-test",
+        "bk-debug",
+        "bk-code-review-workflow",
+        "bk-android"
+      ],
+      "dirs": {
+        "source": "app/src/main/java/",
+        "test": "app/src/test/java/",
+        "uiTest": "app/src/androidTest/java/",
+        "resources": "app/src/main/res/"
+      },
+      "conventions": {
+        "architecture": "MVVM + Clean Architecture",
+        "async": "Kotlin Coroutines + Flow",
+        "di": "Hilt / Koin",
+        "stateManagement": "StateFlow / MutableStateFlow",
+        "uiFramework": "Jetpack Compose",
+        "testFramework": "JUnit5",
+        "mockFramework": "MockK"
+      }
+    }
+  ],
+  "rules": [
+    "rules/mobile-shared-rules.md",
+    "rules/ios-rules.md",
+    "rules/android-rules.md",
+    "rules/mobile-native-rules.md"
+  ],
+  "skills": [
+    "bk-code",
+    "bk-test",
+    "bk-debug",
+    "bk-code-review-workflow",
+    "bk-ios",
+    "bk-android",
+    "bk-mobile-native"
+  ],
+  "mcpServers": {
+    "xcode": {
+      "command": "xcrun",
+      "args": [
+        "mcpbridge"
+      ],
+      "type": "native",
+      "description": "Xcode project build, test, and management (user adds via: claude mcp add --transport stdio xcode -- xcrun mcpbridge)",
+      "scope": "foreground"
+    },
+    "context7": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@upstash/context7-mcp"
+      ],
+      "description": "Library documentation lookup",
+      "scope": "foreground"
+    },
+    "android-emulator": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@androidmcp/server"
+      ],
+      "description": "Android Emulator control and screenshot",
+      "scope": "foreground"
+    }
+  },
+  "templateVars": {
+    "namingConvention": "",
+    "lintCommand": ""
+  },
+  "externalServices": {
+    "figma": {
+      "type": "rest",
+      "script": "scripts/figma-cli.mjs",
+      "env": [
+        "FIGMA_API_KEY"
+      ],
+      "tokenFile": "~/.config/beer-kit/figma.env",
+      "description": "Design extraction reads Figma over its REST API. No MCP server: the npx figma-mcp package offers comment tools only, and Figma Dev Mode MCP has no node export.",
+      "note": "The Variables API additionally needs the file_variables:read scope and a Figma Enterprise plan; without it design tokens come from style names and raw values."
+    }
+  }
+}

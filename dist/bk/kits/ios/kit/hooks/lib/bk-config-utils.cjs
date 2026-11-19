@@ -428,16 +428,28 @@ function writeWorkflowState(updates, root) {
  * several places the kit's own documents name, is lib/agent-report-contract.cjs's job; this
  * only answers "what is the canonical shared/reports name".
  *
+ * Test-agent names carry the platform: `unit-test-ios-login.md` in a single kit. In a composite
+ * kit (mobile_native, fullstack) a feature can have one report per component, so the prefix is
+ * `<kit>-<component id>`: `unit-test-mobile_native-ios-login.md`. A composite without a
+ * component gives the TEMPLATE `unit-test-mobile_native-{component}-login.md` — it names no
+ * file; delegation-enforcer injects it as the dispatch `Output:` for the agent to fill in.
+ * lib/agent-report-contract.cjs accepts both forms (and the legacy bare-component one).
+ *
  * @param {string} agentType - e.g. 'code-reviewer', 'unit-test-agent'
  * @param {string} feature - Feature name slug
- * @param {string} [platform] - Platform for test agents (ios/android/flutter)
+ * @param {string} [platform] - Kit id for test agents (ios/android/flutter/mobile_native/…)
+ * @param {string} [component] - Component id in a composite kit (ios/android, backend/frontend)
  * @returns {string|null} Absolute path, or null when the agent has no shared report
  */
-function getOutputPath(agentType, feature, platform) {
+function getOutputPath(agentType, feature, platform, component) {
   const base = path.join(sharedDir(), 'reports');
   // Normalize: strip bk- prefix for filename generation
   const bare = agentType.replace(/^bk-/, '');
-  const pfx = platform || 'unknown';
+  // Lazy: component-resolver is only needed for the two test-agent names.
+  const { isComposite } = require('./component-resolver.cjs');
+  const pfx = !platform ? 'unknown'
+    : isComposite(platform) ? `${platform}-${component || '{component}'}`
+      : platform;
   const map = {
     'code-reviewer': `code-review-${feature}.md`,
     // Distinct from code-reviewer so `/bk-review --engine dual` can run both in

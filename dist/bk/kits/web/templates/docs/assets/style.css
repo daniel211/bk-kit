@@ -403,6 +403,7 @@ a:hover { color: var(--accent); }
 .badge-python  { background: #fffde7; color: #8d6e00; }
 .badge-web     { background: #e0f2f1; color: #00695c; }
 .badge-fullstack { background: #ede7f6; color: #4527a0; }
+.badge-mobile_native { background: #e1f5fe; color: #01579b; }
 .badge-shared  { background: #fff3e0; color: #e65100; }
 .badge-skill   { background: #f3e5f5; color: #6a1b9a; }
 .badge-hook    { background: #e0f7fa; color: #00695c; }

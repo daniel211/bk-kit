@@ -129,8 +129,9 @@ try {
   }
 
   /**
-   * Scan the project root, then — in a composite kit (fullstack: backend/ + frontend/) — the root
-   * of every component of that platform, so a mutmut config in backend/pyproject.toml counts.
+   * Scan the project root, then — in a composite kit (fullstack: backend/ + frontend/; mobile_native:
+   * ios/ + android/) — the root of every component of that platform, so a mutmut config in
+   * backend/pyproject.toml or a pitest plugin in android/app/build.gradle counts.
    * `file` is reported relative to the project root. Fail-open: no components → root only.
    */
   function detectInComponents(detect, platform, projectRoot) {
@@ -151,8 +152,8 @@ try {
    * Run a full mutation readiness scan and write results.
    */
   function runScan(projectRoot) {
-    const ios     = detectIOSMutation(projectRoot);
-    const android = detectAndroidMutation(projectRoot);
+    const ios     = detectInComponents(detectIOSMutation, 'ios', projectRoot);
+    const android = detectInComponents(detectAndroidMutation, 'android', projectRoot);
     const flutter = detectFlutterMutation(projectRoot);
     const python  = detectInComponents(detectPythonMutation, 'python', projectRoot);
     const web     = detectInComponents(detectWebMutation, 'web', projectRoot);

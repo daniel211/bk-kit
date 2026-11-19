@@ -83,7 +83,7 @@ ALL modes dispatch agents — the conductor NEVER scans or writes docs inline.
    template defaults (detected platform, build commands, SDK versions). python / web: also set
    `root` (dir holding the markers), `framework` (+ web `testRunner`) detected there, merge
    `frameworks[framework]`, then `runner` + runner-prefixed commands; keep the `frameworks` map.
-   fullstack: do this per entry of `components` (its `root`, framework, runner; `present: false`
+   fullstack / mobile_native: do this per entry of `components` (its `root`, framework, runner; `present: false`
    when its markers are gone, `true` when found); never drop `components` or a component's `frameworks`.
    Load: `references/foundation-synthesis.md` § Platform Context Update
 

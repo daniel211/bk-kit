@@ -146,8 +146,16 @@ try {
     const platform = detectUIFile(filePath);
     if (!platform) process.exit(0);
 
-    // Check snapshot infrastructure
-    const hasInfra = checkSnapshotInfra(platform, projectRoot);
+    // Check snapshot infrastructure — in the root of the component that owns the file (mobile_native:
+    // ios/Package.swift, android/app/build.gradle), else the project root.
+    let infraRoot = projectRoot;
+    try {
+      const { componentForFile, componentCwd } = require('./lib/component-resolver.cjs');
+      const abs = path.isAbsolute(filePath) ? filePath : path.join(projectRoot, filePath);
+      const owner = componentForFile(abs, projectRoot);
+      if (owner && owner.platform === platform) infraRoot = componentCwd(owner, projectRoot);
+    } catch { /* fail-open: project root */ }
+    const hasInfra = checkSnapshotInfra(platform, infraRoot);
 
     // "No snapshot infrastructure" is a property of the project, not of the file: one row
     // per file said the same thing N times (X-Game-Pro, 0.13.4). Once per session, deduped by

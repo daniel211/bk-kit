@@ -233,11 +233,13 @@ export async function runDoctor(targetDir, platform, { pkgAgentsDir } = {}) {
     });
   }
 
-  // 3c. fullstack: per component, the recorded root must exist (hooks lint with cwd = root), and
-  //     its framework is compared with a fresh detection there — a mismatch only warns, as in 3b.
+  // 3c. composite (fullstack, mobile_native): per component, the recorded root must exist (hooks lint
+  //     with cwd = root), and a python / web component's framework is compared with a fresh
+  //     detection there — a mismatch only warns, as in 3b. ios / android have no framework.
   for (const c of checkComponents(installedCtx, targetDir)) {
     if (c.present === false) {
-      // Informational, not counted: a repo without (yet) a frontend is a valid fullstack install.
+      // Informational, not counted: a repo without (yet) a frontend — or an iOS repo that took the
+      // mobile_native kit before its Android project exists — is a valid composite install.
       console.log(`  ℹ Component ${c.id}: not present (${c.platform}) — /bk-bootstrap turns it on once its markers exist`);
       continue;
     }

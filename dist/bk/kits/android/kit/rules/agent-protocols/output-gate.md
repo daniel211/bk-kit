@@ -58,6 +58,8 @@ On MISMATCH: fix before returning. Never return "complete" with mismatched outpu
 | bk-performance-analyzer | `bk/dev/shared/reports/performance-{feature}.md` |
 | bk-test-architect | `bk/dev/shared/reports/test-strategy-{feature}.md` |
 
+In a composite kit `{platform}` = `<kit>-<component>` (e.g. `mobile_native-ios`), one report per component.
+
 ## Agent-Specific Checks
 
 | Agent | Required Sections | Notes |

@@ -19,10 +19,9 @@ import { parseModelsOption, resolveModelPreset, persistModelPreset, recordPristi
 import {
   gitPrefix, writeGitignoreEntries,
 } from '../lib/session-state-gitignore.mjs';
-import { FRAMEWORK_PLATFORMS, applyFrameworkToInstalledContext, resolveFrameworkOption } from '../lib/framework-detector.mjs';
-import {
-  applyComponentsToInstalledContext, detectComponentRoot, displayRoot, hasComponents, resolveComponentFrameworkOption,
-} from '../lib/component-detector.mjs';
+import { resolveFrameworkOption } from '../lib/framework-detector.mjs';
+import { displayRoot, hasComponents, resolveComponentFrameworkOption } from '../lib/component-detector.mjs';
+import { detectIntoInstalledContext } from '../lib/installed-context-detection.mjs';
 
 // Re-exported: callers and tests have always imported the list from here.
 export { NEVER_COMMIT, writeGitignoreEntries } from '../lib/session-state-gitignore.mjs';
@@ -157,34 +156,27 @@ export function registerInit(program) {
       copyDirFiltered(kitDir, claudeDir, ['settings.json']);
 
       // python / web: the dir holding the markers (`root`, '.' or a first-level subdir — the same
-      // pick as a fullstack component), then the framework variant and the package runner detected
-      // there, folded into the installed platform-context.json (user-owned from here on; `bk update`
-      // never rewrites it). Before hashing, so .bk-version.json records the file as written.
-      // Mobile kits: null, no output.
-      const single = FRAMEWORK_PLATFORMS.has(platform) ? detectComponentRoot(targetDir, platform) : null;
-      const fw = applyFrameworkToInstalledContext({
+      // pick as a composite component), then the framework variant and the package runner detected
+      // there; composite (fullstack, mobile_native): each component's root, `present`, and (python / web)
+      // its framework variant and runner. Folded into the installed platform-context.json before
+      // hashing, so .bk-version.json records the file as written. The file is user-owned from here
+      // on, but not frozen: when the kit's template changes, `bk update` installs the new template
+      // over an unedited copy and re-applies these values (lib/installed-context-detection.mjs).
+      // Mobile single kits: nothing detected, no output.
+      const { single, comps } = detectIntoInstalledContext({
         ctxPath: join(claudeDir, 'platform-context.json'),
         platform,
         projectRoot: targetDir,
-        root: single ? single.root : '.',
         forced: forcedFramework,
       });
-      if (fw) {
-        console.log(`  ✓ Root: ${displayRoot(fw.root)}`);
-        console.log(`  ✓ Framework: ${fw.line}`);
+      if (single) {
+        console.log(`  ✓ Root: ${displayRoot(single.root)}`);
+        console.log(`  ✓ Framework: ${single.line}`);
         if (single.candidates.length > 1) {
-          console.log(`  ⚠ ${platform} markers in several dirs (${single.candidates.map(displayRoot).join(', ')}) — using ${displayRoot(fw.root)};`
+          console.log(`  ⚠ ${platform} markers in several dirs (${single.candidates.map(displayRoot).join(', ')}) — using ${displayRoot(single.root)};`
             + ' edit `root` in .claude/platform-context.json to change it');
         }
       }
-
-      // fullstack: each component's root (`.` or a first-level subdir) and its framework variant.
-      // applyFrameworkToInstalledContext above returned null for it (not a python / web kit).
-      const comps = applyComponentsToInstalledContext({
-        ctxPath: join(claudeDir, 'platform-context.json'),
-        projectRoot: targetDir,
-        forced: typeof forcedFramework === 'object' ? forcedFramework : null,
-      });
       if (comps) {
         console.log('  ✓ Components:');
         for (const line of comps.lines) console.log(`      ${line}`);

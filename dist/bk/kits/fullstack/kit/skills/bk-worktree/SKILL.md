@@ -86,8 +86,9 @@ Based on project context, run in background (first match wins; lockfiles install
 - `pubspec.yaml` → `flutter pub get`
 
 `create` returns `dependencyInstallers: [{ root, cmd }]` — run each as `cd <worktreePath>/<root> && <cmd>`.
-fullstack (`components` in `.claude/platform-context.json`): one entry per component, in its `root`,
-with only that platform's installers (python: uv/poetry/requirements; web: bun/pnpm/yarn/npm).
+fullstack / mobile_native (`components` in `.claude/platform-context.json`): one entry per present component,
+in its `root`, with only that platform's installers (python: uv/poetry/requirements; web: bun/pnpm/yarn/npm;
+ios: Podfile; android: gradle).
 
 ## Commands
 

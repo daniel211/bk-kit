@@ -33,6 +33,7 @@ const { loadHarnessPolicy, trackRedSignal, trackWarnSignal, resolveMetricPath } 
 const { detectTool, runTool } = require(path.join(libDir, 'native-lint-runner.cjs'));
 const { toolBudgetMs } = require(path.join(libDir, 'hook-budget.cjs'));
 const { enqueueNative, isInsideProjectRoot } = require(path.join(libDir, 'native-lint-deferred.cjs'));
+const { fileBelongsToPlatform, componentForFile, componentCwd } = require(path.join(libDir, 'component-resolver.cjs'));
 const { createHookTimer } = require(path.join(libDir, 'hook-logger.cjs'));
 const { appendJsonl: rotatorAppend } = require(path.join(libDir, 'jsonl-rotator.cjs'));
 
@@ -125,6 +126,14 @@ async function main() {
   // Files outside the project root (/tmp copies, session scratchpads) are not this project's
   // code: linting them only raised red/yellow signals against it. Skip silently.
   if (!isInsideProjectRoot(projectRoot, filePath)) process.exit(0);
+  // mobile_native composite: only files of the ios component (root prefix + extension). A single kit
+  // keeps the extension gate above (fileBelongsToPlatform is fail-open).
+  const absTarget = path.isAbsolute(filePath) || !projectRoot ? filePath : path.join(projectRoot, filePath);
+  if (!fileBelongsToPlatform(absTarget, projectRoot, 'ios')) process.exit(0);
+  // The tool runs in the owning component's root (mobile_native: e.g. android/ holds gradlew and
+  // .swiftlint.yml sits in the ios root); undefined = the project root, as before.
+  const owner = componentForFile(absTarget, projectRoot);
+  const componentRoot = owner && owner.root !== '.' ? componentCwd(owner, projectRoot) : undefined;
   const nativeCfg   = policy.native_lint || {};
   const iosCfg      = nativeCfg.ios || {};
 
@@ -135,7 +144,7 @@ async function main() {
   }
 
   // Detect tool
-  const toolInfo = detectTool('ios');
+  const toolInfo = detectTool('ios', { root: componentRoot });
 
   if (!toolInfo.available || !nativeCfg.fallback_to_regex === false) {
     // Tool unavailable → fall back to regex hook
@@ -178,7 +187,7 @@ async function main() {
   const timeoutMs = toolBudgetMs(nativeCfg.timeout_ms || 30000);
   let result;
   try {
-    result = await runTool('ios', filePath, { timeoutMs, policy: nativeCfg });
+    result = await runTool('ios', filePath, { timeoutMs, policy: nativeCfg, cwd: componentRoot });
   } catch (e) {
     process.stderr.write(`[${HOOK_NAME}] runTool error: ${e.message} — delegating to regex hook\n`);
     process.exit(runRegexFallback(stdinData));

@@ -84,17 +84,22 @@ agents read `frameworks[framework].references`.
 | `package-lock.json` | `npm` | unchanged | `npm ci` |
 | none (web) | `npm` | unchanged | unchanged |
 
-**fullstack — per component** (same rules as `bk init`). For each entry of `components`:
+**fullstack / mobile_native — per component** (same rules as `bk init`). For each entry of `components`:
 
 1. `root`: the dir carrying that platform's root markers (python: pyproject.toml / requirements.txt
-   / manage.py / setup.py; web: package.json next to tsconfig.json / next.config.* / vite.config.*)
-   — the project root (`.`) or a first-level subdir (skip node_modules, .venv, venv, dot-dirs and docs, doc, scripts, tools, examples, e2e, tests, test).
+   / manage.py / setup.py; web: package.json next to tsconfig.json / next.config.* / vite.config.*;
+   ios: *.xcodeproj / *.xcworkspace / Package.swift; android: build.gradle[.kts] / settings.gradle*)
+   — the project root (`.`) or a first-level subdir (skip node_modules, .venv, venv, dot-dirs and docs, doc, scripts, tools, examples, e2e, tests, test;
+   ios / android: never a dir holding a pubspec.yaml — that is a Flutter host project).
    Several qualify → conventional name first (python: backend, api, server; web: frontend, web,
-   client, app), else `.`, else the first alphabetically; tell the user which was picked.
+   client, app; ios: ios, iOS, apple; android: android, Android), else `.`, else the first
+   alphabetically; tell the user which was picked.
    None → set `"present": false` and leave the rest of the component as is (hooks skip it);
    found → `"present": true` + `root` (this turns a previously absent component back on).
-2. `framework` (+ web `testRunner`) detected at that root with the table above; merge into the
-   component's own `commands` / `conventions`; then the runner table at that root.
+2. python / web: `framework` (+ web `testRunner`) detected at that root with the table above; merge
+   into the component's own `commands` / `conventions`; then the runner table at that root.
+   ios / android: no framework variant — set the component's `commands` (scheme, gradle tasks)
+   from that root's scan.
 
 Keep the `components` array, each component's `id` / `platform` / `frameworks`, and the top-level
 `rules` / `skills` / `mcpServers`. Never flatten components into top-level `commands`.

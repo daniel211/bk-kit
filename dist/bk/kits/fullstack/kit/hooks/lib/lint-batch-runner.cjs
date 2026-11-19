@@ -44,6 +44,7 @@
 
 const { execSync } = require('child_process');
 const fs = require('fs');
+const path = require('path');
 
 /** Batch-capable defaults per platform. Each takes a list of quoted paths. */
 const DEFAULT_LINT_COMMANDS = {
@@ -208,7 +209,7 @@ function buildBatchCommands(opts) {
 }
 
 /**
- * A composite kit's batch (fullstack): group the files by owning component and build each
+ * A composite kit's batch (fullstack, mobile_native): group the files by owning component and build each
  * component's commands with ITS platform and ITS `commands.lint` (the component platform's
  * DEFAULT_LINT_COMMANDS when it has none), to run with cwd = the component root — eslint finds
  * its flat config from the cwd, and `ruff check .` with the trailing `.` stripped lints only the
@@ -226,10 +227,13 @@ function buildBatchCommands(opts) {
 function buildComponentBatches(opts) {
   const { projectRoot, files, mode, fallbackLintCommand } = opts || {};
   const { componentForFile, componentCwd } = require('./component-resolver.cjs');
+  const { LINTABLE_EXTENSIONS } = require('./lint-queue.cjs');
   const groups = new Map();
   for (const file of Array.isArray(files) ? files.filter(Boolean) : []) {
     const component = componentForFile(file, projectRoot);
     if (!component) continue;
+    // A file the component owns but its linter cannot read (ios `.m`/`.h`) is not linted.
+    if (!(LINTABLE_EXTENSIONS[component.platform] || []).includes(path.extname(file).toLowerCase())) continue;
     if (!groups.has(component.id)) groups.set(component.id, { component, files: [] });
     groups.get(component.id).files.push(file);
   }

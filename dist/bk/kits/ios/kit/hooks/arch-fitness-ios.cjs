@@ -25,6 +25,7 @@ const libDir = path.join(__dirname, 'lib');
 const { loadHarnessPolicy, trackViolation, resolveMetricPath } = require(path.join(libDir, 'harness-policy-loader.cjs'));
 const { runRules, formatViolations } = require(path.join(libDir, 'arch-rule-runner.cjs'));
 const { IOS_RULES } = require(path.join(libDir, 'arch-rules-ios.cjs'));
+const { fileBelongsToPlatform } = require(path.join(libDir, 'component-resolver.cjs'));
 
 const HOOK_NAME = 'arch-fitness-ios';
 
@@ -88,6 +89,14 @@ async function main() {
   const policy = loadHarnessPolicy();
   const platformConfig = policy.arch_fitness && policy.arch_fitness.ios;
   if (!platformConfig || !platformConfig.enabled) process.exit(0);
+
+  // mobile_native composite: only files of the ios component (root prefix + extension); a single kit
+  // keeps the extension gate above (component-resolver.fileBelongsToPlatform is fail-open).
+  {
+    const root = policy.__projectRoot;
+    const abs = path.isAbsolute(filePath) || !root ? filePath : path.join(root, filePath);
+    if (!fileBelongsToPlatform(abs, root, 'ios')) process.exit(0);
+  }
 
   // Check exclude paths
   const excludePaths = platformConfig.exclude_paths || [];

@@ -1,3 +1,15 @@
+---
+paths:
+  - "**/*.kt"
+  - "**/*.kts"
+  - "**/*.java"
+  - "**/*.gradle"
+  - "**/AndroidManifest.xml"
+  - "**/res/**/*.xml"
+---
+
+<!-- Scoped to Kotlin/Java sources + Gradle/manifest/resource files: loads when one is Read, so the resident set stays small and the mobile_native kit does not carry both stacks. See docs/kit-dev/add-rule.md. -->
+
 # Android Platform Rules
 
 ## Language & Conventions

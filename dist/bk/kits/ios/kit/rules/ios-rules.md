@@ -1,3 +1,18 @@
+---
+paths:
+  - "**/*.swift"
+  - "**/*.m"
+  - "**/*.h"
+  - "**/*.xib"
+  - "**/*.storyboard"
+  - "**/Package.swift"
+  - "**/*.xcconfig"
+  - "**/project.yml"
+  - "**/Info.plist"
+---
+
+<!-- Scoped to Swift/Obj-C sources + Xcode project files: loads when one is Read, so the resident set stays small and the mobile_native kit does not carry both stacks. See docs/kit-dev/add-rule.md. -->
+
 # iOS Platform Rules
 
 ## Language & Conventions

@@ -3,7 +3,7 @@
  * codex-review.mjs — Cross-model code review runner powered by the OpenAI Codex CLI.
  *
  * Usage:
- *   node codex-review.mjs [--feature <name>] [--platform <ios|android|flutter|python|web|fullstack>] [--model <id>] [--files <f1,f2>]
+ *   node codex-review.mjs [--feature <name>] [--platform <ios|android|flutter|mobile_native|python|web|fullstack>] [--model <id>] [--files <f1,f2>]
  *
  * Invokes (prompt on stdin):
  *   codex exec --sandbox read-only --skip-git-repo-check --json [-m <id>]

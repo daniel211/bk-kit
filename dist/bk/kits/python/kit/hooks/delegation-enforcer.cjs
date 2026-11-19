@@ -123,7 +123,7 @@ try {
   async function main() {
     const timer = createHookTimer('delegation-enforcer');
     try {
-      const { isHookEnabled, readWorkflowState, readPlatformContext } = require('./lib/bk-config-utils.cjs');
+      const { isHookEnabled, readWorkflowState, readPlatformContext, getOutputPath } = require('./lib/bk-config-utils.cjs');
 
       if (!isHookEnabled('delegation-enforcer')) {
         timer.end({ status: 'skipped', exit: 0 });
@@ -197,8 +197,10 @@ try {
       ]);
       if (OUTPUT_AGENTS.has(agentType) && feature) {
         const outputMap = {
-          'bk-unit-test-agent': `unit-test-${platform || 'unknown'}-${feature}.md`,
-          'bk-device-test-agent': `device-test-${platform || 'unknown'}-${feature}.md`,
+          // Composite kit: `unit-test-<kit>-{component}-<feature>.md`, a template the agent fills
+          // with its component (getOutputPath) — a kit-only name would let ios clobber android.
+          'bk-unit-test-agent': path.basename(getOutputPath('unit-test-agent', feature, platform === 'unknown' ? null : platform)),
+          'bk-device-test-agent': path.basename(getOutputPath('device-test-agent', feature, platform === 'unknown' ? null : platform)),
           'bk-code-reviewer': `code-review-${feature}.md`,
           // Distinct path so dual-engine review keeps both models' reports.
           'bk-gemini-reviewer': `code-review-gemini-${feature}.md`,
@@ -346,9 +348,9 @@ try {
           const root = typeof platformCtx.root === 'string' ? platformCtx.root.replace(/^\.\/|\/+$/g, '') : '';
           if (cmds) contextParts.push(root && root !== '.' ? `[CMD] (in ${root}/) ${cmds}` : `[CMD] ${cmds}`);
         }
-        // Composite kit (fullstack): no top-level commands — one [CMD] line per component, run
-        // with cwd = its root. Dev agents: bk-python-developer owns the python component,
-        // bk-web-developer the web one (both are already in PLATFORM_AGENTS).
+        // Composite kit (fullstack, mobile_native): no top-level commands — one [CMD] line per present
+        // component, run with cwd = its root. Dev agents: bk-<component platform>-developer owns
+        // that component (python/web, ios/android — all already in PLATFORM_AGENTS).
         if (Array.isArray(platformCtx.components)) {
           for (const c of platformCtx.components) {
             if (!c || c.present === false || !c.commands || typeof c.commands !== 'object') continue;

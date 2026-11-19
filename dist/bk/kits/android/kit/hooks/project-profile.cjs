@@ -40,8 +40,9 @@ try {
       // Detect platform. Filesystem signals are authoritative; doc keywords are only a
       // fallback, and this order is the one core-rules.md and CLAUDE.md.tmpl already
       // document (pubspec.yaml -> flutter, xcodeproj -> ios, ios/+android/ -> monorepo,
-      // build.gradle -> android), then fullstack, python and web, the kit-resolver order.
-      // platform: 'flutter'|'ios'|'android'|'monorepo'|'fullstack'|'python'|'web'|'unknown'
+      // build.gradle -> android), then fullstack, python and web, the kit-resolver order; ios AND
+      // android markers (root or a first-level subdir) are the mobile_native composite, before ios.
+      // platform: 'flutter'|'mobile_native'|'ios'|'android'|'monorepo'|'fullstack'|'python'|'web'|'unknown'
       //
       // Keyword order alone misread EVERY Flutter repo as ios: a Flutter overview
       // legitimately names "iOS Keychain" and carries an `ios/` build-target row, and the
@@ -72,6 +73,10 @@ try {
       let platform = 'unknown';
       if (hasEntry('pubspec.yaml')) {
         platform = 'flutter';
+      } else if (detector.detectMobileComponents(root)) {
+        // native iOS AND Android markers, each at the root or a first-level subdir: the mobile_native
+        // composite kit (kit-resolver order: flutter > mobile_native > ios > android).
+        platform = 'mobile_native';
       } else if (dirHasEntry('ios', XCODE_PROJECT) || dirHasEntry('.', XCODE_PROJECT)) {
         // Both ios/ and android/ present without a pubspec.yaml is the documented
         // `monorepo` value, not a new one.

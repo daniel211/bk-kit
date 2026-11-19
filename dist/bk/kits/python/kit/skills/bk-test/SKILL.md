@@ -78,8 +78,8 @@ If failures exist: suggest `/bk-debug` for bugs or `/bk-code` for missing implem
 ## Output
 
 - `bk/dev/shared/reports/test-strategy-{feature}.json`
-- `bk/dev/shared/reports/unit-test-{platform}-{feature}.json`
-- `bk/dev/shared/reports/device-test-{platform}-{feature}.json` (optional)
+- `bk/dev/shared/reports/unit-test-{platform}-{feature}.md`
+- `bk/dev/shared/reports/device-test-{platform}-{feature}.md` (optional)
 
 ## Constraints
 

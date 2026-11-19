@@ -31,7 +31,7 @@ Agent A WRITES file → Conductor READS file → Conductor dispatches Agent B wi
 | bk-code-reviewer | bk/dev/shared/reports/code-review-{feature}.md |
 | bk-gemini-reviewer | bk/dev/shared/reports/code-review-gemini-{feature}.md |
 | bk-codex-reviewer | bk/dev/shared/reports/code-review-codex-{feature}.md |
-| bk-unit-test-agent | bk/dev/shared/reports/unit-test-{platform}-{feature}.md |
+| bk-unit-test-agent | bk/dev/shared/reports/unit-test-{platform}-{feature}.md (composite: {platform} = kit-component) |
 | bk-debugger | bk/dev/shared/reports/debug-analysis-{feature}.json |
 | bk-git-manager | Git commit (no file output) |
 | bk-project-manager | plan.md + phase/sub-task files (in-place checkbox updates) |

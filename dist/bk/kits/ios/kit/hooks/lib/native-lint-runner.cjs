@@ -115,6 +115,17 @@ function writeCache(platform, result) {
 }
 
 /**
+ * Cache key: the platform, or `<platform>:<root relative to the project>` for a tool detected in a
+ * component root below the project (mobile_native: android/gradlew) — the plain key stays what the
+ * bk-health panel reads.
+ */
+function cacheKey(platform, root) {
+  if (!root) return platform;
+  const rel = path.relative(projectRoot(), root).split(path.sep).join('/');
+  return rel && rel !== '.' ? `${platform}:${rel}` : platform;
+}
+
+/**
  * Check if cached entry for platform is still fresh (within TTL).
  */
 function getCached(platform) {
@@ -132,9 +143,12 @@ function getCached(platform) {
  * Detect whether native lint tool is available for a given platform.
  *
  * @param {'ios'|'android'|'flutter'} platform
+ * @param {{ root?: string }} [opts] — root: the component dir the tool runs in (default the
+ *   project root); only android looks there (its gradlew)
  * @returns {{ name: string, available: boolean, version?: string, path?: string, reason?: string }}
  */
-function detectTool(platform) {
+function detectTool(platform, opts = {}) {
+  const root = opts && opts.root ? opts.root : undefined;
   // Force unavailable (for fallback tests)
   if (process.env.BK_NATIVE_LINT_FORCE_UNAVAILABLE === '1') {
     return { available: false, reason: 'BK_NATIVE_LINT_FORCE_UNAVAILABLE=1' };
@@ -152,19 +166,20 @@ function detectTool(platform) {
   }
 
   // Check cache
-  const cached = getCached(platform);
+  const key = cacheKey(platform, root);
+  const cached = getCached(key);
   if (cached !== null) return cached;
 
   let result;
   switch (platform) {
     case 'ios':    result = detectSwiftlint();   break;
-    case 'android': result = detectDetekt();     break;
+    case 'android': result = detectDetekt(root); break;
     case 'flutter': result = detectDart();       break;
     default:
       result = { available: false, reason: `Unknown platform: ${platform}` };
   }
 
-  writeCache(platform, result);
+  writeCache(key, result);
   return result;
 }
 
@@ -182,10 +197,11 @@ function detectSwiftlint() {
   }
 }
 
-function detectDetekt() {
+function detectDetekt(componentRoot) {
   try {
-    // Check for local gradlew with detekt task. We look for a gradlew in cwd or project root.
-    const root = projectRoot();
+    // Check for local gradlew with detekt task: in the component root (mobile_native: android/), else
+    // the project root.
+    const root = componentRoot || projectRoot();
     const gradlew = path.join(root, 'gradlew');
     if (!fs.existsSync(gradlew)) {
       return { available: false, reason: 'gradlew not found — detekt unavailable' };
@@ -220,7 +236,8 @@ function detectDart() {
  *
  * @param {'ios'|'android'|'flutter'} platform
  * @param {string|string[]} targetPath
- * @param {{ timeoutMs?: number, policy?: object }} [opts]
+ * @param {{ timeoutMs?: number, policy?: object, cwd?: string }} [opts] — cwd: the component root
+ *   the tool runs in (config lookup, gradlew, detekt report); default the project root
  * @returns {Promise<{ exitCode: number, findings: object[], rawOutput: string, durationMs: number, truncated: boolean }>}
  */
 async function runTool(platform, targetPath, opts = {}) {
@@ -237,7 +254,7 @@ async function runTool(platform, targetPath, opts = {}) {
     // P1-6: Even in mock mode, fall back to XML report file for android (detekt)
     // when stdout produces no findings — mirrors real-runtime behavior.
     if (platform === 'android' && findings.length === 0) {
-      const xmlReport = readDetektXmlReport();
+      const xmlReport = readDetektXmlReport(opts.cwd);
       if (xmlReport) findings = parseOutput('android', xmlReport);
     }
     return { exitCode, findings, rawOutput, durationMs: 0, truncated: false };
@@ -253,7 +270,8 @@ async function runTool(platform, targetPath, opts = {}) {
     const { args, cmd } = buildCommand(platform, targetPath, opts);
     logMockCommand(platform, targetPath, opts);
     try {
-      child = cp.execFile(cmd, args, { maxBuffer: MAX_OUTPUT_CHARS }, (err, stdout, stderr) => {
+      const execOpts = opts.cwd ? { maxBuffer: MAX_OUTPUT_CHARS, cwd: opts.cwd } : { maxBuffer: MAX_OUTPUT_CHARS };
+      child = cp.execFile(cmd, args, execOpts, (err, stdout, stderr) => {
         rawOutput = (stdout || '') + (stderr || '');
         exitCode = err ? (err.code || 1) : 0;
         resolve();
@@ -284,7 +302,7 @@ async function runTool(platform, targetPath, opts = {}) {
   // not stdout — stdout is gradle build progress. If stdout parse yielded zero,
   // fall back to reading the report file directly.
   if (platform === 'android' && findings.length === 0) {
-    const xmlReport = readDetektXmlReport();
+    const xmlReport = readDetektXmlReport(opts.cwd);
     if (xmlReport) {
       findings = parseOutput('android', xmlReport);
     }
@@ -298,13 +316,13 @@ async function runTool(platform, targetPath, opts = {}) {
  * Mock-friendly via BK_NATIVE_LINT_MOCK_DETEKT_XML_PATH env var.
  * @returns {string|null} XML content or null if not found
  */
-function readDetektXmlReport() {
+function readDetektXmlReport(componentRoot) {
   // Mock override (for tests)
   const mockPath = process.env.BK_NATIVE_LINT_MOCK_DETEKT_XML_PATH;
   if (mockPath && fs.existsSync(mockPath)) {
     try { return fs.readFileSync(mockPath, 'utf8'); } catch { return null; }
   }
-  const root = projectRoot();
+  const root = componentRoot || projectRoot();
   // Common detekt output paths (root project, app module, multi-module convention)
   const candidates = [
     path.join(root, 'build', 'reports', 'detekt', 'detekt.xml'),
@@ -358,8 +376,8 @@ function buildCommand(platform, targetPath, opts = {}) {
     case 'ios': {
       const configPath = (policy.ios && policy.ios.config_path) || '.swiftlint.yml';
       const args = ['lint', '--quiet', '--reporter', 'json'];
-      // Add config if it exists
-      const root = projectRoot();
+      // Add config if it exists (in the component root the tool runs in — opts.cwd)
+      const root = opts.cwd || projectRoot();
       if (fs.existsSync(path.join(root, configPath))) {
         args.push('--config', configPath);
       }
@@ -368,7 +386,7 @@ function buildCommand(platform, targetPath, opts = {}) {
       return { cmd: 'swiftlint', args };
     }
     case 'android': {
-      const root = projectRoot();
+      const root = opts.cwd || projectRoot();
       const gradlew = path.join(root, 'gradlew');
       // detekt's --input is a comma-separated list, not a repeatable flag.
       return { cmd: gradlew, args: ['detekt', '--format', 'xml', '--input', targets.join(',')] };

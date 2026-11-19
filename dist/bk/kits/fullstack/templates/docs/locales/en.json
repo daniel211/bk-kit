@@ -130,6 +130,7 @@
     "Flutter — Widget + BLoC from Spec": "Feature spec → /bk-code → Dart models, BLoC/Cubit with states, Widget tree with BlocBuilder. Includes unit + widget tests.",
     "Python — FastAPI Endpoint from Spec": "Feature spec → /bk-code → Pydantic schemas, FastAPI router with dependency-injected service, SQLAlchemy repository + Alembic migration. pytest tests; ruff + mypy clean.",
     "Web — React Page from Design": "Figma screen → /bk-spec --design → /bk-code → typed React components (Next.js or Vite), data fetching with loading/error states. Vitest/Jest unit tests + a Playwright flow.",
+    "Mobile Native — One Feature on iOS and Android": "Spec touching both apps → /bk-plan splits it per component (backend contract first if it lives in the repo, then ios/ and android/ in parallel) → bk-ios-developer and bk-android-developer implement it against the same contract with the same errors, validation and analytics events. Each component linted and built in its own root; bk-device-test-agent runs the simulator and the emulator.",
     "Fullstack — API Change Across Backend and Frontend": "Spec touching both stacks → /bk-plan splits it per component (backend/ first, then frontend/) → bk-python-developer changes the endpoint and OpenAPI schema, bk-web-developer regenerates the typed client and updates the page. Each component linted and tested in its own root; one Playwright flow across both."
   }
 }

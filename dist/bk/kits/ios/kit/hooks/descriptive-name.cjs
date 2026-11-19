@@ -120,8 +120,8 @@ try {
       let platform = (PLATFORM && !PLATFORM.startsWith('{{')) ? PLATFORM : 'unknown';
       let namingConvention = NAMING_CONVENTION;
 
-      // A composite kit (fullstack) has no naming rule of its own: the file's component decides
-      // (python rules for backend .py, web rules for frontend .ts/.tsx). No component → skip.
+      // A composite kit (fullstack, mobile_native) has no naming rule of its own: the file's component decides
+      // (python rules for backend .py, web for frontend .ts/.tsx, ios for .swift, android for .kt). No component → skip.
       const resolver = require('./lib/component-resolver.cjs');
       if (resolver.isComposite(platform)) {
         const { resolveProjectRoot } = require('./lib/resolve-project-root.cjs');

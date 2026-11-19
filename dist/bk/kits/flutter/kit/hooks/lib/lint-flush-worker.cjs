@@ -29,7 +29,7 @@ const { takeQueue } = require('./lint-queue.cjs');
 const {
   buildBatchCommands, buildComponentBatches, baseLintCommand, runLintCommand
 } = require('./lint-batch-runner.cjs');
-const { isComposite, readComponents } = require('./component-resolver.cjs');
+const { isComposite, readComponents, componentForFile, componentCwd } = require('./component-resolver.cjs');
 const { firstTime } = require('./advisory-once.cjs');
 const { takeNativeQueue, runNativeLintBatch } = require('./native-lint-deferred.cjs');
 const { appendFinding } = require('./lint-findings-store.cjs');
@@ -78,7 +78,7 @@ function runBatch(cfg) {
   const missing = [];
 
   // Every kit with a readable context lints per component: own command, cwd = component root.
-  // A composite kit (fullstack) has several; a single kit one, rooted at its `root` (a uv
+  // A composite kit (fullstack, mobile_native) has several; a single kit one, rooted at its `root` (a uv
   // backend/ → cwd backend/). No context → the build-time command at the project root.
   const composite = isComposite(cfg.platform);
   if (composite || readComponents(cfg.projectRoot)) {
@@ -177,20 +177,25 @@ async function runNative(cfg) {
     nativeCfg = (require('./harness-policy-loader.cjs').loadHarnessPolicy() || {}).native_lint || {};
   } catch { /* fail-open: defaults are fine */ }
 
-  // Group by the platform each entry recorded — no re-detection from the path.
-  const byPlatform = new Map();
+  // Group by the platform each entry recorded — no re-detection of the platform from the path —
+  // and, in a composite kit (mobile_native), by the component root that owns the file: each group runs
+  // with cwd = that root (android/ holds its own gradlew). Single kits: one group per platform.
+  const groups = new Map();
   for (const entry of entries) {
     const platform = entry && entry.platform;
     if (!platform) continue;
-    if (!byPlatform.has(platform)) byPlatform.set(platform, []);
-    byPlatform.get(platform).push(entry.file);
+    const owner = componentForFile(entry.file, cfg.projectRoot);
+    const cwd = owner && owner.platform === platform && owner.root !== '.' ? componentCwd(owner, cfg.projectRoot) : null;
+    const key = `${platform}|${cwd || ''}`;
+    if (!groups.has(key)) groups.set(key, { platform, cwd, files: [] });
+    groups.get(key).files.push(entry.file);
   }
 
   let totalFiles = 0;
   let text = '';
   let reportedAny = false;
 
-  for (const [platform, queued] of byPlatform) {
+  for (const { platform, cwd, files: queued } of groups.values()) {
     const files = cfg.skipMissing ? existingOnly(queued) : queued;
     if (files.length === 0) continue;
     const result = await runNativeLintBatch({
@@ -198,7 +203,8 @@ async function runNative(cfg) {
       platform,
       files,
       policy: nativeCfg,
-      timeoutMs: cfg.timeoutMs
+      timeoutMs: cfg.timeoutMs,
+      ...(cwd ? { cwd } : {})
     });
     totalFiles += result.files;
 

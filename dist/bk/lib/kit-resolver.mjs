@@ -16,7 +16,7 @@ import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 /** The kits this CLI knows how to ship, in the order they are listed to the user. */
-export const KIT_NAMES = ['ios', 'android', 'flutter', 'python', 'web', 'fullstack'];
+export const KIT_NAMES = ['ios', 'android', 'flutter', 'mobile_native', 'python', 'web', 'fullstack'];
 
 /**
  * Which kit wins when a project carries several markers at once.
@@ -29,15 +29,19 @@ export const KIT_NAMES = ['ios', 'android', 'flutter', 'python', 'web', 'fullsta
  * The mobile kits come before python and web: a mobile repo often carries a requirements.txt (for
  * fastlane or tooling scripts) or a package.json, while a backend or web root rarely carries a
  * pubspec.yaml or an .xcodeproj. fullstack sits between them: python AND web markers, at the
- * root or in a first-level subdir (see detectFullstack), mean one repo with both stacks.
+ * root or in a first-level subdir (see detectComposites), mean one repo with both stacks.
+ *
+ * mobile_native (ios AND android markers, each at the root or in a first-level subdir) comes right after
+ * flutter: a Flutter repo also has ios/ + android/ host projects, so flutter must win first — and
+ * platformMarkerDirs never counts those host projects anyway (the Flutter guard).
  */
-const PREFERENCE = ['flutter', 'ios', 'android', 'fullstack', 'python', 'web'];
+const PREFERENCE = ['flutter', 'mobile_native', 'ios', 'android', 'fullstack', 'python', 'web'];
 
 /**
  * The single-platform kits a composite kit is made of (src/bk-manifest.json `components`).
  * Only what the resolver needs: which marker sets must both be present.
  */
-export const COMPOSITE_KITS = { fullstack: ['python', 'web'] };
+export const COMPOSITE_KITS = { mobile_native: ['ios', 'android'], fullstack: ['python', 'web'] };
 
 /**
  * First-level dirs never scanned for component markers: dependencies, venvs, and dirs that hold
@@ -52,14 +56,29 @@ export const SKIPPED_SUBDIRS = new Set([
 
 /**
  * Conventional component dir names, most likely first. Picks among several first-level subdirs
- * carrying the same platform's markers — for a fullstack component root (component-detector) and
- * for a single-stack kit whose markers sit only in a subdir (detectKitsFromMarkers). Only these
- * platforms are looked for in subdirs; mobile kits are detected at the root only.
+ * carrying the same platform's markers — for a composite component root (component-detector) and
+ * for a python / web kit whose markers sit only in a subdir (detectKitsFromMarkers). MUST equal
+ * CONVENTIONAL_DIRS in hooks/_base/lib/project-detector.cjs — a test asserts the two match.
+ *
+ * ios / android subdirs only count for the mobile_native composite: a single ios or android kit is still
+ * detected at the root only (SUBDIR_SINGLE_PLATFORMS).
  */
 export const CONVENTIONAL_DIRS = {
   python: ['backend', 'api', 'server'],
   web: ['frontend', 'web', 'client', 'app'],
+  ios: ['ios', 'iOS', 'apple'],
+  android: ['android', 'Android'],
 };
+
+/** Single-stack kits that may be detected from a first-level subdir when the root has nothing. */
+const SUBDIR_SINGLE_PLATFORMS = ['python', 'web'];
+
+/**
+ * Component platforms of the mobile_native composite. A dir holding a pubspec.yaml is a Flutter project,
+ * so its ios/ and android/ are Flutter host projects, never mobile_native components: a listing with a
+ * pubspec.yaml never counts for them, and a pubspec.yaml at the root disqualifies every subdir.
+ */
+const FLUTTER_GUARDED_PLATFORMS = new Set(['ios', 'android']);
 
 /**
  * The dir to use among a platform's marker hits (platformMarkerDirs order): a conventional
@@ -151,22 +170,50 @@ function listDir(dir, withFileTypes = false) {
  */
 export function platformMarkerDirs(targetDir, platform) {
   const found = [];
-  const rootHit = markerIn(platform, listDir(targetDir));
+  const guarded = FLUTTER_GUARDED_PLATFORMS.has(platform);
+  const rootEntries = listDir(targetDir);
+  // Flutter guard: a Flutter root's ios/ and android/ are its host projects.
+  if (guarded && rootEntries.includes('pubspec.yaml')) return found;
+  const rootHit = markerIn(platform, rootEntries);
   if (rootHit) found.push({ dir: '.', marker: rootHit });
   const subdirs = listDir(targetDir, true)
     .filter((e) => e.isDirectory() && !e.name.startsWith('.') && !SKIPPED_SUBDIRS.has(e.name))
     .map((e) => e.name)
     .sort();
   for (const name of subdirs) {
-    const hit = markerIn(platform, listDir(join(targetDir, name)));
+    const entries = listDir(join(targetDir, name));
+    if (guarded && entries.includes('pubspec.yaml')) continue;
+    const hit = markerIn(platform, entries);
     if (hit) found.push({ dir: name, marker: hit });
   }
   return found;
 }
 
 /**
+ * A React Native (or Expo) repo: the root package.json lists `react-native` in `dependencies` or
+ * `devDependencies` (Expo apps depend on it too). Its ios/ + android/ are the RN host projects,
+ * not two native apps, so such a repo is never `mobile_native` — detection falls through to what
+ * it gives without that composite (there is no RN kit). No package.json, or one that does not
+ * parse → not React Native. MUST agree with isReactNativeProject in
+ * hooks/_base/lib/project-detector.cjs and cli/bk-harness-ci/index.cjs — a test runs all three.
+ *
+ * @param {string} targetDir
+ * @returns {boolean}
+ */
+export function isReactNativeProject(targetDir) {
+  let pkg;
+  try { pkg = JSON.parse(readFileSync(join(targetDir, 'package.json'), 'utf8')); } catch { return false; }
+  if (!pkg || typeof pkg !== 'object') return false;
+  return ['dependencies', 'devDependencies'].some((key) => {
+    const deps = pkg[key];
+    return !!deps && typeof deps === 'object' && Object.prototype.hasOwnProperty.call(deps, 'react-native');
+  });
+}
+
+/**
  * A composite kit whose component platforms all have markers (root or first-level subdir).
- * The marker text names the first hit of each, e.g. `backend/manage.py + frontend/package.json`.
+ * The marker text names the dir each component would be rooted at (pickMarkerDir), e.g.
+ * `backend/manage.py + frontend/package.json`.
  *
  * @param {string} targetDir
  * @returns {Array<{platform: string, marker: string}>}
@@ -174,7 +221,9 @@ export function platformMarkerDirs(targetDir, platform) {
 function detectComposites(targetDir) {
   const found = [];
   for (const [kit, parts] of Object.entries(COMPOSITE_KITS)) {
-    const hits = parts.map((p) => platformMarkerDirs(targetDir, p)[0]);
+    // A React Native repo's ios/ + android/ are its host projects (isReactNativeProject).
+    if (kit === 'mobile_native' && isReactNativeProject(targetDir)) continue;
+    const hits = parts.map((p) => pickMarkerDir(p, platformMarkerDirs(targetDir, p)));
     if (hits.every(Boolean)) {
       found.push({ platform: kit, marker: hits.map((h) => (h.dir === '.' ? h.marker : `${h.dir}/${h.marker}`)).join(' + ') });
     }
@@ -223,7 +272,7 @@ export function recordedKit(targetDir) {
 
 /**
  * Platforms whose marker files sit in the target dir's own root, plus composite kits
- * (fullstack) whose component markers sit at the root or in first-level subdirs; when neither
+ * (mobile_native, fullstack) whose component markers sit at the root or in first-level subdirs; when neither
  * matched, python / web markers in a first-level subdir (detectSubdirSingles).
  *
  * A detected composite replaces its parts in the list: python and web are what fullstack is
@@ -269,7 +318,7 @@ export function detectKitsFromMarkers(targetDir, known = KIT_NAMES) {
  */
 function detectSubdirSingles(targetDir) {
   const found = [];
-  for (const platform of Object.keys(CONVENTIONAL_DIRS)) {
+  for (const platform of SUBDIR_SINGLE_PLATFORMS) {
     const pick = pickMarkerDir(platform, platformMarkerDirs(targetDir, platform).filter((h) => h.dir !== '.'));
     if (pick) found.push({ platform, marker: `${pick.dir}/${pick.marker}` });
   }
@@ -278,11 +327,12 @@ function detectSubdirSingles(targetDir) {
 
 /** The marker list as the failure message prints it. */
 function searchedMarkersText() {
-  const lines = markersByPreference().map((m) => `    ${m.platform.padEnd(9)} ${m.label}`);
+  const lines = markersByPreference().map((m) => `    ${m.platform.padEnd(13)} ${m.label}`);
   for (const [kit, parts] of Object.entries(COMPOSITE_KITS)) {
-    lines.push(`    ${kit.padEnd(9)} ${parts.join(' and ')} markers, at the root or in first-level subdirs`);
+    lines.push(`    ${kit.padEnd(13)} ${parts.join(' and ')} markers, at the root or in first-level subdirs`
+      + (kit === 'mobile_native' ? ' (not with react-native in package.json)' : ''));
   }
-  lines.push(`    ${Object.keys(CONVENTIONAL_DIRS).join(' / ')} markers in one first-level subdir when the root has none`
+  lines.push(`    ${SUBDIR_SINGLE_PLATFORMS.join(' / ')} markers in one first-level subdir when the root has none`
     + ` (backend/, frontend/, …; not ${['docs', 'scripts', 'tests'].join('/')}/ or dot-dirs)`);
   return lines.join('\n');
 }
