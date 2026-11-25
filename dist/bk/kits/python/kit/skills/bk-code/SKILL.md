@@ -31,7 +31,7 @@ loops). Terminal: commit (success) | escalated (fix-loop exceeded) | aborted.
 **Every transition writes BOTH state files** — `bk/dev/shared/.workflow-state.json`
 (`current_phase` + `workflow_type: "bk-code"`) and `{plan-dir}/.plan-state.json`.
 Phase changes: `node .claude/cli/bk-health/index.cjs --set-phase <phase>` (validated like an Edit, no Read
-needed); batch boundary: `--batch next`. `.plan-state.json` alone leaves `fsm-guard` inert: no transition validation, no phase-recurrence
+needed); batch boundary: `--batch next` (also resets the per-batch fix budgets). `.plan-state.json` alone leaves `fsm-guard` inert: no transition validation, no phase-recurrence
 ladder, nothing for `compact-recovery` to restore. Load: `references/workflow-state.md`
 
 ### Approval Gates
@@ -73,8 +73,8 @@ Load: `references/intent-detection.md` + `references/plan-consumption.md`
   missing. Code quality may be reduced. Consider running `/bk-bootstrap`." and continue
 - Detect platform from plan.md YAML `platforms`, load `platform-context.json`
 - Read `## Execution Batches` from plan.md → build the batch queue
-- **FSM:** write `.workflow-state.json` → `current_phase: "plan"` + `workflow_type: "bk-code"`,
-  `feature`, `plan_dir`, `platform`, `complexity_tier`, `total_batches`
+- **FSM:** `node .claude/cli/bk-health/index.cjs --start bk-code --feature <slug> --platform <p> --field total_batches=<N>
+  --field complexity_tier=<tier> --field review_mode=<mode>` (opens `plan`, new episode). Never write `.workflow-state.json` via Bash/python
 
 ### Code-Step-2: Hydrate Sub-Tasks
 Load: `references/plan-consumption.md`

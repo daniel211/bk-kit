@@ -2,7 +2,8 @@
  * native-lint-runner.cjs — Shared library for native linting tool integration.
  *
  * Exports:
- *   detectTool(platform)         → { name, available, version, path } | { available: false, reason }
+ *   detectTool(platform, {root}) → { name, available, version, path, runner? } | { available: false, reason }
+ *                                  (android: lib/detekt-config-detector.cjs — gradlew alone is not detekt)
  *   runTool(platform, target, opts) → { exitCode, findings, rawOutput, durationMs, truncated }
  *                                  target is one path or an array of paths (one batched run)
  *   buildCommand(platform, target, opts) → { cmd, args }
@@ -27,6 +28,8 @@ const fs   = require('fs');
 const path = require('path');
 const cp   = require('child_process');
 const { resolveProjectRoot } = require('./resolve-project-root.cjs');
+const { detectDetekt: detectDetektIn } = require('./detekt-config-detector.cjs');
+const { MISSING_TOOL_RE } = require('./lint-batch-runner.cjs');
 
 /**
  * The project root every path in this module resolves against.
@@ -44,6 +47,15 @@ function projectRoot() {
 
 const CACHE_FILE     = '.bk-metrics/native-tools-cache.json';
 const CACHE_TTL_MS   = 5 * 60 * 1000; // 5 minutes
+/**
+ * Detection-cache schema. An entry without this exact `v` is ignored and re-detected.
+ *
+ * Field review 2026-11-25: entries written before 2 say android detekt is available "via gradlew"
+ * for any tree with a gradlew — the very bug detection was fixed for. Honouring them until their
+ * TTL ran out would keep a ktlint-only project's lint silent; bump this whenever a detector's
+ * answer for the same tree changes.
+ */
+const CACHE_SCHEMA = 2;
 const DEFAULT_TIMEOUT_MS = 30000;
 const MAX_OUTPUT_CHARS   = 500000; // ~500k chars before truncation
 
@@ -109,7 +121,7 @@ function writeCache(platform, result) {
     const dir = path.dirname(cachePath);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     const cache = readCache();
-    cache[platform] = { result, ts: Date.now() };
+    cache[platform] = { result, ts: Date.now(), v: CACHE_SCHEMA };
     fs.writeFileSync(cachePath, JSON.stringify(cache, null, 2), 'utf8');
   } catch { /* fail-open */ }
 }
@@ -132,6 +144,8 @@ function getCached(platform) {
   const cache = readCache();
   const entry = cache[platform];
   if (!entry) return null;
+  // A pre-schema entry may carry the old any-gradlew-means-detekt answer — never trust it.
+  if (entry.v !== CACHE_SCHEMA) return null;
   const ttl = CACHE_TTL_MS;
   if (Date.now() - entry.ts > ttl) return null;
   return entry.result;
@@ -197,21 +211,12 @@ function detectSwiftlint() {
   }
 }
 
+/**
+ * detekt in the component root (mobile_native: android/), else the project root. A gradlew alone
+ * is not detekt: see lib/detekt-config-detector.cjs for the field evidence and what is checked.
+ */
 function detectDetekt(componentRoot) {
-  try {
-    // Check for local gradlew with detekt task: in the component root (mobile_native: android/), else
-    // the project root.
-    const root = componentRoot || projectRoot();
-    const gradlew = path.join(root, 'gradlew');
-    if (!fs.existsSync(gradlew)) {
-      return { available: false, reason: 'gradlew not found — detekt unavailable' };
-    }
-    // Check if detekt task exists (tasks --all output)
-    // This is expensive so we skip it here and rely on the TTL cache.
-    return { name: 'detekt', available: true, version: 'via gradlew', path: gradlew };
-  } catch {
-    return { available: false, reason: 'detekt detection failed' };
-  }
+  return detectDetektIn(componentRoot || projectRoot());
 }
 
 function detectDart() {
@@ -236,12 +241,19 @@ function detectDart() {
  *
  * @param {'ios'|'android'|'flutter'} platform
  * @param {string|string[]} targetPath
- * @param {{ timeoutMs?: number, policy?: object, cwd?: string }} [opts] — cwd: the component root
- *   the tool runs in (config lookup, gradlew, detekt report); default the project root
- * @returns {Promise<{ exitCode: number, findings: object[], rawOutput: string, durationMs: number, truncated: boolean }>}
+ * @param {{ timeoutMs?: number, policy?: object, cwd?: string, tool?: object }} [opts] — cwd: the
+ *   component root the tool runs in (config lookup, gradlew, detekt report); default the project
+ *   root. tool: a detectTool() result; android picks gradle vs standalone detekt from it and
+ *   detects it (cached) when absent.
+ * @returns {Promise<{ exitCode: number, findings: object[], rawOutput: string, durationMs: number,
+ *   truncated: boolean, toolFailed?: boolean, missingTool?: boolean, toolError?: string }>}
+ *   toolFailed: the run failed without producing a report (android) — NOT a clean pass.
  */
 async function runTool(platform, targetPath, opts = {}) {
   const timeoutMs = opts.timeoutMs || DEFAULT_TIMEOUT_MS;
+  if (platform === 'android' && !opts.tool) {
+    opts = { ...opts, tool: detectTool('android', opts.cwd ? { root: opts.cwd } : {}) };
+  }
 
   // Mock mode: return canned output
   const mockOutput = process.env.BK_NATIVE_LINT_MOCK_OUTPUT;
@@ -253,11 +265,12 @@ async function runTool(platform, targetPath, opts = {}) {
     let findings    = parseOutput(platform, rawOutput);
     // P1-6: Even in mock mode, fall back to XML report file for android (detekt)
     // when stdout produces no findings — mirrors real-runtime behavior.
+    let xmlReport = null;
     if (platform === 'android' && findings.length === 0) {
-      const xmlReport = readDetektXmlReport(opts.cwd);
+      xmlReport = readDetektXmlReport(opts.cwd);
       if (xmlReport) findings = parseOutput('android', xmlReport);
     }
-    return { exitCode, findings, rawOutput, durationMs: 0, truncated: false };
+    return withFailureFlags(platform, { exitCode, findings, rawOutput, durationMs: 0, truncated: false }, xmlReport);
   }
 
   const start = Date.now();
@@ -300,23 +313,62 @@ async function runTool(platform, targetPath, opts = {}) {
 
   // P1-6: Detekt via gradlew writes XML to build/reports/detekt/detekt.xml,
   // not stdout — stdout is gradle build progress. If stdout parse yielded zero,
-  // fall back to reading the report file directly.
+  // fall back to reading the report file directly. Only a report this run wrote counts: an
+  // older one left in build/ would replay stale findings and mask a failed run as a result.
+  let xmlReport = null;
   if (platform === 'android' && findings.length === 0) {
-    const xmlReport = readDetektXmlReport(opts.cwd);
+    xmlReport = readDetektXmlReport(opts.cwd, { since: start });
     if (xmlReport) {
       findings = parseOutput('android', xmlReport);
     }
   }
 
-  return { exitCode, findings, rawOutput, durationMs, truncated };
+  return withFailureFlags(platform, { exitCode, findings, rawOutput, durationMs, truncated }, xmlReport);
+}
+
+/**
+ * Lines of gradle / shell output that name why a detekt run failed, most specific first.
+ * "Task 'detekt' not found" is the X-Game-Pro case (ktlint-only project, no detekt plugin).
+ */
+const FAILURE_REASON_RES = [
+  /Task '[^']*' not found[^\n]*/,
+  /Unknown command-line option '[^']*'/,
+  MISSING_TOOL_RE,
+  /FAILURE: [^\n]*/
+];
+
+/**
+ * Field review 2026-11-25: on android a non-zero exit with nothing parseable and no XML report
+ * used to come back as `findings: []`, which every caller reads as a clean pass — so a detekt
+ * that never ran ("Task 'detekt' not found") was indistinguishable from clean code for the whole
+ * review. Flag it instead: `toolFailed` (callers record a yellow signal / advisory, never a block)
+ * and `missingTool` when the tool or task does not exist at all. Other platforms' linters exit
+ * non-zero only alongside their findings, so they are left as they were.
+ */
+function withFailureFlags(platform, result, xmlReport) {
+  if (platform !== 'android') return result;
+  const { exitCode, findings, rawOutput } = result;
+  if (exitCode === 0 || exitCode === 124 || findings.length > 0 || xmlReport) return result;
+  const raw = String(rawOutput || '');
+  let reason = '';
+  for (const re of FAILURE_REASON_RES) {
+    const m = raw.match(re);
+    if (m) { reason = m[0]; break; }
+  }
+  if (!reason) reason = raw.split('\n').map((l) => l.trim()).filter(Boolean).pop() || `exit ${exitCode}`;
+  const missingTool = exitCode === 127 || /Task '[^']*' not found/.test(raw) || MISSING_TOOL_RE.test(raw);
+  return { ...result, toolFailed: true, missingTool, toolError: reason.slice(0, 200) };
 }
 
 /**
  * P1-6 helper: read detekt XML report from common gradle output paths.
  * Mock-friendly via BK_NATIVE_LINT_MOCK_DETEKT_XML_PATH env var.
+ * @param {string} [componentRoot]
+ * @param {{ since?: number }} [opts] — since: ignore reports last written before this epoch ms
+ *   (1s slack for coarse filesystem mtimes)
  * @returns {string|null} XML content or null if not found
  */
-function readDetektXmlReport(componentRoot) {
+function readDetektXmlReport(componentRoot, opts = {}) {
   // Mock override (for tests)
   const mockPath = process.env.BK_NATIVE_LINT_MOCK_DETEKT_XML_PATH;
   if (mockPath && fs.existsSync(mockPath)) {
@@ -331,7 +383,9 @@ function readDetektXmlReport(componentRoot) {
   ];
   for (const p of candidates) {
     try {
-      if (fs.existsSync(p)) return fs.readFileSync(p, 'utf8');
+      if (!fs.existsSync(p)) continue;
+      if (opts.since && fs.statSync(p).mtimeMs < opts.since - 1000) continue;
+      return fs.readFileSync(p, 'utf8');
     } catch { /* continue */ }
   }
   return null;
@@ -366,7 +420,8 @@ function logMockCommand(platform, targetPath, opts) {
  *
  * @param {'ios'|'android'|'flutter'} platform
  * @param {string|string[]} targetPath — one path, or a batch of them in one run
- * @param {{ policy?: object }} [opts]
+ * @param {{ policy?: object, cwd?: string, tool?: object }} [opts] — tool: android's detectTool()
+ *   result; runner 'cli' builds the standalone detekt invocation, anything else the gradlew one
  * @returns {{ cmd: string, args: string[] }}
  */
 function buildCommand(platform, targetPath, opts = {}) {
@@ -387,6 +442,17 @@ function buildCommand(platform, targetPath, opts = {}) {
     }
     case 'android': {
       const root = opts.cwd || projectRoot();
+      const tool = opts.tool || {};
+      if (tool.runner === 'cli' && tool.path) {
+        // Standalone detekt (no Gradle plugin): its own CLI flags. stdout is console text, so the
+        // XML report goes to the first path readDetektXmlReport() checks.
+        const args = ['--input', targets.join(','),
+          '--report', `xml:${path.join(root, 'build', 'reports', 'detekt', 'detekt.xml')}`];
+        const config = ['detekt.yml', path.join('config', 'detekt', 'detekt.yml')]
+          .find((c) => fs.existsSync(path.join(root, c)));
+        if (config) args.push('--config', path.join(root, config));
+        return { cmd: tool.path, args };
+      }
       const gradlew = path.join(root, 'gradlew');
       // detekt's --input is a comma-separated list, not a repeatable flag.
       return { cmd: gradlew, args: ['detekt', '--format', 'xml', '--input', targets.join(',')] };

@@ -1,7 +1,9 @@
 'use strict';
 /**
  * set-phase.cjs — `bk-health --set-phase <phase> [--batch <N|next>]`: move the workflow without
- * the conductor reading and editing .workflow-state.json.
+ * the conductor reading and editing .workflow-state.json. `--batch` is the batch boundary: batch
+ * N+1, recurrence counts reset, batch N into completed_batches, and the per-batch fix budgets
+ * (fsm-phase-transition FIX_BUDGET_FIELDS) back to 0.
  *
  * Why a CLI: in X-Game-Pro (0.12.x, 6 conductor sessions) the conductor Read
  * bk/dev/shared/.workflow-state.json 47 times (~24k tokens), most of them only to change
@@ -153,8 +155,11 @@ function extraFields(opts, fresh) {
   return { ok: true, fields };
 }
 
-/** One-line description of what landed. */
-function describe(decision, fields, before, seeded) {
+/**
+ * One-line description of what landed.
+ * @param {string[]} [budgets] - fix budgets the batch boundary zeroed
+ */
+function describe(decision, fields, before, seeded, budgets = []) {
   const parts = [];
   if (decision.verdict === 'new_episode') {
     parts.push(`new episode ${decision.patch.workflow_episode}: ${decision.from || 'none'} → ${decision.phase}`);
@@ -171,10 +176,17 @@ function describe(decision, fields, before, seeded) {
     parts.push('batch seeded to 1 (total_batches ' + before.total_batches + ')');
   } else if (fields.batch !== undefined) {
     const closed = fields.completed_batches ? `, batch ${before.batch} recorded in completed_batches` : '';
-    parts.push(`batch ${before.batch === undefined ? 'none' : before.batch} → ${fields.batch}, recurrence counts reset${closed}`);
+    // Said whenever a budget was present, so the conductor sees the reset and edits nothing;
+    // only the budgets that were spent are spelled out.
+    const zeroed = budgets.filter((k) => fields[k] === 0);
+    const spent = zeroed.filter((k) => before[k] !== 0).map((k) => `${k} ${before[k]}→0`);
+    const fixes = zeroed.length > 0
+      ? ', fix budgets reset' + (spent.length > 0 ? ` (${spent.join(', ')})` : '') : '';
+    parts.push(`batch ${before.batch === undefined ? 'none' : before.batch} → ${fields.batch}, recurrence counts reset${fixes}${closed}`);
   }
-  const extras = Object.keys(fields)
-    .filter((k) => !['current_phase', 'batch', 'phase_recurrence_count', 'completed_batches'].includes(k));
+  const quiet = ['current_phase', 'batch', 'phase_recurrence_count', 'completed_batches',
+    ...budgets.filter((k) => fields[k] === 0)];
+  const extras = Object.keys(fields).filter((k) => !quiet.includes(k));
   if (extras.length > 0) parts.push(extras.map((k) => `${k}=${JSON.stringify(fields[k])}`).join(' '));
   return `[bk-health] ${parts.join('; ') || 'nothing to change'}`;
 }
@@ -217,6 +229,7 @@ function setPhase(opts = {}) {
   let fields = {};
   let before = {};
   let seeded = false;        // batch=1 auto-seeded by `--set-phase coding`
+  let budgetsReset = {};     // fix budgets zeroed by a batch boundary
 
   const written = cfg.writeWorkflowState((fresh) => {
     before = fresh || {};
@@ -235,6 +248,12 @@ function setPhase(opts = {}) {
       if (!b.ok) { early = b.message; return null; }
       fields.batch = b.batch;
       fields.phase_recurrence_count = {};
+      // The fix budgets are per batch ("max 2 cycles" per batch, bk-code step 3c): the new batch
+      // starts with its own. An explicit --inc / --field in the same call still wins.
+      budgetsReset = fsm.fixBudgetResetPatch(fresh);
+      for (const k of Object.keys(budgetsReset)) {
+        if (fields[k] === undefined) fields[k] = 0;
+      }
       // The batch being left is complete — that is what the boundary write asserts. Record it:
       // subagent-iteration-cap's progress signature reads `completed_batches.length`, and until
       // the 2026-10-30 field review nothing in the kit wrote the field, so that part of the
@@ -326,7 +345,10 @@ function setPhase(opts = {}) {
       } catch { /* telemetry never changes the verdict */ }
     }
   }
-  return { success: true, exitCode: 0, verdict: decision.verdict, message: describe(decision, fields, before, seeded), advisory };
+  return {
+    success: true, exitCode: 0, verdict: decision.verdict,
+    message: describe(decision, fields, before, seeded, Object.keys(budgetsReset)), advisory
+  };
 }
 
 module.exports = { setPhase, resolveBatch, parseField };

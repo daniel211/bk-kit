@@ -13,8 +13,11 @@
  *   node .claude/cli/bk-health/index.cjs --set-phase <phase> [--batch <N|next>] [--inc <field>]...
  *                                        [--field key=value]... [--session <id>]
  *   node .claude/cli/bk-health/index.cjs --batch <N|next>
+ *   node .claude/cli/bk-health/index.cjs --start <bk-plan|bk-code|bk-debug|bk-refactor> --feature <slug>
+ *                                        [--plan-dir <dir>] [--platform <p>] [--field key=value]... [--force]
  *   (`--set-phase coding` auto-seeds batch=1 when batch is unset and total_batches > 0;
- *    `--field batch=…` is refused — use `--set-phase coding --batch 1` or `--batch 1`)
+ *    `--field batch=…` is refused — use `--set-phase coding --batch 1` or `--batch 1`;
+ *    `--batch` also zeroes the per-batch fix budgets; `--start` opens a workflow, lib/start-workflow.cjs)
  *
  * Duration format: Nh | Nd | Nm (e.g. 24h, 7d, 30m)
  */
@@ -30,6 +33,7 @@ const { buildBehaviourPanel, renderBehaviourPanel } = require('./lib/behaviour.c
 const { verifySensors, renderVerifySensors } = require('./lib/verify-sensors.cjs');
 const { drillDown } = require('./lib/subagent-drill-down.cjs');
 const { setPhase } = require('./lib/set-phase.cjs');
+const { startWorkflow } = require('./lib/start-workflow.cjs');
 
 // ─── Arg parsing ──────────────────────────────────────────────────────────
 
@@ -75,6 +79,9 @@ function parseArgs(argv) {
     else if (a === '--apply') flags.apply = true;
     else if (a === '--dry-run') flags.dryRun = true;
     else if (a === '--set-phase' && args[i + 1]) { flags.setPhase = args[++i]; }
+    else if (a === '--start' && args[i + 1]) { flags.start = args[++i]; }
+    else if (a === '--plan-dir' && args[i + 1]) { flags.planDir = args[++i]; }
+    else if (a === '--platform' && args[i + 1]) { flags.platform = args[++i]; }
     else if (a === '--batch' && args[i + 1]) { flags.batch = args[++i]; }
     else if (a === '--inc' && args[i + 1]) { (flags.inc = flags.inc || []).push(args[++i]); }
     else if (a === '--field' && args[i + 1]) { (flags.fields = flags.fields || []).push(args[++i]); }
@@ -82,7 +89,7 @@ function parseArgs(argv) {
 
   // Default: --dashboard if no subcommand
   if (!flags.dashboard && !flags.timeline && !flags.ashby && !flags.resume && !flags.resetCounts && !flags.steer && !flags.mutationCheck && !flags.verifySensors && !flags.subagentDrillDown &&
-      !flags.setPhase && flags.batch === undefined) {
+      !flags.setPhase && flags.batch === undefined && !flags.start) {
     flags.dashboard = true;
   }
 
@@ -94,6 +101,29 @@ function parseArgs(argv) {
 async function main() {
   const flags = parseArgs(process.argv);
   const projectRoot = resolveCliProjectRoot();
+
+  // ── Open a workflow (lib/start-workflow.cjs) ───────────────────────────
+  // The opening write of /bk-plan, /bk-code, /bk-debug, /bk-refactor: one line out, like --set-phase.
+  if (flags.start) {
+    const result = (flags.setPhase || flags.batch !== undefined)
+      ? { success: false, exitCode: 1,
+          message: '[bk-health] --start opens the workflow at its opening phase; run --set-phase / --batch as a separate call.' }
+      : startWorkflow({
+        projectRoot,
+        workflow: flags.start,
+        feature: flags.feature,
+        planDir: flags.planDir || null,
+        platform: flags.platform || null,
+        fields: flags.fields || [],
+        force: flags.force,
+        sessionId: flags.session || null
+      });
+    if (flags.json) process.stdout.write(JSON.stringify(result) + '\n');
+    else if (result.success) process.stdout.write(result.message + '\n');
+    else process.stderr.write(result.message + '\n');
+    process.exit(result.exitCode);
+    return;
+  }
 
   // ── Set phase / advance batch (lib/set-phase.cjs) ─────────────────────
   // Before everything else: it is the one subcommand the conductor runs on every phase change,

@@ -6,8 +6,8 @@
 // sliding window (`window_minutes`) rather than for the lifetime of the project. Concurrent
 // fan-out of the same agent for the same feature (`batch_coalesce_ms`) is one iteration.
 // Iterations are further scoped to a progress signature (`progress_scoped`), so only tries
-// that committed nothing, completed no batch and stayed on the same sub-task accumulate
-// against the cap.
+// that committed nothing, completed no batch and stayed on the same sub-task (or the same set
+// of sub-tasks) accumulate against the cap.
 // Orchestration agents (`exempt_agents`) are not capped at all — they are dispatched once
 // per commit or per doc, which a loop cap has nothing useful to say about.
 //
@@ -125,7 +125,8 @@ try {
    * still catch — including it would hand such a loop a fresh budget every lap.
    *
    * The unit of work is the fourth field, and it is appended only when the dispatch names
-   * one (see `extractSubTaskId`). Batch-level state cannot see progress INSIDE a batch: bk-code
+   * one — a sub-task, or a small set of them worked in one dispatch (`st:34+39`; see
+   * `extractSubTaskId`). Batch-level state cannot see progress INSIDE a batch: bk-code
    * dispatches the developer once per sub-task, sequentially, and commits nothing until the
    * batch ends. In the iOS field repo (X-Game-Pro, 0.12.1, /bk-code crypto-session-protocol)
    * batch 2 ran bk-ios-developer for sub-tasks 07, 08, 09 and 10 — each finished cleanly and
@@ -143,7 +144,7 @@ try {
    * direction, so an upgrade never blocks anyone.
    *
    * @param {object} state
-   * @param {string|null} [subTaskId]  from `extractSubTaskId`; null/absent = batch-level
+   * @param {string|null} [subTaskId]  from `extractSubTaskId` (`11`, `34+39`); null/absent = batch-level
    * @returns {string}
    */
   function progressSignature(state, subTaskId = null) {
@@ -156,88 +157,185 @@ try {
   }
 
   /**
-   * Which sub-task this dispatch works on, if it names exactly one.
+   * The most sub-tasks one dispatch may name and still get a budget of its own.
    *
-   * Precision matters more than recall here: a spurious id hands a real loop a fresh budget,
-   * while a missed id only falls back to the batch-level signature the cap already had. So:
+   * A plan batch is typically 3-6 sub-tasks. A dispatch that names more than this is working
+   * through most or all of a batch, and the batch-level signature already describes that unit;
+   * keying it by a long id list would only let a batch-wide retry whose list is phrased a
+   * little differently ("31-38" then "31-37") escape into a fresh budget. Above the limit the
+   * dispatch is batch-level — it does NOT fall through to a later source, which could pick a
+   * single id out of the description and file a batch-wide dispatch under one sub-task.
+   */
+  const MAX_SUB_TASKS_PER_KEY = 6;
+
+  /** `extractMentions` result for "names too many sub-tasks to be a unit": stop, go batch-level. */
+  const TOO_MANY = Symbol('too-many-sub-tasks');
+
+  /**
+   * Which unit of work this dispatch is: one sub-task, or a small set worked in one dispatch.
    *
-   * 1. The prompt's `Sub-task file:` line (also `Plan sub-task file:`), which every bk-code
-   *    per-sub-task dispatch template carries — implement, parallel implement and the
-   *    debug-driven fix. Singular only: `Sub-task files:` is the plural list a reviewer or
-   *    test agent gets for a whole batch, and it identifies no single unit.
-   * 2. Otherwise the prompt's FIRST `Task:` line, when it names exactly one `sub-task NN`
-   *    ("Task: Implement sub-task 15 (AppCoordinator route + hand-off) of plan …"). Conductors
-   *    do not always copy the template: in X-Game-Pro (2026-10-28, meeting-point-picker
-   *    batch 5) the dispatches for sub-tasks 15, 16 and 17 carried no `Sub-task file:` line and
-   *    descriptions like "[opus] Coordinator route wiring", so all three shared the batch-level
-   *    signature and a fix for 17 was denied as "iteration 4" — the user had to be asked, and
-   *    the conductor routed the fix to bk-unit-test-agent to get around the cap. Only the Task
-   *    line's FIRST sentence is read (see `firstSentence`): the field lines go on to list the
-   *    specs and impl reports to read, which name other sub-tasks. A first sentence naming
-   *    none, or several, falls through to the next rule rather than deciding "no unit".
-   * 3. Otherwise exactly one distinct plan sub-task FILE path, `sub-task-NN-<slug>.md` (the
-   *    same dispatches said "Read the full spec bk/dev/…/sub-task-15-coordinator-route-wiring.md").
-   *    Only the full file name counts: dependency notes name sub-tasks by number ("depends on
-   *    13", "see sub-task-05"), not by spec path, and two different paths mean no single unit.
-   *    This is the loosest rule, and it is still safe in the direction that matters: an id read
-   *    off a referenced-but-not-worked-on spec is the SAME id on every identical retry, so a
-   *    looping dispatch keeps one signature and still climbs to the cap.
-   * 4. Otherwise the description, when it mentions exactly one `sub-task NN` ("Implement
-   *    sub-task 11: envelope receiver"). The description is one line the conductor writes
-   *    about this dispatch; the rest of the prompt body is not scanned for bare mentions,
-   *    because it routinely lists other sub-tasks ("Dependency note: 03, 04 done").
+   * Returns the sorted, de-duplicated ids joined with `+` — `"11"`, `"34+39"`, `"31+32+33"` —
+   * or null for a batch-level dispatch. A single id keeps the bare form earlier versions wrote,
+   * so `st:11` rows from before this change still match. Keying by the SET is what keeps the
+   * anti-loop guarantee: retrying "34 then 39" is the same key every time and still climbs to
+   * the cap, while moving on to "54 and 55" is a different unit with its own budget. Order does
+   * not matter ("55 rồi 54" = "54 and 55"); ids are integers, so `07` and `7` agree.
    *
-   * Two different ids from either source mean the dispatch spans several units — none is
-   * returned. Ids are normalised to their integer value so `07` and `7` agree.
+   * Field regression (X-Game-Pro, kit 0.19.0, 2026-11-25, Android M2 batch B4): the conductor
+   * dispatched bk-android-developer for sub-tasks 31-33, then 34+39 (twice — one real retry
+   * after agent_stuck), then 54+55, all within the hour with nothing committed. The prompts
+   * were Vietnamese, their `Task:` lines opened with a sentence naming no sub-task ("Tiếp tục
+   * Batch B4 (Live map) trên nhánh …"), and every one named several sub-tasks, which the old
+   * single-id rule read as "no unit". All four shared the batch signature and 54+55 was denied
+   * as "iteration 4".
+   *
+   * Precision still matters more than recall: a spurious id hands a real loop a fresh budget,
+   * while a missed one only falls back to the batch-level signature. Sources, first hit wins:
+   *
+   * 1. `Sub-task file:` lines (also `Plan sub-task file:`), the bk-code dispatch templates'
+   *    declaration of the unit. Each singular line declares one unit, so several lines declare
+   *    a set. Singular only: `Sub-task files:` is the plural reference list a reviewer or test
+   *    agent gets for the whole batch.
+   * 2. The `Task:` paragraph (see `taskParagraph`), sentence by sentence: the FIRST sentence
+   *    that explicitly names sub-tasks decides, and only that sentence's ids count. The
+   *    paragraph is read past its first sentence because conductors open with context
+   *    ("Continue batch B4 on branch …") and name the unit in the next one ("Làm sub-task 34
+   *    rồi sub-task 39"); later sentences are not unioned in, because they say what to read or
+   *    what comes next ("Sub-task 16 depends on this", "e.g. VM customMirror from sub-task 07").
+   *    A sentence reporting completed work is skipped (`DONE_MARKER`): "Đợt đầu (31, 32, 33) đã
+   *    xong" describes the previous dispatch, not this one.
+   * 3. The description, the one line the conductor writes about this dispatch ("[opus] B4
+   *    sub-tasks 34 and 39").
+   * 4. Exactly one distinct plan spec path, `sub-task-NN-<slug>.md`. Still single-id only: body
+   *    paths are what the agent should READ, and a body that lists several specs is a reviewer's
+   *    batch list or a set of references, not a declaration of scope. Report paths
+   *    (`impl-sub-task-06.md`, `fix-…`, `review-…`) never count — a sub-task inside a longer
+   *    file name is not a mention.
+   *
+   * Only explicit mentions count in 2 and 3 (see `extractMentions`): "sub-task 34", "sub-tasks
+   * 31-33", "sub-task 31, 32 và 33", "ST-25". A bare number list only counts as the tail of
+   * such a phrase, so "phụ thuộc 34" or "Dependency note: 07, 08 done" add nothing.
    *
    * @param {object} toolInput
    * @returns {string|null}
    */
-  /**
-   * The first sentence of a `Task:` line: up to the first period followed by whitespace, or a
-   * period ending the line. A period inside a path (`bk/dev/x.md`) is followed by a letter and
-   * does not end it. The field lines are paragraphs — "Task: Implement sub-task 15 (…) of plan
-   * bk/dev/meeting-point-picker. Read the full spec …/sub-task-15-….md (…) Also read impl reports
-   * research/impl-sub-task-06.md and impl-sub-task-13.md …" — and only the first sentence says
-   * which unit THIS dispatch is; the rest lists what to read.
-   */
-  function firstSentence(text) {
-    const end = text.search(/\.(?:\s|$)/);
-    return end === -1 ? text : text.slice(0, end);
-  }
-
   function extractSubTaskId(toolInput) {
     if (!toolInput) return null;
-    const single = (ids) => {
-      const set = new Set(ids.map((id) => String(parseInt(id, 10))));
-      return set.size === 1 ? [...set][0] : null;
-    };
-
     const prompt = typeof toolInput.prompt === 'string' ? toolInput.prompt : '';
+
     const fileLines = [...prompt.matchAll(/^[ \t]*(?:plan[ \t]+)?sub-task[ \t]+file[ \t]*:[^\n]*/gim)];
     if (fileLines.length > 0) {
-      const ids = fileLines
-        .map((m) => m[0].match(/\bsub-task-(\d+)\b/i))
-        .filter(Boolean)
-        .map((m) => m[1]);
-      if (ids.length > 0) return single(ids);
+      const ids = fileLines.flatMap((m) =>
+        [...m[0].matchAll(/(?<![\w-])sub-task-(\d+)\b/gi)].map((p) => p[1]));
+      if (ids.length > 0) return subTaskKey(ids);
     }
 
-    // `(?<![\w-])`: a sub-task inside a longer name is not a mention — `impl-sub-task-06.md` is a
-    // report the dispatch reads, not the unit it works on.
-    const taskLine = prompt.match(/^[ \t]*task[ \t]*:([^\n]*)/im);
-    if (taskLine) {
-      const ids = [...firstSentence(taskLine[1]).matchAll(/(?<![\w-])sub-?task[ \t_-]*#?(\d+)\b/gi)].map((m) => m[1]);
-      const id = ids.length > 0 ? single(ids) : null;
-      if (id) return id;
+    const paragraph = taskParagraph(prompt);
+    if (paragraph) {
+      for (const sentence of splitSentences(paragraph)) {
+        if (DONE_MARKER.test(sentence)) continue;
+        const ids = extractMentions(sentence);
+        if (ids === TOO_MANY) return null;
+        if (ids.length > 0) return subTaskKey(ids);
+      }
+    }
+
+    const description = typeof toolInput.description === 'string' ? toolInput.description : '';
+    if (!DONE_MARKER.test(description)) {
+      const ids = extractMentions(description);
+      if (ids === TOO_MANY) return null;
+      if (ids.length > 0) return subTaskKey(ids);
     }
 
     const specPaths = [...prompt.matchAll(/(?<![\w-])sub-task-(\d+)-[a-z0-9][a-z0-9_-]*\.md\b/gi)].map((m) => m[1]);
-    if (specPaths.length > 0) return single(specPaths);
+    const distinct = new Set(specPaths.map((id) => parseInt(id, 10)));
+    return distinct.size === 1 ? String([...distinct][0]) : null;
+  }
 
-    const description = typeof toolInput.description === 'string' ? toolInput.description : '';
-    const mentions = [...description.matchAll(/\bsub-?task[ \t_-]*#?(\d+)\b/gi)].map((m) => m[1]);
-    return mentions.length > 0 ? single(mentions) : null;
+  /** Sorted, de-duplicated integer ids joined with `+`; null when there are none or too many. */
+  function subTaskKey(ids) {
+    const set = [...new Set(ids.map((id) => parseInt(id, 10)).filter(Number.isFinite))]
+      .sort((a, b) => a - b);
+    if (set.length === 0 || set.length > MAX_SUB_TASKS_PER_KEY) return null;
+    return set.join('+');
+  }
+
+  /**
+   * The `Task:` field: the rest of its line plus any continuation lines, up to a blank line or
+   * the next template field (`Output:`, `Sub-task file:`, `Dependency note:` …). Only ASCII
+   * labels end it — the template's field names are English, while a Vietnamese line such as
+   * "Làm đợt đầu của B4 gồm: sub-task 31 …" is prose with a colon in it, not a field.
+   * Paths are blanked out first (`.md` specs and reports, branch names are harmless) so a file
+   * name is never read as a mention and its dots never split a sentence.
+   */
+  function taskParagraph(prompt) {
+    const lines = prompt.split('\n');
+    const start = lines.findIndex((l) => /^[ \t]*task[ \t]*:/i.test(l));
+    if (start === -1) return '';
+    const out = [lines[start].replace(/^[ \t]*task[ \t]*:/i, '')];
+    for (const line of lines.slice(start + 1)) {
+      if (!line.trim() || /^[ \t]*[A-Za-z][\w /-]{0,30}:(?:\s|$)/.test(line)) break;
+      out.push(line);
+    }
+    return out.join('\n').replace(/\S+\.md\b/gi, ' ');
+  }
+
+  /**
+   * Sentences: split at a period, `!` or `?` followed by whitespace or the end, and at line
+   * breaks. A period inside a token (`bk/dev/x`, `v0.19`) is followed by a non-space and does
+   * not split; an ellipsis does not split either — "sub-task 32 …, sub-task 33 …" is one list.
+   */
+  function splitSentences(text) {
+    return text.split(/(?<!\.)\.(?!\.)(?=\s|$)|[!?](?=\s|$)|\n/).filter((s) => s.trim());
+  }
+
+  /**
+   * A sentence that reports finished work names sub-tasks that are context, not this dispatch's
+   * unit. English and Vietnamese, since conductors write both. `\b` is ASCII-only in JS, so the
+   * Vietnamese forms carry their own whitespace instead; "xong" alone covers "đã xong", "chưa
+   * xong" (not yet done — still a status report, still not the unit).
+   */
+  const DONE_MARKER = /\b(?:done|completed?|finished|merged|already)\b|\bxong\b|đã[ \t]+(?:hoàn[ \t]+thành|merge|commit|làm)/i;
+
+  /**
+   * Every sub-task id a piece of text names explicitly, or TOO_MANY.
+   *
+   * A mention is a phrase — `sub-task`, `sub-tasks`, `subtask`, `sub task`, or `ST-` — then a
+   * number, then optionally a tail of more numbers joined by a list connector (`,` `&` `+` `/`
+   * `and` `or` `then` `và` `rồi` `hoặc`) or a range (`-` `–` `—` `to` `đến`). "sub-tasks 31-33"
+   * is 31, 32, 33; "sub-task 34 rồi 39" is 34 and 39. A number only counts when it is part of
+   * such a phrase, so a bare list elsewhere in the sentence adds nothing. A range wider than
+   * MAX_SUB_TASKS_PER_KEY is TOO_MANY rather than expanded.
+   */
+  function extractMentions(text) {
+    if (!text) return [];
+    const LIST = '(?:[ \\t]*[,&+/][ \\t]*(?:(?:and|và|rồi)[ \\t]+)?|[ \\t]+(?:and|or|then|và|rồi|hoặc)[ \\t]+)';
+    const RANGE = '(?:[ \\t]*[-–—][ \\t]*|[ \\t]+(?:to|đến)[ \\t]+)';
+    const PHRASE = new RegExp(
+      // Not inside a longer token: `impl-sub-task-06`, `bk/dev/sub-task-…`, `1st`.
+      '(?<![\\w/.-])(?:sub[ _-]?tasks?|ST(?=[-_]?#?\\d))[ \\t_-]*(?:gồm[ \\t]*)?:?[ \\t]*#?(\\d+)' +
+      `((?:(?:${LIST}|${RANGE})#?\\d+(?![\\w-]))*)`,
+      'giu'
+    );
+    const STEP = new RegExp(`(${LIST}|${RANGE})#?(\\d+)`, 'giu');
+    const ids = [];
+    for (const m of text.matchAll(PHRASE)) {
+      let prev = parseInt(m[1], 10);
+      ids.push(prev);
+      for (const step of (m[2] || '').matchAll(STEP)) {
+        const n = parseInt(step[2], 10);
+        if (new RegExp(`^${RANGE}$`, 'u').test(step[1])) {
+          const [lo, hi] = prev <= n ? [prev, n] : [n, prev];
+          if (hi - lo + 1 > MAX_SUB_TASKS_PER_KEY) return TOO_MANY;
+          for (let i = lo; i <= hi; i++) ids.push(i);
+        } else {
+          ids.push(n);
+        }
+        prev = n;
+      }
+    }
+    if (new Set(ids).size > MAX_SUB_TASKS_PER_KEY) return TOO_MANY;
+    return ids;
   }
 
   /**
@@ -476,13 +574,23 @@ try {
       const sigFields = subTaskId
         ? 'commit|completed_batches|batch|sub-task'
         : 'commit|completed_batches|batch';
+      // A set key (`34+39`) is one unit too: the same set again is a retry, a different set
+      // is not — so the message says "sub-tasks" and "a different set" for it.
+      const isSet = Boolean(subTaskId && subTaskId.includes('+'));
       const unitNote = subTaskId
-        ? ` on sub-task ${subTaskId}`
+        ? ` on sub-task${isSet ? 's' : ''} ${subTaskId}`
         : '';
+      // The hint for a batch-level block has to describe the rule `extractSubTaskId` really
+      // applies. It used to demand a "Sub-task file:" line, which sent conductors whose Task
+      // line already named "sub-task 34 rồi sub-task 39" looking for the wrong fix.
       const freshNote = subTaskId
-        ? `Committing, finishing a batch or moving to a different sub-task starts a fresh budget.`
-        : `Committing or finishing a batch starts a fresh budget. A per-sub-task dispatch whose ` +
-          `prompt carries a "Sub-task file: .../sub-task-NN-*.md" line is budgeted per sub-task.`;
+        ? `Committing, finishing a batch or moving to a different sub-task` +
+          `${isSet ? ' (or a different set of sub-tasks)' : ''} starts a fresh budget.`
+        : `Committing or finishing a batch starts a fresh budget. A dispatch that names the ` +
+          `sub-task(s) it works on — a "Sub-task file: .../sub-task-NN-*.md" line, or ` +
+          `"sub-task NN" / "sub-tasks NN and MM" / "sub-tasks NN-MM" (at most ` +
+          `${MAX_SUB_TASKS_PER_KEY}) in the Task: line or the description — is budgeted per ` +
+          `sub-task or per set, so moving on to different sub-tasks is not counted as a retry.`;
       const progressNote = (windowMs !== 0 && progressScoped)
         ? `\nThe count is scoped to the current progress signature ` +
           `(${sigFields} = ${currentSig}): these are ${currentCount} tries${unitNote} ` +

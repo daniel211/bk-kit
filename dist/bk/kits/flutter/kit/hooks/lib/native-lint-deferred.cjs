@@ -191,8 +191,10 @@ function groupByFile(findings) {
  *           cwd?: string }} opts — cwd: the component root the tool runs in (mobile_native composite)
  * @returns {Promise<{ ran: boolean, files: number, findings: number, filesWithFindings: number,
  *                     red: number, yellow: number, truncated: boolean, timedOut: boolean,
- *                     durationMs: number, reported: object[] }>}
+ *                     durationMs: number, reported: object[], toolFailed?: boolean,
+ *                     missingTool?: boolean, toolError?: string, exitCode?: number }>}
  *          `reported` is up to MAX_REPORTED_FINDINGS findings, for the caller to print.
+ *          `toolFailed`: the tool ran but failed with no report — results unknown, not clean.
  */
 async function runNativeLintBatch(opts = {}) {
   const { projectRoot, platform, policy = {}, timeoutMs, cwd } = opts;
@@ -228,6 +230,23 @@ async function runNativeLintBatch(opts = {}) {
       });
     } catch { /* fail-open */ }
     return { ...empty, ran: true, files: batch.length, truncated, timedOut: true, durationMs, yellow: 1 };
+  }
+
+  // A run that failed without a report (runTool `toolFailed`) is not a pass. Field review
+  // 2026-11-25: X-Game-Pro's `./gradlew detekt` failed with "Task 'detekt' not found" on every
+  // flush and was read as clean — no row, no signal, nothing. Record it like a timeout: a yellow
+  // signal (visible, never weighed by the kill switch) and `toolFailed` for the flush's advisory.
+  if (result.toolFailed) {
+    try {
+      trackWarnSignal(signalType, {
+        file: batch[0] || null, files: batch.length, errors: 0, warnings: 0,
+        durationMs, truncated, toolFailed: true, exitCode
+      });
+    } catch { /* fail-open */ }
+    return {
+      ...empty, ran: true, files: batch.length, truncated, durationMs, yellow: 1,
+      toolFailed: true, missingTool: Boolean(result.missingTool), toolError: result.toolError || '', exitCode
+    };
   }
 
   const redOnErrorOnly = policy.red_on_error_only !== false;

@@ -48,14 +48,8 @@ If Trivial:
 
 ## State Output
 
-Write to `bk/dev/shared/.workflow-state.json`:
-```json
-{
-  "command": "bk-debug",
-  "current_phase": "classify",
-  "complexity_tier": "Trivial|Standard|Complex",
-  "issue_type": "general|build|crash|device|perf",
-  "platform": "{detected}",
-  "review_mode": "{from arguments}"
-}
+Open the workflow (`classify`, new episode, last workflow's leftovers cleared) — never via Bash/python:
+```
+node .claude/cli/bk-health/index.cjs --start bk-debug --feature <slug> --platform <p> \
+  --field complexity_tier=<tier> --field issue_type=<type> --field review_mode=<mode>
 ```

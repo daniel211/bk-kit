@@ -105,6 +105,69 @@ const ABANDONABLE_WORKFLOWS = new Set(['bk-plan']);
 // `completed` is bk-plan's: a plan ends at approval, it never commits code.
 const TERMINAL_PHASES = new Set(['commit', 'aborted', 'completed']);
 
+// The per-batch fix budgets: the "max 2 cycles" counters the skills bump with `--inc` on a fix
+// loop (quality: review→coding, build: build retries, test: test fixes, refactor: test→refactor).
+// A budget belongs to the loop that spent it, so two boundaries give it back: an explicit reopen
+// after `commit` (below) and a batch boundary (`bk-health --batch next`). Before the second one
+// existed the X-Game-Pro conductor (0.19.0) saw `quality_fix_count: 2` survive `--set-phase coding
+// --batch next` and Edit-reset it by hand, 4 times in one session. One list, so the two resets and
+// `bk-health --start` (a new workflow) cannot drift apart.
+const FIX_BUDGET_FIELDS = ['quality_fix_count', 'build_retry_count', 'test_fix_count', 'refactor_fix_count'];
+
+/**
+ * The fix budgets present in `state` as numbers, zeroed. A budget the workflow never wrote stays
+ * absent — `--inc` counts a missing field from 0 — so a bk-plan state never grows bk-code fields.
+ * @param {object} state
+ * @returns {object} e.g. { quality_fix_count: 0 }
+ */
+function fixBudgetResetPatch(state) {
+  const patch = {};
+  for (const k of FIX_BUDGET_FIELDS) {
+    if (state && typeof state[k] === 'number') patch[k] = 0;
+  }
+  return patch;
+}
+
+/**
+ * The bookkeeping that opens a workflow episode at `newPhase`: episode number, the finished
+ * workflow under `previous_episode`, a history that starts with this entry, fresh counts.
+ *
+ * Shared by the two ways an episode opens: an opening-phase write over a terminal (or abandoned
+ * plan) state, judged by decidePhaseWrite(), and `bk-health --start`, which also opens one over
+ * an empty state. With no workflow on disk there is nothing to remember, so the episode is 1 and
+ * previous_episode null; otherwise exactly what the terminal → opening path has always written.
+ *
+ * @param {object} currentState - state on disk ({} when there is none)
+ * @param {string} newPhase
+ * @param {string} enteredBy - recorded as phase_history[0].entered_by
+ * @returns {object}
+ */
+function openEpisodePatch(currentState, newPhase, enteredBy) {
+  const state = currentState || {};
+  const currentPhase = state.current_phase || null;
+  const workflowType = state.workflow_type || state.command || null;
+  const hadWorkflow = Boolean(workflowType || currentPhase);
+  return {
+    workflow_episode: hadWorkflow ? (state.workflow_episode || 1) + 1 : 1,
+    previous_episode: hadWorkflow ? {
+      workflow_type: workflowType,
+      feature: state.feature || null,
+      ended_phase: currentPhase,
+      ended_at: state.updated_at || null
+    } : null,
+    phase_history: [{
+      phase: newPhase,
+      ts: Date.now(),
+      entered_by: enteredBy,
+      from_phase: currentPhase
+    }],
+    phase_recurrence_count: { [newPhase]: 1 },
+    // A fresh history needs no window start; this also drops one a Write carried over.
+    recurrence_reset_ts: null,
+    reopen_count: 0
+  };
+}
+
 /** The CLI the deny messages point at. */
 const HEALTH_CLI = 'node .claude/cli/bk-health/index.cjs';
 
@@ -408,25 +471,7 @@ function decidePhaseWrite(p) {
       verdict: 'new_episode',
       from: currentPhase,
       phase: newPhase,
-      patch: {
-        workflow_episode: (currentState.workflow_episode || 1) + 1,
-        previous_episode: {
-          workflow_type: workflowType,
-          feature: currentState.feature || null,
-          ended_phase: currentPhase,
-          ended_at: currentState.updated_at || null
-        },
-        phase_history: [{
-          phase: newPhase,
-          ts: Date.now(),
-          entered_by: enteredBy,
-          from_phase: currentPhase
-        }],
-        phase_recurrence_count: { [newPhase]: 1 },
-        // A fresh history needs no window start; this also drops one a Write carried over.
-        recurrence_reset_ts: null,
-        reopen_count: 0
-      }
+      patch: openEpisodePatch(currentState, newPhase, enteredBy)
     };
   }
 
@@ -518,9 +563,7 @@ function decidePhaseWrite(p) {
       reopen_reason: null                    // consumed: a stale marker must not reopen again
     };
     // A reopened workflow gets its fix budgets back; the old loop's are spent.
-    for (const k of ['quality_fix_count', 'build_retry_count', 'test_fix_count', 'refactor_fix_count']) {
-      if (typeof currentState[k] === 'number') patch[k] = 0;
-    }
+    Object.assign(patch, fixBudgetResetPatch(currentState));
     return {
       verdict: 'transition', from: currentPhase, to: newPhase, patch,
       recurrence: { action: 'pass', entered: 1 }, signal: null, loopCount: 0, testing: null, reopened: true
@@ -657,6 +700,9 @@ module.exports = {
   REOPEN_TARGETS,
   MAX_REOPENS,
   ABANDONABLE_WORKFLOWS,
+  FIX_BUDGET_FIELDS,
+  fixBudgetResetPatch,
+  openEpisodePatch,
   extractStringField,
   startsNewEpisode,
   checkPhaseRecurrence,

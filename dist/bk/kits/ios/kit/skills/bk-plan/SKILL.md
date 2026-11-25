@@ -57,9 +57,9 @@ Load: `references/autodream-integration.md`
    small/normal/large/massive; parallel signals if `--parallel`/`--auto`.
    Load: `references/feature-triage.md` + `references/parallel-planning.md`
 
-   **2a. Declare the workflow** — write `bk/dev/shared/.workflow-state.json`:
-   `workflow_type`/`command: "bk-plan"`, `feature`, `plan_dir`, `platform`,
-   `current_phase: "planning"`. Skip it and the plan runs as whatever workflow ran last.
+   **2a. Declare the workflow** — `node .claude/cli/bk-health/index.cjs --start bk-plan --feature <slug> --platform <p>`
+   (opens `planning`, new episode, clears the last workflow's leftovers). Skip it and the plan
+   runs as whatever workflow ran last. Never write `.workflow-state.json` via Bash/python.
    Load: `references/workflow-state.md`
 
    **2b. Task Tracking** — TaskCreate per dispatch step, updated before/after each dispatch.

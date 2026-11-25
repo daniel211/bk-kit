@@ -46,7 +46,8 @@ State file schema + resume-after-compaction: `references/workflow-state.md`.
 2. Parse the refactor type from `$ARGUMENTS`: rename / extract / move / restructure / modernize
 3. Grep/Glob for affected files and symbols, map ALL references, estimate blast radius
 4. Show the user: refactor type + scope, affected files with symbol counts, proposed approach
-5. Write `refactor_type`, `affected_files`, `complexity_tier`, `platform` to `.workflow-state.json`
+5. Open the workflow: `node .claude/cli/bk-health/index.cjs --start bk-refactor --feature <slug> --platform <p>
+   --field refactor_type=<t> --field complexity_tier=<tier> --field affected_files='[...]'`
 
 Standard/Complex scope (many files or cross-cutting) → **scope approval gate** via
 `AskUserQuestion` (`references/phase-dispatch.md`). Trivial scope needs no gate.

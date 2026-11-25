@@ -193,7 +193,7 @@ async function main() {
   const timeoutMs = toolBudgetMs(nativeCfg.timeout_ms || 30000);
   let result;
   try {
-    result = await runTool('android', filePath, { timeoutMs, policy: nativeCfg, cwd: componentRoot });
+    result = await runTool('android', filePath, { timeoutMs, policy: nativeCfg, cwd: componentRoot, tool: toolInfo });
   } catch (e) {
     process.stderr.write(`[${HOOK_NAME}] runTool error: ${e.message} — delegating to regex hook\n`);
     process.exit(runRegexFallback(stdinData));
@@ -213,6 +213,19 @@ async function main() {
       });
     } catch { /* fail-open */ }
     process.exit(0);
+  }
+
+  // A failed run with no report is not a pass (field review 2026-11-25: "Task 'detekt' not
+  // found" read as clean). Record a yellow signal and lint with the regex hook instead — never
+  // block on a tool that did not run.
+  if (result.toolFailed) {
+    process.stderr.write(`[${HOOK_NAME}] detekt run failed (exit ${exitCode}, no report): ${result.toolError || 'unknown'} — delegating to regex hook\n`);
+    try {
+      trackWarnSignal(SIGNAL_TYPE, {
+        file: filePath, errors: 0, warnings: 0, durationMs, truncated, toolFailed: true, exitCode
+      });
+    } catch { /* fail-open */ }
+    process.exit(runRegexFallback(stdinData));
   }
 
   // Write findings

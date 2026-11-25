@@ -131,7 +131,7 @@
             "progress_scoped": {
               "type": "boolean",
               "default": true,
-              "description": "Count only iterations that share the current progress signature (last_commit_hash | completed_batches length | batch, plus the sub-task id when the dispatch prompt names exactly one via a 'Sub-task file:' line or the description names one 'sub-task NN'), so sequential sub-tasks inside one batch each get their own budget while a retry of the same sub-task still counts, and so a conductor that commits or completes a batch gets a fresh budget and only no-progress retries accumulate. Defaults to true when absent; ignored when window_minutes is 0."
+              "description": "Count only iterations that share the current progress signature (last_commit_hash | completed_batches length | batch, plus the sub-task key when the dispatch names one or more sub-tasks: 'Sub-task file:' lines, the Task: paragraph ('sub-task 34 rồi sub-task 39', 'sub-tasks 31-33'), the description, or one spec path; more than 6 ids is batch-level), so sequential sub-tasks inside one batch each get their own budget while a retry of the same sub-task still counts, and so a conductor that commits or completes a batch gets a fresh budget and only no-progress retries accumulate. Defaults to true when absent; ignored when window_minutes is 0."
             },
             "exempt_agents": {
               "type": "array",

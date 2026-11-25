@@ -165,6 +165,31 @@ function reportMissingTools(cfg, missing) {
 }
 
 /**
+ * A native linter that ran but failed with no report (runTool `toolFailed` — X-Game-Pro's
+ * `./gradlew detekt` → "Task 'detekt' not found") used to read as a clean pass. Say so once per
+ * (platform, root) per session as a `lint-advisory`, like a missing lint tool: the failure repeats
+ * on every flush until the setup changes, and runNativeLintBatch already logs each one as a
+ * yellow signal. Never a finding.
+ */
+function reportNativeToolFailure(cfg, platform, cwd, result) {
+  const rel = cwd ? path.relative(cfg.projectRoot, cwd).split(path.sep).join('/') : '';
+  const where = rel && rel !== '.' ? `${rel}/` : './';
+  const key = `native-lint-tool-failed|${platform}|${where}`;
+  if (!firstTime(key, { sessionId: cfg.sessionId || null, feature: 'lint' })) return;
+  const why = result.toolError ? `: ${result.toolError}` : '';
+  const hint = result.missingTool
+    ? ' — the linter is not set up there; configure it or set native_lint.' + platform + '.enabled: false'
+    : '';
+  appendFinding(cfg.projectRoot, {
+    kind: 'lint-advisory',
+    session_id: cfg.sessionId || null,
+    files: 0,
+    text: `[NATIVE-LINT] ${platform}: lint run failed in ${where} (exit ${result.exitCode}) with no report — `
+      + `${result.files} file(s) NOT checked${why}${hint}`
+  });
+}
+
+/**
  * Drain the deferred native-lint queue and run each platform's linter once over its batch.
  * @returns {Promise<{ files: number, text: string }>}
  */
@@ -211,6 +236,8 @@ async function runNative(cfg) {
     if (result.timedOut) {
       text += `[NATIVE-LINT] ${platform}: timed out after ${cfg.timeoutMs}ms over ${result.files} file(s)\n`;
       reportedAny = true;
+    } else if (result.toolFailed) {
+      reportNativeToolFailure(cfg, platform, cwd, result);
     } else if (result.findings > 0) {
       const names = files.map((f) => path.basename(f));
       const shown = names.slice(0, MAX_NAMES_SHOWN).join(', ');

@@ -54,10 +54,12 @@ For each batch in the Execution Batches table:
 
 Dispatch `bk-{platform}-developer` for each sub-task in the batch, respecting dependencies.
 
-Keep exactly one `Sub-task file:` line per dispatch (and `sub-task {NN}` in the description):
-the dispatch cap budgets each sub-task separately by reading it, so sequential sub-tasks in
-one batch are not mistaken for retries. Without it they share one budget and the 4th is blocked.
-(Fallbacks, in order: the first sentence of the `Task:` line naming one `sub-task NN`, then exactly one
+Keep one `Sub-task file:` line per sub-task the dispatch works on (and `sub-task {NN}` in the
+description): the dispatch cap budgets each sub-task — or each set, for a dispatch that works
+several (`sub-tasks 34 and 39`, `sub-tasks 31-33`, at most 6) — separately by reading it, so
+sequential sub-tasks in one batch are not mistaken for retries. Without it they share one budget
+and the 4th is blocked. (Fallbacks, in order: the first `Task:` sentence that names `sub-task NN`
+explicitly, skipping sentences about finished work; then the description; then exactly one
 `sub-task-NN-{slug}.md` path in the prompt — the template line is still the reliable one.)
 
 **Sequential sub-tasks** (sub-task has `depends:` on another sub-task in same batch):
@@ -406,7 +408,8 @@ A batch is complete when ALL of these are true:
    on a batch that actually completed; never to escape a fix loop — a reset without the batch
    increment does not clear the window. Never touch `phase_history` or `recurrence_reset_ts`:
    `fsm-guard` refuses writes that change them. It also appends batch N to `completed_batches`
-   (the dispatch cap's progress signature reads it).
+   (the dispatch cap's progress signature reads it), and zeroes the fix budgets
+   (`quality_fix_count`, `build_retry_count`, `test_fix_count`): the 2-cycle limits are per batch.
    **Order:** this write comes BEFORE the next batch's `--set-phase coding` — or combine them,
    `--set-phase coding --batch next`, which applies the reset first. Running `--set-phase coding`
    first is judged against the finished batch's counts and is blocked as a fix loop.

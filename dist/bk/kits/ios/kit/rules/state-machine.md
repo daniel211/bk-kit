@@ -234,7 +234,7 @@ episode instead.
 reopen path above). The next workflow
 starts by writing an **opening phase** — `plan` (bk-code), `classify` (bk-debug), `analyze`
 (bk-refactor), `planning` (bk-plan)
-— straight over the terminal state. `fsm-guard.cjs` recognises that as a new episode and (the
+— straight over the terminal state; use `bk-health --start <workflow> --feature <slug>`, which does it in one write. `fsm-guard.cjs` recognises that as a new episode and (the
 bookkeeping is applied by its PostToolUse half, after the write lands — the guard never changes
 the file between your Read and your Write):
 

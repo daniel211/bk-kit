@@ -6,32 +6,25 @@ does not declare itself there, the plan run inherits the previous workflow — a
 workflow, and statusline / compact-recovery show the wrong one. `.plan-state.json` tracks the
 plan's steps; this file only says "a plan for {feature} is in flight". Both are written.
 
-## Fields bk-plan owns
+## Opening the workflow — one CLI call
 
-```json
-{
-  "workflow_type": "bk-plan",
-  "command": "bk-plan",
-  "feature": "{feature-slug}",
-  "plan_dir": "bk/dev/{feature-slug}",
-  "platform": "ios|android|flutter",
-  "current_phase": "planning|completed|aborted",
-  "batch": null,
-  "total_batches": null,
-  "complexity_tier": null
-}
+```
+node .claude/cli/bk-health/index.cjs --start bk-plan --feature <slug> [--platform ios|android|flutter] [--plan-dir <dir>]
 ```
 
-Read the file first and keep every field you do not own — cost tally, dispatch counts,
-signals and halt flags belong to hooks. Null the previous workflow's per-feature fields
-(`batch`, `total_batches`, `complexity_tier`) so they are not read as this plan's.
-`phase_history[]` / `phase_recurrence_count{}` are the guard's — never hand-write them.
+It writes `workflow_type`/`command: "bk-plan"`, `feature`, `workflowId`, `plan_dir` (default
+`bk/dev/<slug>`), `platform` (kept if omitted), `current_phase: "planning"`, opens a new episode
+(fresh `phase_history` / counts, `previous_episode`), and clears the last workflow's per-workflow
+fields (`batch`, `total_batches`, `completed_batches`, `complexity_tier`, fix budgets,
+`signal_count` / `retry_agents` / `last_signal`, agent ids, testing evidence). Cost tally, dispatch
+counts and halt flags are kept. Never write `.workflow-state.json` through Bash/python heredocs —
+`fsm-guard` never sees those writes.
 
 ## When to write
 
 | Workflow point | `current_phase` | Also write |
 |----------------|-----------------|-----------|
-| Step 2, once the feature slug is known | `planning` | every field above |
+| Step 2, once the feature slug is known | `planning` | `--start bk-plan` (above) |
 | Step 12, user approves | `completed` | — (then output `/bk-code {plan-dir}/plan.md`) |
 | Step 12, user cancels | `aborted` | — |
 | Step 12, user asks for revisions | *(unchanged)* | — |
@@ -39,20 +32,19 @@ signals and halt flags belong to hooks. Null the previous workflow's per-feature
 
 Transitions (enforced by `fsm-guard`): `(none)→planning→{completed|aborted}`. Step 12's writes are
 `node .claude/cli/bk-health/index.cjs --set-phase completed|aborted` — the same validation as an Edit, without
-reading the state file first; the Step 2 declaration stays a full Write.
+reading the state file first.
 
 ## Handoffs
 
-- **Over a finished workflow** (`commit` / `aborted` / `completed`, any feature): writing
-  `planning` opens a new episode — allowed, counters reset, the old one lands in
-  `previous_episode`.
-- **To /bk-code**: bk-code's Code-Step-1 writes `plan` over `completed` — a new episode. It is
-  also accepted over a `planning` the approval write never reached, so a missed `completed`
-  never blocks the hand-off.
-- **Over an in-flight bk-code/bk-debug/bk-refactor** (non-terminal phase): the guard refuses
+- **Over a finished workflow** (`commit` / `aborted` / `completed`, any feature): `--start`
+  opens a new episode; the old one lands in `previous_episode`.
+- **To /bk-code**: Code-Step-1's `--start bk-code` opens over `completed` — or over a `planning`
+  the approval write never reached, so a missed `completed` never blocks the hand-off.
+- **Over an in-flight bk-code/bk-debug/bk-refactor** (non-terminal phase): `--start` refuses
   with exit 2. That workflow still owns the file — do not route around it. AskUserQuestion:
-  finish or abort that workflow first, or plan without the state write (say the statusline
-  and metrics will show the other workflow until it ends).
+  finish or abort that workflow first (`--force` only on the user's word: its work stays
+  uncommitted), or plan without the state write (say the statusline and metrics will show the
+  other workflow until it ends).
 
 ## Resume after compaction
 

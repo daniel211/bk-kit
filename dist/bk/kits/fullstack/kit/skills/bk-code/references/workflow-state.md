@@ -75,8 +75,9 @@ gets them restored). To move the workflow, change `current_phase` and nothing of
 ## How to write a phase change — the CLI first
 
 ```
+node .claude/cli/bk-health/index.cjs --start bk-code --feature <slug> [--platform <p>] [--field total_batches=4] [--field complexity_tier=Standard] [--field review_mode=auto]
 node .claude/cli/bk-health/index.cjs --set-phase <phase> [--inc quality_fix_count] [--field reviewer_agent_id=<id>]
-node .claude/cli/bk-health/index.cjs --batch next          # batch boundary: batch N+1 + counts reset
+node .claude/cli/bk-health/index.cjs --batch next          # batch boundary: batch N+1, counts + fix budgets reset
 node .claude/cli/bk-health/index.cjs --set-phase coding --batch next   # same, and enter the next batch's coding
 node .claude/cli/bk-health/index.cjs --set-phase coding --batch 1   # first batch, explicit (batch null)
 ```
@@ -97,21 +98,21 @@ the pause) and exits 2 — handle it exactly as a refused Edit. `--inc` / `--fie
 
 Why: Read + Edit of `current_phase` cost the X-Game-Pro conductor 47 Reads (~24k tokens) over 6
 sessions, and the Edit often failed with "File has been modified since read" because hooks
-write the same file. The Edit path still works and is still guarded — use it for the
-multi-field writes (Code-Step-1 opening a workflow) or when the CLI is unavailable. The CLI never
-applies the recurrence override env; in a session started with it, Edit instead.
+write the same file. The Edit path still works and is still guarded — use it only when the CLI
+is unavailable. Never write the file through Bash/python heredocs: `fsm-guard` never sees them.
+The CLI never applies the recurrence override env; in a session started with it, Edit instead.
 
 ## When to write
 
 | Workflow point | `current_phase` | Also write |
 |----------------|-----------------|-----------|
-| Code-Step-1, after plan.md parsed (full Write) | `plan` | `workflow_type`, `feature`, `plan_dir`, `platform`, `complexity_tier`, `total_batches` |
+| Code-Step-1, after plan.md parsed | `plan` | `--start bk-code` (above): `workflow_type`, `feature`, `plan_dir`, `platform`, `--field` `complexity_tier` / `total_batches` |
 | Code-Step-3a, first dispatch of a batch | `coding` | `batch` (`--set-phase coding --batch 1` for batch 1; auto-seeded to 1 if omitted), `dev_agent_id` |
 | Code-Step-3b, before test dispatch | `testing` | — |
 | Code-Step-3b, tests already ran as plan sub-tasks | `review` | `testing_evidence` (`--field testing_evidence=<report>`) |
 | Code-Step-3c, before review dispatch | `review` | `reviewer_agent_id` |
 | Code-Step-3c, critical findings → re-implement | `coding` | `quality_fix_count += 1` (`--inc quality_fix_count`) |
-| Code-Step-3d, batch complete → next batch | *(unchanged)* | `batch += 1`, `phase_recurrence_count: {}`, batch N → `completed_batches` (`--batch next`, BEFORE the next `--set-phase coding`) |
+| Code-Step-3d, batch complete → next batch | *(unchanged)* | `batch += 1`, `phase_recurrence_count: {}`, fix budgets → 0, batch N → `completed_batches` (`--batch next`, BEFORE the next `--set-phase coding`) |
 | Code-Step-4, before bk-git-manager | `commit` | — |
 | Fix loop / build retry limit exceeded | `escalated` | reason + options presented to user |
 
@@ -122,15 +123,15 @@ After `commit`, follow-up work on the same feature: `--set-phase coding --field 
 
 ## Starting the next feature
 
-`commit` and `aborted` end the episode, they do not end the repo. Code-Step-1 of the *next*
-feature writes `current_phase: "plan"` over the terminal state (or over the `/bk-plan` that
-produced this plan — `completed`, or still `planning` if its approval write was missed): the guard reads that as a new
-episode, allows it, and — once the write has landed — resets `phase_history[]` /
-`phase_recurrence_count{}` so the last feature's fix loops cannot block this one. It also bumps
-`workflow_episode` and stores the finished workflow under `previous_episode`. Those fields are
-overwritten even if your write copied the old values; everything else you wrote is kept.
+`commit` and `aborted` end the episode, they do not end the repo. Code-Step-1's `--start bk-code`
+opens over the terminal state (or over the `/bk-plan` that produced this plan — `completed`, or
+still `planning` if its approval write was missed) in one call: new episode (`workflow_episode`
++1, `previous_episode`, `phase_history[]` / `phase_recurrence_count{}` from zero), and the last
+workflow's per-workflow fields cleared — batch, fix budgets, `signal_count` / `retry_agents` /
+`last_signal`, agent ids, testing evidence. Cost tally and dispatch counts are kept. It refuses
+(exit 2) over another workflow still in flight; `--force` only on the user's word.
 
-Write the opening phase — never delete `.workflow-state.json` to escape a terminal state.
+Never delete `.workflow-state.json` to escape a terminal state.
 
 ## Batch boundary reset (important)
 
@@ -143,7 +144,11 @@ counter in the **same write** that advances the batch:
 node .claude/cli/bk-health/index.cjs --batch next
 ```
 
-(Edit fallback: `{ ...state, "batch": N+1, "phase_recurrence_count": {} }` in one write.)
+(Edit fallback: `{ ...state, "batch": N+1, "phase_recurrence_count": {} }` + fix budgets at 0, one write.)
+
+Fix budgets (`quality_fix_count`, `build_retry_count`, `test_fix_count`) are **per batch**: the
+"max 2 cycles" counts one batch's loops, and `--batch next` sets them back to 0 — never reset them
+by hand.
 
 Leave `current_phase` unchanged in that write — it is not a transition. When a write both
 advances `batch` and resets the counter, the guard also stamps `recurrence_reset_ts` after it

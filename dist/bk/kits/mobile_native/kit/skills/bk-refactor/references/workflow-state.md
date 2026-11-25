@@ -5,7 +5,8 @@ File: `bk/dev/shared/.workflow-state.json`
 `workflow_type` (alias `command`) is what `fsm-guard.cjs` matches against the transition table in
 `rules/state-machine.md`. Omit it and every transition passes unvalidated.
 `phase_history[]` / `phase_recurrence_count{}` are appended by the guard — read, don't write.
-Phase changes: `node .claude/cli/bk-health/index.cjs --set-phase <phase>` (`--inc refactor_fix_count` on a
+Open with `node .claude/cli/bk-health/index.cjs --start bk-refactor --feature <slug> [--platform <p>]` (`analyze`,
+new episode, leftovers cleared; never via Bash/python). Phase changes: `--set-phase <phase>` (`--inc refactor_fix_count` on a
 test→refactor loop) — validated like an Edit, no Read of this file needed; Edit is the fallback.
 
 ```json
