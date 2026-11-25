@@ -1,9 +1,9 @@
 {
   "kit": "beer-kit",
   "platform": "fullstack",
-  "version": "0.20.3",
-  "commit": "b7107a7f2981a00204d33c0bc7ff2b618fca2d57",
-  "builtAt": "2026-11-25T09:14:41.013Z",
+  "version": "0.20.4",
+  "commit": "95d84936e53347e6e5a9ae4b8a5e0bacfdfba6df",
+  "builtAt": "2026-11-25T09:37:14.559Z",
   "nodeVersion": "v22.15.0",
   "stats": {
     "agents": 27,

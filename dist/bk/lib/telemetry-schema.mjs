@@ -114,6 +114,10 @@ export const TELEMETRY_FILES = {
     fields: {
       ts: 'ts', type: 'token', count: 'keep', errors: 'keep', warnings: 'keep', durationMs: 'keep',
       truncated: 'keep', feature: 'feature', batch: 'keep',
+      // Native-lint batch outcomes (lib/native-lint-deferred.cjs): how many files a batch covered,
+      // and whether the run timed out or failed with no report (e.g. 0.19.0's `gradlew detekt
+      // --format` on a project without detekt). All booleans/numbers — nothing project-specific.
+      files: 'keep', timedOut: 'keep', toolFailed: 'keep', exitCode: 'keep',
     },
   },
   'subagent-live.jsonl': {
