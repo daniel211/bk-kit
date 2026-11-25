@@ -234,7 +234,7 @@ async function runNative(cfg) {
     totalFiles += result.files;
 
     if (result.timedOut) {
-      text += `[NATIVE-LINT] ${platform}: timed out after ${cfg.timeoutMs}ms over ${result.files} file(s)\n`;
+      text += `[NATIVE-LINT] ${platform}: timed out after ${result.timeoutMs || cfg.timeoutMs}ms over ${result.files} file(s)\n`;
       reportedAny = true;
     } else if (result.toolFailed) {
       reportNativeToolFailure(cfg, platform, cwd, result);
@@ -288,10 +288,16 @@ if (require.main === module) {
   // outlive the session. Generous over the per-command bound because a batch may issue several
   // commands, each with its own timeout.
   const perCommandMs = parseInt(process.env.BK_LINT_TIMEOUT_MS || '60000', 10);
+  // A native android batch may run `./gradlew detekt` under GRADLE_BATCH_TIMEOUT_MS (150s by
+  // default, above the per-command bound), so the ceiling must sit above that too, or the worker
+  // dies mid-run and the result — findings or the timeout signal — is lost. In mobile_native one
+  // worker can run an iOS batch (per-command bound) and then the gradle batch, so the ceiling
+  // covers both back to back.
+  const { GRADLE_BATCH_TIMEOUT_MS } = require('./native-lint-runner.cjs');
   const selfKill = setTimeout(() => {
     process.stderr.write('[lint-flush-worker] self-timeout reached — exiting\n');
     process.exit(0);
-  }, Math.max(perCommandMs * 3, 90000));
+  }, Math.max(perCommandMs * 3, 90000, GRADLE_BATCH_TIMEOUT_MS + perCommandMs + 30000));
   selfKill.unref();
 
   let cfg = {};

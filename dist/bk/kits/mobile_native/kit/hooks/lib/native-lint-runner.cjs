@@ -11,6 +11,7 @@
  *   parseDetektXml(raw)          → normalized findings[]
  *   parseDartAnalyzeJson(raw)    → normalized findings[]
  *   withTimeout(promise, ms)     → promise with exit-code 124 semantics
+ *   GRADLE_BATCH_TIMEOUT_MS      — the floor a background (flush) caller gives a gradle detekt run
  *
  * Mock env overrides (for tests):
  *   BK_NATIVE_LINT_MOCK_AVAILABLE=swiftlint|detekt|dart  — mark tool as available
@@ -30,6 +31,7 @@ const cp   = require('child_process');
 const { resolveProjectRoot } = require('./resolve-project-root.cjs');
 const { detectDetekt: detectDetektIn } = require('./detekt-config-detector.cjs');
 const { MISSING_TOOL_RE } = require('./lint-batch-runner.cjs');
+const { collectDetektReports, scopeFindings } = require('./detekt-gradle-reports.cjs');
 
 /**
  * The project root every path in this module resolves against.
@@ -57,6 +59,15 @@ const CACHE_TTL_MS   = 5 * 60 * 1000; // 5 minutes
  */
 const CACHE_SCHEMA = 2;
 const DEFAULT_TIMEOUT_MS = 30000;
+/**
+ * Floor on the timeout of a `./gradlew detekt` run from the background flush (opts.gradleTimeoutMs).
+ * The flush's 60s per-command bound was sized for single-file tools; a Gradle run pays daemon
+ * start + configuration of every module before detekt starts. Measured 2026-11-25 on a 2-module
+ * toy project (Gradle 9.9.1, detekt 1.23.8, no Android plugin): 6-7s per run — a real Android
+ * build's configuration phase is commonly tens of seconds on top. Never used inline:
+ * a hook path that waits on Gradle is the 5s-budget bug hook-budget.cjs exists for.
+ */
+const GRADLE_BATCH_TIMEOUT_MS = parseInt(process.env.BK_NATIVE_LINT_GRADLE_TIMEOUT_MS || '150000', 10);
 const MAX_OUTPUT_CHARS   = 500000; // ~500k chars before truncation
 
 // ─── withTimeout helper ────────────────────────────────────────────────────
@@ -241,19 +252,25 @@ function detectDart() {
  *
  * @param {'ios'|'android'|'flutter'} platform
  * @param {string|string[]} targetPath
- * @param {{ timeoutMs?: number, policy?: object, cwd?: string, tool?: object }} [opts] — cwd: the
- *   component root the tool runs in (config lookup, gradlew, detekt report); default the project
- *   root. tool: a detectTool() result; android picks gradle vs standalone detekt from it and
- *   detects it (cached) when absent.
+ * @param {{ timeoutMs?: number, gradleTimeoutMs?: number, policy?: object, cwd?: string,
+ *   tool?: object }} [opts] — cwd: the component root the tool runs in (config lookup, gradlew,
+ *   detekt report); default the project root. tool: a detectTool() result; android picks gradle
+ *   vs standalone detekt from it and detects it (cached) when absent. gradleTimeoutMs: a floor on
+ *   timeoutMs that applies only to the gradle runner (background callers only — see
+ *   GRADLE_BATCH_TIMEOUT_MS).
  * @returns {Promise<{ exitCode: number, findings: object[], rawOutput: string, durationMs: number,
- *   truncated: boolean, toolFailed?: boolean, missingTool?: boolean, toolError?: string }>}
+ *   truncated: boolean, timeoutMs?: number, reports?: number, toolFailed?: boolean,
+ *   missingTool?: boolean, toolError?: string }>}
  *   toolFailed: the run failed without producing a report (android) — NOT a clean pass.
+ *   reports: android gradle runner — how many fresh detekt XML reports were read.
  */
 async function runTool(platform, targetPath, opts = {}) {
-  const timeoutMs = opts.timeoutMs || DEFAULT_TIMEOUT_MS;
   if (platform === 'android' && !opts.tool) {
     opts = { ...opts, tool: detectTool('android', opts.cwd ? { root: opts.cwd } : {}) };
   }
+  const gradle = isGradleRunner(platform, opts.tool);
+  let timeoutMs = opts.timeoutMs || DEFAULT_TIMEOUT_MS;
+  if (gradle && opts.gradleTimeoutMs > timeoutMs) timeoutMs = opts.gradleTimeoutMs;
 
   // Mock mode: return canned output
   const mockOutput = process.env.BK_NATIVE_LINT_MOCK_OUTPUT;
@@ -264,13 +281,13 @@ async function runTool(platform, targetPath, opts = {}) {
     const exitCode  = parseInt(mockExit || '0', 10);
     let findings    = parseOutput(platform, rawOutput);
     // P1-6: Even in mock mode, fall back to XML report file for android (detekt)
-    // when stdout produces no findings — mirrors real-runtime behavior.
-    let xmlReport = null;
+    // when stdout produces no findings — mirrors real-runtime behavior (no freshness check:
+    // nothing ran, so every fixture report counts).
+    const base = { exitCode, findings, rawOutput, durationMs: 0, truncated: false };
     if (platform === 'android' && findings.length === 0) {
-      xmlReport = readDetektXmlReport(opts.cwd);
-      if (xmlReport) findings = parseOutput('android', xmlReport);
+      return withAndroidReports(base, targetPath, opts, {});
     }
-    return withFailureFlags(platform, { exitCode, findings, rawOutput, durationMs: 0, truncated: false }, xmlReport);
+    return withFailureFlags(platform, base, false);
   }
 
   const start = Date.now();
@@ -302,7 +319,7 @@ async function runTool(platform, targetPath, opts = {}) {
     });
   } catch (e) {
     if (e.timedOut) {
-      return { exitCode: 124, findings: [], rawOutput: `Timed out after ${timeoutMs}ms`, durationMs: Date.now() - start, truncated: false };
+      return { exitCode: 124, findings: [], rawOutput: `Timed out after ${timeoutMs}ms`, durationMs: Date.now() - start, truncated: false, timeoutMs };
     }
     return { exitCode: 1, findings: [], rawOutput: e.message, durationMs: Date.now() - start, truncated: false };
   }
@@ -311,19 +328,48 @@ async function runTool(platform, targetPath, opts = {}) {
   const durationMs = Date.now() - start;
   let findings = parseOutput(platform, rawOutput);
 
-  // P1-6: Detekt via gradlew writes XML to build/reports/detekt/detekt.xml,
-  // not stdout — stdout is gradle build progress. If stdout parse yielded zero,
-  // fall back to reading the report file directly. Only a report this run wrote counts: an
-  // older one left in build/ would replay stale findings and mask a failed run as a result.
-  let xmlReport = null;
+  // P1-6: Detekt via gradlew writes XML to <module>/build/reports/detekt/*.xml, not stdout —
+  // stdout is gradle build progress. If stdout parse yielded zero, read the report files. Only a
+  // report this run wrote counts: an older one left in build/ would replay stale findings and
+  // mask a failed run as a result.
+  const base = { exitCode, findings, rawOutput, durationMs, truncated };
   if (platform === 'android' && findings.length === 0) {
-    xmlReport = readDetektXmlReport(opts.cwd, { since: start });
-    if (xmlReport) {
-      findings = parseOutput('android', xmlReport);
-    }
+    return withAndroidReports(base, targetPath, opts, { since: start });
   }
+  return withFailureFlags(platform, base, false);
+}
 
-  return withFailureFlags(platform, { exitCode, findings, rawOutput, durationMs, truncated }, xmlReport);
+/** android + anything but the standalone CLI = `./gradlew detekt` (buildCommand's own rule). */
+function isGradleRunner(platform, tool) {
+  return platform === 'android' && !(tool && tool.runner === 'cli' && tool.path);
+}
+
+/**
+ * Fill an android result's findings from detekt's XML report(s), then apply the failure flags.
+ *
+ * Gradle runner: every fresh report under the component root, findings scoped to the batch's
+ * files (see lib/detekt-gradle-reports.cjs for the plugin facts). The detekt task FAILS when
+ * issues exceed maxIssues (default 0) but still writes its reports — observed on 1.23.8 and
+ * 2.0.0-alpha.6 ("Analysis failed with 1 weighted issues", exit 1, reports present) — so a
+ * non-zero exit WITH a fresh report is an "issues found" result, even when none of the issues
+ * are in this batch's files. Non-zero with no fresh report stays toolFailed.
+ * Standalone CLI: the one report path it was told to write, as before.
+ */
+function withAndroidReports(base, targetPath, opts, { since }) {
+  const root = opts.cwd || projectRoot();
+  if (!isGradleRunner('android', opts.tool)) {
+    const xml = readDetektXmlReport(opts.cwd, since ? { since } : {});
+    const findings = xml ? parseOutput('android', xml) : base.findings;
+    return withFailureFlags('android', { ...base, findings }, Boolean(xml));
+  }
+  const mockPath = process.env.BK_NATIVE_LINT_MOCK_DETEKT_XML_PATH;
+  const reports = mockPath && fs.existsSync(mockPath)
+    ? [{ path: mockPath, xml: fs.readFileSync(mockPath, 'utf8') }]
+    : collectDetektReports(root, since ? { since } : {});
+  const all = [];
+  for (const r of reports) all.push(...parseOutput('android', r.xml));
+  const findings = scopeFindings(all, toTargetList(targetPath), { root, projectRoot: projectRoot() });
+  return withFailureFlags('android', { ...base, findings, reports: reports.length }, reports.length > 0);
 }
 
 /**
@@ -345,10 +391,10 @@ const FAILURE_REASON_RES = [
  * and `missingTool` when the tool or task does not exist at all. Other platforms' linters exit
  * non-zero only alongside their findings, so they are left as they were.
  */
-function withFailureFlags(platform, result, xmlReport) {
+function withFailureFlags(platform, result, reportFound) {
   if (platform !== 'android') return result;
   const { exitCode, findings, rawOutput } = result;
-  if (exitCode === 0 || exitCode === 124 || findings.length > 0 || xmlReport) return result;
+  if (exitCode === 0 || exitCode === 124 || findings.length > 0 || reportFound) return result;
   const raw = String(rawOutput || '');
   let reason = '';
   for (const re of FAILURE_REASON_RES) {
@@ -361,7 +407,8 @@ function withFailureFlags(platform, result, xmlReport) {
 }
 
 /**
- * P1-6 helper: read detekt XML report from common gradle output paths.
+ * P1-6 helper: read the standalone detekt CLI's XML report (the gradle runner reads every
+ * module's report instead — withAndroidReports).
  * Mock-friendly via BK_NATIVE_LINT_MOCK_DETEKT_XML_PATH env var.
  * @param {string} [componentRoot]
  * @param {{ since?: number }} [opts] — since: ignore reports last written before this epoch ms
@@ -453,9 +500,14 @@ function buildCommand(platform, targetPath, opts = {}) {
         if (config) args.push('--config', path.join(root, config));
         return { cmd: tool.path, args };
       }
-      const gradlew = path.join(root, 'gradlew');
-      // detekt's --input is a comma-separated list, not a repeatable flag.
-      return { cmd: gradlew, args: ['detekt', '--format', 'xml', '--input', targets.join(',')] };
+      // The Gradle plugin's `detekt` task takes no file list or format: its only command-line
+      // options are --auto-correct / --rerun, and `./gradlew detekt --format xml --input …` fails
+      // with "Unknown command-line option '--format'" (verified 2026-11-25 on plugin 1.23.8 and
+      // 2.0.0-alpha.6, Gradle 9.9.1). It analyses every module that applies the plugin and writes
+      // XML per module by default; withAndroidReports() collects those and scopes them to
+      // `targets`. --continue: one module's "Analysis failed" must not skip the others' reports.
+      // The plain `detekt` task, not detektMain: no compilation, so no compile failure to mask it.
+      return { cmd: path.join(root, 'gradlew'), args: ['detekt', '--continue', '--quiet', '--console=plain'] };
     }
     case 'flutter': {
       return { cmd: 'dart', args: ['analyze', '--format=json', ...targets] };
@@ -636,6 +688,7 @@ module.exports = {
   buildCommand,
   withTimeout,
   normalizeSeverity,
+  GRADLE_BATCH_TIMEOUT_MS,
   // Internal exports for tests
   _getCachePath:  getCachePath,
   _readCache:     readCache,

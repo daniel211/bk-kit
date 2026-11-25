@@ -34,22 +34,10 @@ const fs   = require('fs');
 const path = require('path');
 
 const { resolveQueueFile, enqueueFile, takeQueueEntries } = require('./lint-queue.cjs');
-const { runTool } = require('./native-lint-runner.cjs');
+const { runTool, GRADLE_BATCH_TIMEOUT_MS } = require('./native-lint-runner.cjs');
+const { realish } = require('./detekt-gradle-reports.cjs');
 const { trackRedSignal, trackWarnSignal, resolveMetricPath } = require('./harness-policy-loader.cjs');
 const { appendJsonl: rotatorAppend } = require('./jsonl-rotator.cjs');
-
-/** Real path of `p`, resolving symlinks through the nearest existing ancestor (macOS /tmp -> /private/tmp). */
-function realish(p) {
-  let cur = path.resolve(p);
-  const tail = [];
-  for (;;) {
-    try { return path.join(fs.realpathSync(cur), ...tail.reverse()); } catch { /* climb */ }
-    const parent = path.dirname(cur);
-    if (parent === cur) return path.resolve(p);
-    tail.push(path.basename(cur));
-    cur = parent;
-  }
-}
 
 /**
  * True when `file` lives inside `projectRoot`. Native lint must skip anything else: an Edit/Write
@@ -192,9 +180,11 @@ function groupByFile(findings) {
  * @returns {Promise<{ ran: boolean, files: number, findings: number, filesWithFindings: number,
  *                     red: number, yellow: number, truncated: boolean, timedOut: boolean,
  *                     durationMs: number, reported: object[], toolFailed?: boolean,
- *                     missingTool?: boolean, toolError?: string, exitCode?: number }>}
+ *                     missingTool?: boolean, toolError?: string, exitCode?: number,
+ *                     timeoutMs?: number }>}
  *          `reported` is up to MAX_REPORTED_FINDINGS findings, for the caller to print.
  *          `toolFailed`: the tool ran but failed with no report — results unknown, not clean.
+ *          `timeoutMs`: on a timeout, the bound actually applied (a gradle run gets a higher floor).
  */
 async function runNativeLintBatch(opts = {}) {
   const { projectRoot, platform, policy = {}, timeoutMs, cwd } = opts;
@@ -212,7 +202,11 @@ async function runNativeLintBatch(opts = {}) {
 
   let result;
   try {
-    result = await runTool(platform, batch, cwd ? { timeoutMs, policy, cwd } : { timeoutMs, policy });
+    // gradleTimeoutMs: this runs in the detached flush worker, so a `./gradlew detekt` (whole
+    // project, daemon + configuration first) may outlast the per-command bound sized for
+    // single-file tools. runTool applies it to the gradle runner only.
+    const runOpts = { timeoutMs, policy, gradleTimeoutMs: GRADLE_BATCH_TIMEOUT_MS };
+    result = await runTool(platform, batch, cwd ? { ...runOpts, cwd } : runOpts);
   } catch {
     return { ...empty, files: batch.length, truncated: overflowed };
   }
@@ -229,7 +223,10 @@ async function runNativeLintBatch(opts = {}) {
         durationMs, truncated, timedOut: true
       });
     } catch { /* fail-open */ }
-    return { ...empty, ran: true, files: batch.length, truncated, timedOut: true, durationMs, yellow: 1 };
+    return {
+      ...empty, ran: true, files: batch.length, truncated, timedOut: true, durationMs, yellow: 1,
+      ...(result.timeoutMs ? { timeoutMs: result.timeoutMs } : {})
+    };
   }
 
   // A run that failed without a report (runTool `toolFailed`) is not a pass. Field review

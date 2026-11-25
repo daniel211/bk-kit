@@ -212,6 +212,14 @@ async function main() {
         file: filePath, errors: 0, warnings: 0, durationMs, truncated, timedOut: true
       });
     } catch { /* fail-open */ }
+    // `./gradlew detekt` analyses the whole project after daemon start + configuration; inside
+    // this hook's ~4s tool budget it will almost always time out (2026-11-25: 6-7s on a 2-module
+    // toy project). Without this the file got no check at all — hand it to the regex hook, as the
+    // unavailable / toolFailed paths do. The standalone CLI keeps the old skip.
+    if (toolInfo.runner !== 'cli') {
+      process.stderr.write(`[${HOOK_NAME}] gradle detekt cannot finish inside the hook budget — delegating to regex hook\n`);
+      process.exit(runRegexFallback(stdinData));
+    }
     process.exit(0);
   }
 
