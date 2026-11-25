@@ -130,7 +130,7 @@ bk doctor                  # kiểm tra cài đặt
 Mở dự án trong Claude Code rồi chạy `/bk-bootstrap`.
 
 Cài một phiên bản cụ thể: truyền tag vào lệnh tải, ví dụ
-<!-- auto:release-version -->`gh release download v0.20.1 --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz'`<!-- /auto:release-version -->.
+<!-- auto:release-version -->`gh release download v0.20.2 --repo daniel211/bk-kit --pattern 'beerkit-bk-*.tgz'`<!-- /auto:release-version -->.
 
 ### Cập nhật
 

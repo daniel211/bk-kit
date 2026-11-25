@@ -1,7 +1,7 @@
 {
-  "version": "0.20.1",
+  "version": "0.20.2",
   "platform": "mobile_native",
-  "builtAt": "2026-11-25T08:27:31.915Z",
+  "builtAt": "2026-11-25T08:42:31.379Z",
   "fileCount": 448,
   "files": {
     ".bk.json": "1d6d59c151741037c6269c4d80bb2da64f4560a2f609228719d068349ea070dd",
@@ -53,7 +53,7 @@
     "hooks/fsm-guard.cjs": "14eba0d0fd4c7229f71abf87622d6976beda04c164584156570f6e6d5486d41c",
     "hooks/global-kill-switch.cjs": "8d13f57dca8422bf4d250e6df330dfed1dfa16e349519bcbcd403616a64fa69d",
     "hooks/handoff-writer.cjs": "ac55b88e4495b3750a43d1292ad9cf6a94cc8f03fcbd88da0270a551177ff1e2",
-    "hooks/inferential-review.cjs": "88c3d8b9a57834e7ffffc481ede9ecf38636c7869f30262bbdcbdd15e974429c",
+    "hooks/inferential-review.cjs": "47fdfe2d3130efba34dd2471536fc023ca829ba3c1683beb05722f5ab5e2ce5c",
     "hooks/lib/advisory-once.cjs": "22219cfdf29034532f7d396ac91c329e4a3a5e6d0a04479edcde9561064bbc8b",
     "hooks/lib/agent-classes.cjs": "bca0bb1aeffaca3764de60d498bc26fb752ba4f862c77b430cc4f24b44d98873",
     "hooks/lib/agent-memory-corrected-path.cjs": "806fecae1ff406202a824135fd7ec96e4d0ee1ca8ef7d14fab0d3f7b242624d5",

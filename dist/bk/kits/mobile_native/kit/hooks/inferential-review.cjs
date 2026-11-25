@@ -42,6 +42,7 @@ const {
 const { enqueueEdit, getQueueSize, clearQueue } = require(path.join(libDir, 'inferential-queue.cjs'));
 const { isJudgeAvailable } = require(path.join(libDir, 'inferential-judge.cjs'));
 const { createHookTimer } = require(path.join(libDir, 'hook-logger.cjs'));
+const { firstTime } = require(path.join(libDir, 'advisory-once.cjs'));
 
 const HOOK_NAME = 'inferential-review';
 
@@ -275,8 +276,16 @@ async function main() {
   // 12 of 12 result rows in both repos are byte-identical to DEFAULT_RESULT because neither repo
   // sets the key. Skipping the ENQUEUE as well as the spawn is the point — queueing without ever
   // spawning would grow the queue without bound.
+  //
+  // A missing key is a configuration state, not an error, and it holds for the whole session.
+  // Logged as `error: 'judge_unavailable'` on every edit it was 27 rows in a 40-minute window
+  // of X-Game-Pro's hook-log.jsonl (0.19.0) — and the only rows there with a non-empty `error`,
+  // so a scan for errors found nothing but this. Now: one `no_judge` row, error empty, on the
+  // first edit of a session; later edits exit without a row. No session id → log (fail-open).
   if (!isJudgeAvailable()) {
-    finish('skipped', { error: 'judge_unavailable' });
+    const sessionId = parsed.event && parsed.event.session_id;
+    if (firstTime('inferential-review:no-judge', { sessionId })) finish('no_judge');
+    process.exit(0);
   }
 
   // File pattern match
