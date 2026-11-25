@@ -29,6 +29,17 @@ const path = require('path');
 
 const { appendJsonl } = require('./jsonl-rotator.cjs');
 const { resolveWorkflowId } = require('./workflow-identity.cjs');
+const { acquireLockFile, releaseLockFile } = require('./cross-process-lock-file.cjs');
+
+// The close-out lock (see emitSummary). The critical section is two JSONL reads and one
+// append — milliseconds — so even five sessions quitting at once clear it in well under the
+// timeout. The timeout is a ceiling on how long a SessionEnd/SubagentStop hook can stall,
+// not a budget: hooks must never hang the session.
+const SUMMARY_LOCK_TIMEOUT_MS = 400;
+// A lock this old was left by a close-out that died mid-write (killed hook, app force-quit).
+// Far above any real hold time, low enough that the next session's close-out is not lost to it.
+const SUMMARY_LOCK_STALE_MS = 5000;
+const SUMMARY_LOCK_RETRY_MS = 10;
 
 /** Read a JSONL file into parsed rows, skipping anything unparseable. [] if unreadable. */
 function readRows(filePath) {
@@ -248,9 +259,15 @@ function countReactiveSignals(entries) {
  * @param {string|null} [opts.sessionId] — the session doing the close-out; scopes ad-hoc work
  * @returns {object|null} the summary written, or null when there was nothing to summarize
  */
-function emitSummary({ metricsDir, skill, feature, phase, complexityTier, closedBy, sessionId }) {
+function emitSummary(opts) {
+  const { metricsDir, skill, feature, sessionId } = opts;
   const summaryPath = path.join(metricsDir, 'workflow-summary.jsonl');
   const tracePath = path.join(metricsDir, 'agent-trace.jsonl');
+
+  // No trace file means no rows to summarize — the body would return null anyway. Checked
+  // before locking because the lock lives in metricsDir, which may not exist yet, and a lock
+  // that cannot be created would only burn the whole timeout to reach the same null.
+  if (!fs.existsSync(tracePath)) return null;
 
   // WHICH WORKFLOW THIS ROW BELONGS TO, stamped rather than inferred by the readers.
   //
@@ -284,6 +301,65 @@ function emitSummary({ metricsDir, skill, feature, phase, complexityTier, closed
   // (skill, feature) behaviour stands.
   const sessionScoped = !knownFeature && Boolean(sid);
 
+  // THE READ-DECIDE-APPEND BELOW MUST BE ATOMIC ACROSS PROCESSES.
+  //
+  // The `since` cut reads the last summary row, the trace is filtered against it, and a row is
+  // appended — and with no lock, concurrent close-outs all read before any of them wrote.
+  // X-Game-Pro on 0.19.0: five sessions ended together when the app quit, each SessionEnd ran
+  // the flush, and workflow-summary.jsonl got five byte-identical `bk-code:partner-place-
+  // category` rows at 2026-11-23T13:11:26 (phase commit, total_agents 9, total_duration_ms
+  // 200474, closed_by session-stop) differing only in session_id. insights.md and `bk metrics`
+  // then counted that workflow's 9 agents five times. fusionworkomni showed the same twice on
+  // 2026-10-30. The terminal-entry and feature-change close-outs in workflow-metrics.cjs race
+  // the flush the same way. Under the lock the summary file is read fresh, so the second..Nth
+  // close-out sees the first one's row, finds no trace rows after it, and writes nothing.
+  const lockPath = summaryPath + '.lock';
+  const lockToken = acquireLockFile(lockPath, {
+    timeoutMs: SUMMARY_LOCK_TIMEOUT_MS,
+    staleMs: SUMMARY_LOCK_STALE_MS,
+    retryMs: SUMMARY_LOCK_RETRY_MS
+  });
+
+  // ON TIMEOUT: skip, except for a session-scoped workflow.
+  //
+  // A shared (skill, feature) workflow loses nothing by skipping: `since` is unchanged, so the
+  // next close-out of that feature (any session's terminal-entry, feature-change or flush)
+  // picks the same trace rows up. A duplicate row, by contrast, is permanent — every reader
+  // counts it forever. So a shared key never writes without the lock.
+  //
+  // A session-scoped (ad-hoc) workflow is the opposite case. Its id is `session:<id>`, so no
+  // other session's close-out can ever produce its row — the duplicate the lock guards against
+  // cannot come from the concurrent quits that cause contention — and once this session ends
+  // nothing else will ever close it, so a skip would lose the row for good. Writing unlocked
+  // is the smaller loss there.
+  if (!lockToken && !sessionScoped) {
+    // A distinct status so a skipped close-out is visible in hook-log.jsonl, not silent.
+    try {
+      require('./hook-logger.cjs').logHook('workflow-summary', {
+        status: 'lock_timeout',
+        error: `close-out of ${workflowId} skipped — summary lock busy for `
+          + `${SUMMARY_LOCK_TIMEOUT_MS}ms; the next close-out of this feature covers the same rows`
+      });
+    } catch { /* logger unavailable */ }
+    return null;
+  }
+
+  try {
+    return closeOutUnderLock(opts, { summaryPath, tracePath, workflowId, sid, sessionScoped });
+  } finally {
+    releaseLockFile(lockPath, lockToken);
+  }
+}
+
+/**
+ * The body of emitSummary, run while holding the summary lock (or, for a session-scoped
+ * workflow whose lock timed out, without it — see emitSummary): read the `since` cut, collect
+ * the trace rows after it, append one summary row. Returns null when nothing is new.
+ */
+function closeOutUnderLock(
+  { metricsDir, skill, feature, phase, complexityTier, closedBy },
+  { summaryPath, tracePath, workflowId, sid, sessionScoped }
+) {
   // Agents dispatched for THIS workflow — those traced since the previous summary for the
   // same feature and skill.
   //

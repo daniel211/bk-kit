@@ -14,6 +14,7 @@ const os = require('os');
 const BK_VERSION = '2.1.0';
 
 const { resolveProjectRoot } = require('./resolve-project-root.cjs');
+const { acquireLockFile, releaseLockFile } = require('./cross-process-lock-file.cjs');
 
 const GLOBAL_CONFIG_PATH = path.join(os.homedir(), '.claude', '.bk.json');
 
@@ -297,20 +298,12 @@ const STATE_LOCK_TIMEOUT_MS = 2000;
 const STATE_LOCK_STALE_MS = 15000;
 const STATE_LOCK_RETRY_MS = 25;
 
-/** Block the thread for `ms`. Hooks are synchronous CJS — there is no event loop to await on. */
-function sleepSync(ms) {
-  try {
-    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
-  } catch {
-    const until = Date.now() + ms;
-    while (Date.now() < until) { /* SharedArrayBuffer unavailable — spin */ }
-  }
-}
-
 /** Log a warning through hook-logger when it is available. */
 function logStateWarning(message) {
   try {
-    require('./hook-logger.cjs').log('warn', 'bk-config', message);
+    // hook-logger exports logHook, not log: the old `.log('warn', …)` call threw inside this
+    // try, so every "workflow-state write dropped" warning was silently discarded.
+    require('./hook-logger.cjs').logHook('bk-config', { status: 'warn', error: message });
   } catch { /* logger unavailable */ }
 }
 
@@ -320,33 +313,17 @@ function logStateWarning(message) {
  * Waiting is the point. The previous version returned immediately when the lock was held,
  * and every caller ignored the `false` — so under parallel subagents (SubagentStop fires
  * once per agent, all at the same moment) writes simply vanished, taking cost accounting
- * and dispatch counts with them.
+ * and dispatch counts with them. The mechanism itself lives in cross-process-lock-file.cjs,
+ * shared with the workflow-summary close-out.
  *
  * @param {string} lockPath
  * @param {number} timeoutMs
- * @returns {boolean} true when this process owns the lock
+ * @returns {string|null} the lock token when this process owns the lock
  */
 function acquireStateLock(lockPath, timeoutMs) {
-  const deadline = Date.now() + timeoutMs;
-  // Every branch below falls through to the deadline check: a lock directory that cannot be
-  // written to (missing, read-only) must end as a refused write, never as a spin.
-  for (;;) {
-    try {
-      // `wx` is atomic: under a race exactly one process creates the file and the rest retry.
-      fs.writeFileSync(lockPath, String(process.pid), { flag: 'wx' });
-      return true;
-    } catch { /* held by someone else, or unwritable — inspect it below */ }
-
-    try {
-      if (Date.now() - fs.statSync(lockPath).mtimeMs > STATE_LOCK_STALE_MS) {
-        // Break it; the `wx` create above still decides who wins the retry.
-        try { fs.unlinkSync(lockPath); } catch { /* another writer broke it first */ }
-      }
-    } catch { /* no lock file — the create failed for another reason, retry until deadline */ }
-
-    if (Date.now() >= deadline) return false;
-    sleepSync(STATE_LOCK_RETRY_MS);
-  }
+  return acquireLockFile(lockPath, {
+    timeoutMs, staleMs: STATE_LOCK_STALE_MS, retryMs: STATE_LOCK_RETRY_MS
+  });
 }
 
 /**
@@ -376,7 +353,8 @@ function writeWorkflowState(updates, root) {
   // take it — on a fresh repo this is the call that creates bk/dev/shared/.
   try { fs.mkdirSync(path.dirname(statePath), { recursive: true }); } catch { /* checked below */ }
 
-  if (!acquireStateLock(lockPath, STATE_LOCK_TIMEOUT_MS)) {
+  const lockToken = acquireStateLock(lockPath, STATE_LOCK_TIMEOUT_MS);
+  if (!lockToken) {
     logStateWarning(`workflow-state write dropped — lock held for ${STATE_LOCK_TIMEOUT_MS}ms`);
     return false;
   }
@@ -413,7 +391,7 @@ function writeWorkflowState(updates, root) {
     logStateWarning(`workflow-state write failed: ${err && err.message}`);
     return false;
   } finally {
-    try { fs.unlinkSync(lockPath); } catch { /* ignore */ }
+    releaseLockFile(lockPath, lockToken);
   }
 }
 
